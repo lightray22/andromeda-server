@@ -17,7 +17,14 @@ use Andromeda\Apps\Accounts\Resource\{Contact, EmailContact, Client, RecoveryKey
  * of registered clients, can have registered two factor, 
  * can provide secret-key crypto services, provides contact info
  * 
- * @phpstan-type AccountJ array{id:string, username:string, dispname:?string}
+ * @phpstan-import-type PolicyBaseJ from PolicyBase
+ * @phpstan-import-type RecoveryKeyJ from RecoveryKey
+ * @phpstan-import-type TwoFactorJ from TwoFactor
+ * @phpstan-import-type ContactJ from Contact
+ * @phpstan-import-type ClientJ from Client
+ * @phpstan-type PublicAccountJ array{id:string, username:string, dispname:?string, contacts:list<string>}
+ * @phpstan-type UserAccountJ array{id:string, username:string, dispname:?string, policy?:PolicyBaseJ, date_created?:float, date_loggedon?:?float, date_active?:?float, date_passwordset?:?float, recoverykeys?:array<string,RecoveryKeyJ>, twofactors?:array<string,TwoFactorJ>, contacts?:array<string,ContactJ>, clients?:array<string,ClientJ>}
+ * @phpstan-type AdminAccountJ array{comment:?string, date_modified:?float, groups:list<string>, policy_from?:array{session_timeout:?string, client_timeout:?string, max_password_age:?string, limit_sessions:?string, limit_contacts:?string, limit_recoverykeys:?string, admin:?string, disabled:?string, forcetf:?string, allowcrypto:?string, userdelete:?string, account_search:?string, group_search:?string}}
  */
 class Account extends PolicyBase implements IKeySource
 {
@@ -271,13 +278,13 @@ class Account extends PolicyBase implements IKeySource
         $f = $this->GetInheritableField(function(PolicyBase $b){ return $b->admin; });
         return ($f !== null) ? $f->TryGetValue() ?? $default : $default;
     }
-    
-    /** True if this account is enabled */
-    public function isEnabled() : bool
-    { 
-        $default = false;
+
+    /** @return int enum code for account disable */
+    public function isDisabled() : int
+    {
+        $default = 0;
         $f = $this->GetInheritableField(function(PolicyBase $b){ return $b->disabled; });
-        return (($f !== null) ? $f->TryGetValue() ?? $default : $default) === 0; // invert logic
+        return ($f !== null) ? $f->TryGetValue() ?? $default : $default;
     }
     
     /** Sets this account's admin-status to the given value */
@@ -489,7 +496,7 @@ class Account extends PolicyBase implements IKeySource
     /** Sets this account to enabled if it was disabled pending a valid contact */
     public function NotifyValidContact() : self
     {
-        if ($this->disabled->TryGetValue() === self::DISABLE_PENDING_CONTACT)
+        if ($this->isDisabled() === self::DISABLE_PENDING_CONTACT)
             $this->SetDisabled(null);
         
         return $this;
@@ -563,97 +570,6 @@ class Account extends PolicyBase implements IKeySource
         
         foreach (self::$delete_handlers as $func) 
             $func($this->database, $this);
-    }
-
-    public const OBJECT_FULL = 1; 
-    public const OBJECT_ADMIN = 2;
-    
-    /**
-     * Gets this account as a printable object
-     * @return AccountJ
-     * return array<mixed> `{id:id,username:string,dispname:string}` \
-        if OBJECT_FULL or OBJECT_ADMIN, add: {dates:{created:float,passwordset:?float,loggedon:?float,active:?float}, 
-            counters:{groups:int,sessions:int,contacts:int,clients:int,twofactors:int,recoverykeys:int}, 
-            limits:{sessions:?int,contacts:?int,recoverykeys:?int}, config:{admin:bool,disabled:int,forcetf:bool,allowcrypto:bool
-                accountsearch:int, groupsearch:int, userdelete:bool},session_timeout:?int,client_timeout:?int,max_password_age:?int} \
-        if OBJECT_FULL, add: {contacts:[id:Contact], clients:[id:Client], twofactors:[id:TwoFactor]} \
-        if OBJECT_ADMIN, add: {twofactor:bool, comment:?string, groups:[id], limits_from:[string:"id:class"], dates:{modified:?float},
-            config_from:[string:"id:class"], session_timeout_from:"id:class", client_timeout_from:"id:class", max_password_age_from:"id:class"}
-     */
-    public function GetClientObject(int $level = 0) : array
-    {
-        //$mapobj = function($e) { return $e->GetClientObject(); }; // @phpstan-ignore-line
-        
-        $data = array(
-            'id' => $this->ID(),
-            'username' => $this->GetUsername(),
-            'dispname' => $this->fullname->TryGetValue()
-        );
-
-        /*if (($level & self::OBJECT_FULL) !== 0 || 
-            ($level & self::OBJECT_ADMIN) !== 0)
-        {
-            $data += array(
-                'client_timeout' => $this->GetClientTimeout(),
-                'session_timeout' => $this->GetSessionTimeout(),
-                'max_password_age' => $this->GetMaxPasswordAge(),
-                'dates' => array(
-                    'created' => $this->GetDateCreated(),
-                    'passwordset' => $this->GetPasswordDate(),
-                    'loggedon' => $this->GetLoggedonDate(),
-                    'active' => $this->GetActiveDate()
-                ),
-                'config' => array_merge(
-                    Utilities::array_map_keys(function($p){ return $this->GetFeatureBool($p); },
-                        array('admin','forcetf','allowcrypto','userdelete')),
-                    Utilities::array_map_keys(function($p){ return $this->GetFeatureInt($p); },
-                        array('disabled','accountsearch','groupsearch'))
-                ),
-                'counters' => Utilities::array_map_keys(function($p){ return $this->CountObjectRefs($p); },
-                    array('sessions','contacts','clients','twofactors','recoverykeys')
-                ),
-                'limits' => Utilities::array_map_keys(function($p){ return $this->TryGetCounterLimit($p); },
-                    array('sessions','contacts','recoverykeys')
-                )
-            );
-        }
-        
-        if (($level & self::OBJECT_FULL) !== 0)
-        {
-            $data += array(
-                'twofactors' => array_map($mapobj, $this->GetTwoFactors()),
-                'contacts' => array_map($mapobj, $this->GetContacts(false)),
-                'clients' => array_map($mapobj, $this->GetClients()),
-            );
-        }
-        else
-        {            
-            $data['contacts'] = array_map($mapobj, array_filter($this->GetContacts(),
-                function(Contact $c){ return $c->GetIsPublic(); }));
-        }
-
-        if (($level & self::OBJECT_ADMIN) !== 0)
-        {
-            $data += array(
-                'twofactor' => $this->HasValidTwoFactor(),
-                'comment' => $this->TryGetScalar('comment'),
-                'groups' => array_keys($this->GetGroups()),
-                'client_timeout_from' => static::toString($this->TryGetInheritsScalarFrom('client_timeout')),
-                'session_timeout_from' => static::toString($this->TryGetInheritsScalarFrom('session_timeout')),
-                'max_password_age_from' => static::toString($this->TryGetInheritsScalarFrom('max_password_age')),
-                
-                'config_from' => Utilities::array_map_keys(function($p){ 
-                    return static::toString($this->TryGetInheritsScalarFrom("$p")); }, array_keys($data['config'])),
-                    
-                'limits_from' => Utilities::array_map_keys(function($p){ 
-                    return static::toString($this->TryGetInheritsScalarFrom("limit_$p")); }, array_keys($data['limits'])),
-            );
-            
-            $data['dates']['modified'] = $this->TryGetDate('modified');
-            $data['counters']['groups'] = $this->CountObjectRefs('groups');
-        }*/
-
-        return $data;
     }
 
     /** Returns true if the account has a validated two factor and recovery keys */
@@ -829,5 +745,129 @@ class Account extends PolicyBase implements IKeySource
 
         $this->BaseDestroyCrypto();
         return $this;
+    }
+
+    /**
+     * Gets the account's policy settings (resolved inheritance)
+     * @return PolicyBaseJ
+     */
+    public function GetPolicyClientObject() : array
+    {
+        return array(
+            'session_timeout' => $this->GetSessionTimeout(),
+            'client_timeout' => $this->GetClientTimeout(),
+            'max_password_age' => $this->GetMaxPasswordAge(),
+            'limit_sessions' => $this->GetLimitSessions(),
+            'limit_contacts' => $this->GetLimitContacts(),
+            'limit_recoverykeys' => $this->GetLimitRecoveryKeys(),
+
+            'admin' => $this->isAdmin(),
+            'disabled' => $this->isDisabled(),
+            'forcetf' => $this->GetForceUseTwoFactor(),
+            'allowcrypto' => $this->GetAllowCrypto(),
+            'userdelete' => $this->GetAllowUserDelete(),
+            'account_search' => $this->GetAllowAccountSearch(),
+            'group_search' => $this->GetAllowGroupSearch()
+        );
+    }
+
+    /**
+     * Gets this account as a printable object (public)
+     * @return PublicAccountJ
+     */
+    public function GetPublicClientObject() : array
+    {
+        $contacts = array_values(array_filter($this->GetContacts(), 
+            function(Contact $c){ return $c->GetIsPublic(); }));
+
+        return array(
+            'id' => $this->ID(),
+            'username' => $this->username->GetValue(),
+            'dispname' => $this->fullname->TryGetValue(),
+            'contacts' => array_map(function(Contact $c){ return $c->GetAddress(); }, $contacts)
+        );
+    }
+
+    /**
+     * Gets this account as a printable object (user)
+     * @param bool $full if true, show recoverykeys/twofactors/contacts/clients
+     * @return UserAccountJ
+     */
+    public function GetUserClientObject(bool $full = false) : array
+    {
+        $retval = array(
+            'id' => $this->ID(),
+            'username' => $this->username->GetValue(),
+            'dispname' => $this->fullname->TryGetValue()
+        );
+
+        if ($full) $retval += array(
+            'policy' => $this->GetPolicyClientObject(),
+
+            'date_created' => $this->date_created->GetValue(),
+            'date_loggedon' => $this->date_loggedon->TryGetValue(),
+            'date_active' => $this->date_active->TryGetValue(),
+            'date_passwordset' => $this->date_passwordset->TryGetValue(),
+
+            'recoverykeys' => array_map(function(RecoveryKey $r){ return $r->GetClientObject(); }, $this->GetRecoveryKeys()),
+            'twofactors' => array_map(function(TwoFactor $t){ return $t->GetClientObject(); }, $this->GetTwoFactors()),
+            'contacts' => array_map(function(Contact $c){ return $c->GetClientObject(); }, $this->GetContacts(false)),
+            'clients' => array_map(function(Client $c){ return $c->GetClientObject(); }, $this->GetClients()),
+        );
+
+        return $retval;
+    }
+
+    /**
+     * Gets this account as a printable object (admin)
+     * @param bool $full if true, show permissions, twofactors, clients, contacts
+     * @return \Union<UserAccountJ, AdminAccountJ>
+     */
+    public function GetAdminClientObject(bool $full = false) : array
+    {
+        $retval = $this->GetUserClientObject($full);
+
+        $retval += array(
+            'comment' => $this->comment->TryGetValue(),
+            'date_modified' => $this->date_modified->TryGetValue(),
+            'groups' => array_keys($this->GetGroups())
+        );
+
+        if ($full)
+        {
+            $session_timeout = $this->GetInheritableSource(function(PolicyBase $b){ return $b->session_timeout; });
+            $client_timeout = $this->GetInheritableSource(function(PolicyBase $b){ return $b->client_timeout; });
+            $max_password_age = $this->GetInheritableSource(function(PolicyBase $b){ return $b->max_password_age; });
+            $limit_sessions = $this->GetInheritableSource(function(PolicyBase $b){ return $b->limit_sessions; });
+            $limit_contacts = $this->GetInheritableSource(function(PolicyBase $b){ return $b->limit_contacts; });
+            $limit_recoverykeys = $this->GetInheritableSource(function(PolicyBase $b){ return $b->limit_recoverykeys; });
+
+            $admin = $this->GetInheritableSource(function(PolicyBase $b){ return $b->admin; });
+            $disabled = $this->GetInheritableSource(function(PolicyBase $b){ return $b->disabled; });
+            $forcetf = $this->GetInheritableSource(function(PolicyBase $b){ return $b->forcetf; });
+            $allowcrypto = $this->GetInheritableSource(function(PolicyBase $b){ return $b->allowcrypto; });
+            $userdelete = $this->GetInheritableSource(function(PolicyBase $b){ return $b->userdelete; });
+            $account_search = $this->GetInheritableSource(function(PolicyBase $b){ return $b->account_search; });
+            $group_search = $this->GetInheritableSource(function(PolicyBase $b){ return $b->group_search; });
+
+            $retval['policy_from'] = array(
+                'session_timeout' => ($session_timeout !== null) ? (string)$session_timeout : null,
+                'client_timeout' => ($client_timeout !== null) ? (string)$client_timeout : null,
+                'max_password_age' => ($max_password_age !== null) ? (string)$max_password_age : null,
+                'limit_sessions' => ($limit_sessions !== null) ? (string)$limit_sessions : null,
+                'limit_contacts' => ($limit_contacts !== null) ? (string)$limit_contacts : null,
+                'limit_recoverykeys' => ($limit_recoverykeys !== null) ? (string)$limit_recoverykeys : null,
+                
+                'admin' => ($admin !== null) ? (string)$admin : null,
+                'disabled' => ($disabled !== null) ? (string)$disabled : null,
+                'forcetf' => ($forcetf !== null) ? (string)$forcetf : null,
+                'allowcrypto' => ($allowcrypto !== null) ? (string)$allowcrypto : null,
+                'userdelete' => ($userdelete !== null) ? (string)$userdelete : null,
+                'account_search' => ($account_search !== null) ? (string)$account_search : null,
+                'group_search' => ($group_search !== null) ? (string)$group_search : null,
+            );
+        }
+
+        return $retval;
     }
 }

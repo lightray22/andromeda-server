@@ -10,6 +10,10 @@ use Andromeda\Apps\Accounts\Resource\Client;
 /** 
  * Provides a base class for apps that use the Authenticator to log auth info
  * @phpstan-import-type ActionLogJ from BaseActionLog
+ * @phpstan-import-type UserAccountJ from Account
+ * @phpstan-import-type ClientJ from Client
+ * @phpstan-type AuthActionLogJ array{admin:?bool, account:?string, client:?string, sudouser:?string}
+ * @phpstan-type ExpandAuthActionLogJ array{admin:?bool, account:?UserAccountJ, client:?ClientJ, sudouser:?UserAccountJ}
  */
 abstract class AuthActionLog extends BaseActionLog
 {
@@ -88,12 +92,10 @@ abstract class AuthActionLog extends BaseActionLog
     /**
      * Returns the printable client object of this AuthActionLog
      * @param bool $expand if true, expand linked objects
-     * @return ActionLogJ
-     * // array<mixed> `{admin:?bool, ?account:id, ?client:id, ?sudouser:id}`
-        if $expand, `{?account:Account, ?client:Client, ?sudouser:Account}`
+     * @return ($expand is true ? \Union<ActionLogJ, ExpandAuthActionLogJ> : \Union<ActionLogJ, AuthActionLogJ>)
      */
     public function GetClientObject(bool $expand = false) : array
-    {        
+    {
         $retval = parent::GetClientObject($expand);
     
         $retval['admin'] = (bool)$this->admin->TryGetValue();
@@ -104,18 +106,15 @@ abstract class AuthActionLog extends BaseActionLog
             $sudouser = $this->sudouser->TryGetObject();
             $client = $this->client->TryGetObject();
             
-            if ($account !== null)  $retval['account']  = $account->GetClientObject();
-            if ($client !== null)   $retval['client']   = $client->GetClientObject();
-            if ($sudouser !== null) $retval['sudouser'] = $sudouser->GetClientObject();
+            $retval['account']  = ($account !== null) ? $account->GetUserClientObject() : null;
+            $retval['client']   = ($client !== null) ? $client->GetClientObject() : null;
+            $retval['sudouser'] = ($sudouser !== null) ? $sudouser->GetUserClientObject() : null;
         }
         else
         {
-            if (($id = $this->account->TryGetObjectID()) !== null)
-                $retval['account'] = $id;
-            if (($id = $this->client->TryGetObjectID()) !== null)
-                $retval['client'] = $id;
-            if (($id = $this->sudouser->TryGetObjectID()) !== null)
-                $retval['sudouser'] = $id;
+            $retval['account'] = $this->account->TryGetObjectID();
+            $retval['client'] = $this->client->TryGetObjectID();
+            $retval['sudouser'] = $this->sudouser->TryGetObjectID();
         }
 
         return $retval;

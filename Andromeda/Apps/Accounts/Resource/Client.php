@@ -16,7 +16,8 @@ use Andromeda\Apps\Accounts\Crypto\AuthObject;
  * can sign-out securely and not need to use two factor (or remember
  * any other client-specific values) on the next sign in
  * 
- * @phpstan-type ClientJ array{id:string}
+ * @phpstan-import-type SessionJ from Session
+ * @phpstan-type ClientJ array{id:string, name:?string, lastaddr:string, useragent:string, date_created:float, date_loggedon:?float, date_active:?float, authkey?:string, session:?SessionJ}
  */
 class Client extends BaseObject
 {    
@@ -185,10 +186,7 @@ class Client extends BaseObject
      * @return ClientJ
      */
     public function GetClientObject(bool $secret = false) : array
-    { 
-     //* @return array<mixed> `{id:id, name:?string, lastaddr:string, useragent:string, \
-     //dates_created:float, date_loggedon:?float, date_active:?float, session:Session}` // TODO RAY !! GetClientObject
-
+    {
         $data = array(
             'id' => $this->ID(),
             'name' => $this->name->TryGetValue(),
@@ -202,7 +200,6 @@ class Client extends BaseObject
         if ($secret) $data['authkey'] = $this->GetAuthKey();
         
         $session = Session::TryLoadByClient($this->database, $this);
-        
         $data['session'] = ($session !== null) ? $session->GetClientObject($secret) : null;
 
         return $data;        

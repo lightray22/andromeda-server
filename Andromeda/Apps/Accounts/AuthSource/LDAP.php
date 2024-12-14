@@ -4,13 +4,11 @@ use Andromeda\Core\Database\{FieldTypes, ObjectDatabase, TableTypes};
 use Andromeda\Core\Errors\{BaseExceptions, ErrorManager};
 use Andromeda\Core\IOFormat\SafeParams;
 
-use Andromeda\Apps\Accounts\Account;
-
 /** 
  * Uses an LDAP server for authentication
  * @phpstan-import-type ExternalJ from External
  * @phpstan-import-type AdminExternalJ from External
- * @phpstan-type LDAPJ array{}
+ * @phpstan-type LDAPJ array{hostname:string, secure:bool, userprefix:?string}
  */
 class LDAP extends External
 {
@@ -65,15 +63,15 @@ class LDAP extends External
     
     /**
      * Returns a printable client object for this LDAP
-     * @return ($admin is true ? \Union<AdminExternalJ, LDAPJ> : \Union<ExternalJ, LDAPJ>)
+     * @return ($admin is true ? \Union<AdminExternalJ, LDAPJ> : ExternalJ)
      */
     public function GetClientObject(bool $admin) : array
     {
-        return parent::GetClientObject($admin) + array(
+        return parent::GetClientObject($admin) + (!$admin ? [] : array(
             'hostname' => $this->hostname->GetValue(),
             'secure' => $this->secure->GetValue(),
             'userprefix' => $this->userprefix->TryGetValue()
-        );
+        ));
     }
     
     /** @var ?resource */

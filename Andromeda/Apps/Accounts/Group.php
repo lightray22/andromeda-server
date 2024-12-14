@@ -1,6 +1,5 @@
 <?php declare(strict_types=1); namespace Andromeda\Apps\Accounts; if (!defined('Andromeda')) die();
 
-use Andromeda\Core\Utilities;
 use Andromeda\Core\Database\{FieldTypes, ObjectDatabase, TableTypes, QueryBuilder};
 
 use Andromeda\Apps\Accounts\Resource\Contact;
@@ -11,7 +10,9 @@ use Andromeda\Apps\Accounts\Resource\Contact;
  * Used primarily to manage config for multiple accounts at once, in a many-to-many relationship.
  * Groups use a priority number to resolve conflicting properties.
  * 
- * @phpstan-type GroupJ array{id:string, name:string}
+ * @phpstan-import-type PolicyBaseJ from PolicyBase
+ * @phpstan-type PublicGroupJ array{id:string, name:string}
+ * @phpstan-type AdminGroupJ array{priority:int, comment:?string, date_created:float, date_modified:?float, accounts?:list<string>, policy:PolicyBaseJ}
  */
 class Group extends PolicyBase
 {
@@ -190,56 +191,52 @@ class Group extends PolicyBase
             $func($this->database, $this);
     }
     
-    public const OBJECT_FULL = 1; 
-    public const OBJECT_ADMIN = 2;
-    
     /**
-     * Gets this group as a printable object
-     * @param int $level if FULL, show list of account IDs, if ADMIN, show details
-     * @return GroupJ
-     * return array<mixed> `{id:id, name:string}` \
-        if FULL, add `{accounts:[id]}` \
-        if ADMIN, add `{priority:int,comment:?string,dates:{created:float,modified:?float}, session_timeout:?int, client_timeout:?int, max_password_age:?int, \
-            config:{admin:?bool,disabled:?int,forcetf:?bool,allowcrypto:?bool,accountsearch:?int,groupsearch:?int,userdelete:bool}, \
-            counters:{accounts:int}, limits:{sessions:?int,contacts:?int,recoverykeys:?int}}`
+     * Gets this group as a printable object (public)
+     * @return PublicGroupJ
      */
-    public function GetClientObject(int $level = 0) : array
+    public function GetPublicClientObject() : array
     {
-        $retval = array(
+        return array(
             'id' => $this->ID(),
             'name' => $this->GetDisplayName()
         );
+    }
+
+    /** 
+     * Gets this group as a printable object (admin)
+     * @return \Union<PublicGroupJ, AdminGroupJ>
+     */
+    public function GetAdminClientObject(bool $accounts = false) : array
+    {
+        $retval = $this->GetPublicClientObject();
+
+        $retval += array(
+            'priority' => $this->priority->GetValue(),
+            'comment' => $this->comment->TryGetValue(),
+            'date_created' => $this->date_created->GetValue(),
+            'date_modified' => $this->date_modified->TryGetValue(),
+            'policy' => array(
+                'session_timeout' => $this->session_timeout->TryGetValue(),
+                'client_timeout' => $this->client_timeout->TryGetValue(),
+                'max_password_age' => $this->max_password_age->TryGetValue(),
+                'limit_sessions' => $this->limit_sessions->TryGetValue(),
+                'limit_contacts' => $this->limit_contacts->TryGetValue(),
+                'limit_recoverykeys' => $this->limit_recoverykeys->TryGetValue(),
+
+                'admin' => $this->admin->TryGetValue(),
+                'disabled' => $this->disabled->TryGetValue(),
+                'forcetf' => $this->forcetf->TryGetValue(),
+                'allowcrypto' => $this->allowcrypto->TryGetValue(),
+                'userdelete' => $this->userdelete->TryGetValue(),
+                'account_search' => $this->account_search->TryGetValue(),
+                'group_search' => $this->group_search->TryGetValue()
+            )
+        );
         
-        /*if (($level & self::OBJECT_ADMIN) !== 0)
-        {
-            $retval += array(
-                'dates' => array(
-                    'created' => $this->date_created->GetValue(),
-                    'modified' => $this->date_modified->TryGetValue()
-                ),
-                'config' => array_merge(
-                    Utilities::array_map_keys(function($p){ return $this->GetFeatureBool($p); },
-                        array('admin','forcetf','allowcrypto','userdelete')),
-                    Utilities::array_map_keys(function($p){ return $this->GetFeatureInt($p); },
-                        array('disabled','accountsearch','groupsearch'))
-                ),
-                'counters' => array(
-                    'accounts' => $this->CountObjectRefs('accounts')
-                ),
-                'limits' => Utilities::array_map_keys(function($p){ return $this->TryGetCounterLimit($p); },
-                    array('sessions','contacts','recoverykeys')
-                ),
-                'priority' => $this->GetPriority(),
-                'comment' => $this->GetComment(),
-                'session_timeout' => $this->TryGetScalar('session_timeout'),
-                'client_timeout' => $this->TryGetScalar('client_timeout'),
-                'max_password_age' => $this->TryGetScalar('max_password_age')
-            );
-        }            
-        
-        if (($level & self::OBJECT_FULL) !== 0) 
-            $retval['accounts'] = array_keys($this->GetAccounts());*/
-        
+        if ($accounts) 
+            $retval['accounts'] = array_keys($this->GetAccounts());
+
         return $retval;
     }
 }

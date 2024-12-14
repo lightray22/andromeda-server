@@ -11,8 +11,7 @@ use Andromeda\Apps\Accounts\Crypto\{AuthObjectFull, AccountKeySource, IKeySource
  * Also stores a backup copy of the account's master key, 
  * and as a matter of convention, can byapss two factor
  * 
- * @phpstan-type RecoveryKeyJ array{date_created:float}   
- * // TODO RAY !! GetClientObject authkey or secret? make consistent also authkey should not be null
+ * @phpstan-type RecoveryKeyJ array{date_created:float, authkey?:string}
  */
 class RecoveryKey extends BaseObject implements IKeySource
 {

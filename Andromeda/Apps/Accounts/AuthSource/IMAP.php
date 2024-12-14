@@ -4,8 +4,6 @@ use Andromeda\Core\Database\{FieldTypes, ObjectDatabase, TableTypes};
 use Andromeda\Core\Errors\{BaseExceptions, ErrorManager};
 use Andromeda\Core\IOFormat\SafeParams;
 
-use Andromeda\Apps\Accounts\Account;
-
 /** 
  * Uses an IMAP server for authentication
  * @phpstan-import-type ExternalJ from External
@@ -91,17 +89,17 @@ class IMAP extends External
     
     /**
      * Returns a printable client object for this IMAP
-     * @return ($admin is true ? \Union<AdminExternalJ, IMAPJ> : \Union<ExternalJ, IMAPJ>)
+     * @return ($admin is true ? \Union<AdminExternalJ, IMAPJ> : ExternalJ)
      */
     public function GetClientObject(bool $admin) : array
     {
-        return parent::GetClientObject($admin) + array(
+        return parent::GetClientObject($admin) + (!$admin ? [] : array(
             'protocol' => $this->GetProtocol(),
             'hostname' => $this->hostname->GetValue(),
             'port' => $this->port->TryGetValue(),
             'implssl' => $this->implssl->GetValue(),
             'secauth' => $this->secauth->GetValue()
-        );
+        ));
     }
     
     /** Checks for the existence of the IMAP extension */

@@ -126,7 +126,7 @@ class Authenticator
             
             $auth->account = $auth->session->GetAccount();
             
-            if (!$auth->account->isEnabled()) 
+            if ($auth->account->isDisabled() !== 0) 
                 throw new Exceptions\AccountDisabledException();
             
             if (!$database->GetApiPackage()->GetConfig()->isReadOnly())

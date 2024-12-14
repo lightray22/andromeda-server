@@ -83,7 +83,7 @@ class BaseObjectTest extends \PHPUnit\Framework\TestCase
         $database = $this->createMock(ObjectDatabase::class);
         $obj = new EasyObject($database,array(),true); $id = $obj->ID();
         
-        $str = "$id:Andromeda\\Core\\Database\\EasyObject";
+        $str = "$id:EasyObject";
         $this->assertSame($str, BaseObject::toString($obj));
         $this->assertSame($str, "$obj");
     }

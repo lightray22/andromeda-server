@@ -73,7 +73,7 @@ trait AuthObjectFull
      * @return string full key if the auth key is not in memory
      * @throws Exceptions\RawKeyNotAvailableException if the real key is not in memory or is null
      */
-    public function GetFullKey() : ?string
+    public function GetFullKey() : string
     {
         return implode(":",array(static::GetFullKeyPrefix(), $this->ID(), $this->GetAuthKey()));
     }

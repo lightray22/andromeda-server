@@ -8,7 +8,7 @@ use Andromeda\Apps\Accounts\Crypto\AuthObjectFull;
 
 /** 
  * An object describing a contact method for a user account
- * @phpstan-type ContactJ array{id:string}
+ * @phpstan-type ContactJ array{id:string, type:key-of<self::TYPES>, address:string, valid:bool, public:bool, asfrom:bool, date_created:float}
  */
 abstract class Contact extends BaseObject
 {
@@ -42,7 +42,10 @@ abstract class Contact extends BaseObject
     private FieldTypes\StringType $address;
     /** If this contact is publically viewable */
     private FieldTypes\BoolType $public;
-    /** True if this contact should be used as a "from" address */
+    /** 
+     * True if this contact should be used as a "from" address
+     * nullable otherwise UNIQUE would only allow one to be 0
+     */
     private FieldTypes\NullBoolType $asfrom;
     /** Timestamp this contact was created */
     private FieldTypes\Timestamp $date_created;
@@ -164,7 +167,7 @@ abstract class Contact extends BaseObject
     }
     
     /** Returns the contact address string */
-    protected function GetAddress() : string { return $this->address->GetValue(); }
+    public function GetAddress() : string { return $this->address->GetValue(); }
     
     /** Returns true if the contact has been validated */
     public function GetIsValid() : bool { return $this->authkey->TryGetValue() === null; }
@@ -324,18 +327,16 @@ abstract class Contact extends BaseObject
      * Gets this contact as a printable object
      * @return ContactJ
      */
-    public function GetClientObject() : array // TODO RAY !! GetClientObject
+    public function GetClientObject() : array
     {
         return array(
             'id' => $this->ID(),
-            /*'type' => self::TYPES[$this->GetType()],
+            'type' => array_flip(self::TYPES)[$this->typefield->GetValue()],
             'address' => $this->GetAddress(),
             'valid' => $this->GetIsValid(),
-            'asfrom' => (bool)($this->TryGetScalar('asfrom')),
             'public' => $this->GetIsPublic(),
-            'dates' => array(
-                'created' => $this->GetDateCreated()
-            )*/
+            'asfrom' => $this->asfrom->TryGetValue() === true,
+            'date_created' => $this->date_created->GetValue()
         );
     }
 }

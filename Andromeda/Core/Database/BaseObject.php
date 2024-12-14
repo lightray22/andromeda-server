@@ -228,7 +228,7 @@ abstract class BaseObject
     /** Returns the string "id:class" where id is the object ID and class is its short class name */
     final public function __toString() : string 
     { 
-        return $this->ID().':'.static::class;
+        return $this->ID().':'.Utilities::ShortClassName(static::class);
     }
     
     /** Returns the given object's as a string if not null, else null */

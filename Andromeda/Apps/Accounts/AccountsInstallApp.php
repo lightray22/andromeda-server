@@ -35,7 +35,7 @@ class AccountsInstallApp extends InstallerApp
             $username = $params->GetParam("username", SafeParams::PARAMLOG_ALWAYS)->CheckLength(127)->GetAlphanum();
             $password = $params->GetParam("password", SafeParams::PARAMLOG_NEVER)->GetRawString();
             
-            return Account::Create($db, $username, $password)->SetAdmin(true)->GetClientObject();
+            return Account::Create($db, $username, $password)->SetAdmin(true)->GetUserClientObject();
         }
         else return null;
     }

@@ -4,13 +4,11 @@ use Andromeda\Core\Database\{FieldTypes, ObjectDatabase, TableTypes};
 use Andromeda\Core\Errors\{BaseExceptions, ErrorManager};
 use Andromeda\Core\IOFormat\SafeParams;
 
-use Andromeda\Apps\Accounts\Account;
-
 /** 
  * Uses an FTP server for authentication
  * @phpstan-import-type ExternalJ from External
  * @phpstan-import-type AdminExternalJ from External
- * @phpstan-type FTPJ array{}
+ * @phpstan-type FTPJ array{hostname:string, port:?int, implssl:bool} 
  */
 class FTP extends External
 {
@@ -65,15 +63,15 @@ class FTP extends External
     
     /**
      * Returns a printable client object for this FTP
-     * @return ($admin is true ? \Union<AdminExternalJ, FTPJ> : \Union<ExternalJ, FTPJ>)
+     * @return ($admin is true ? \Union<AdminExternalJ, FTPJ> : ExternalJ)
      */
     public function GetClientObject(bool $admin) : array
     {
-        return parent::GetClientObject($admin) + array(
+        return parent::GetClientObject($admin) + (!$admin ? [] : array(
             'hostname' => $this->hostname->GetValue(),
             'port' => $this->port->TryGetValue(),
             'implssl' => $this->implssl->GetValue()
-        );
+        ));
     }
     
     /** @var ?resource */

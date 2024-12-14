@@ -4,7 +4,10 @@ use Andromeda\Core\Database\{BaseObject, FieldTypes, TableTypes, ObjectDatabase}
 use Andromeda\Core\IOFormat\SafeParams;
 use Andromeda\Apps\Accounts\Resource\Contact;
 
-/** Base class for account/groups containing properties that can be set per-account or per-group */
+/** 
+ * Base class for account/groups containing properties that can be set per-account or per-group
+ * @phpstan-type PolicyBaseJ array{session_timeout:?int, client_timeout:?int, max_password_age:?int, limit_sessions:?int, limit_contacts:?int, limit_recoverykeys:?int, admin:?bool, disabled:?int, forcetf:?bool, allowcrypto:?bool, userdelete:?bool, account_search:?int, group_search:?int}
+ */
 abstract class PolicyBase extends BaseObject
 {
     use TableTypes\TableLinkedChildren;
@@ -102,8 +105,6 @@ abstract class PolicyBase extends BaseObject
         $this->date_modified->SetTimeNow();
         return $this;
     }
-
-    // TODO RAY !! GetClientObject? group will use, but account will override
 
     /** Gets the comment for the entity (or null) */
     public function GetComment() : ?string { 

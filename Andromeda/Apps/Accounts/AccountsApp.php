@@ -16,12 +16,15 @@ use Andromeda\Apps\Accounts\Resource\{Client, Contact, RecoveryKey, Session, Two
  * authentication, multi-client/session management, authentication via external
  * sources, and granular per-account/per-group config.
  * 
- * @phpstan-import-type AccountJ from Account
+ * @phpstan-import-type PublicAccountJ from Account
+ * @phpstan-import-type UserAccountJ from Account
+ * @phpstan-import-type AdminAccountJ from Account
  * @phpstan-import-type ClientJ from Client
  * @phpstan-import-type ConfigJ from Config
  * @phpstan-import-type ContactJ from Contact
  * @phpstan-import-type ExternalJ from AuthSource\External
- * @phpstan-import-type GroupJ from Group
+ * @phpstan-import-type PublicGroupJ from Group
+ * @phpstan-import-type AdminGroupJ from Group
  * @phpstan-import-type GroupJoinJ from GroupJoin
  * @phpstan-import-type RecoveryKeyJ from RecoveryKey
  * @phpstan-import-type RegisterAllowJ from RegisterAllow
@@ -234,7 +237,7 @@ class AccountsApp extends BaseApp
     /**
      * Gets the current account object, or the specified one
      * @throws Exceptions\UnknownAccountException if the specified account is not valid
-     * @return AccountJ
+     * @return PublicAccountJ|UserAccountJ|AdminAccountJ
      */
     protected function GetAccount(SafeParams $params, ?Authenticator $authenticator) : ?array
     {
@@ -249,20 +252,18 @@ class AccountsApp extends BaseApp
                 throw new Exceptions\UnknownAccountException();
         }
         else $account = $authenticator->GetAccount();
-        
-        $objtype = 0;
-        
-        $admin = $authenticator->isRealAdmin();
-        if ($admin) $objtype |= Account::OBJECT_ADMIN;
-        
-        if ($params->GetOptParam("full",false)->GetBool())
-        {
-            if ($admin || ($account === $authenticator->GetAccount()))
-                $objtype |= Account::OBJECT_FULL;
-            else throw new Exceptions\AdminRequiredException();
-        }
 
-        return $account->GetClientObject($objtype);
+        $admin = $authenticator->isRealAdmin();
+        $full = $params->GetOptParam("full",false)->GetBool();
+
+        if ($account !== $authenticator->GetAccount() && !$admin)
+        {
+            if ($full) throw new Exceptions\AdminRequiredException();
+            return $account->GetPublicClientObject();
+        }
+        else if ($admin)
+            return $account->GetAdminClientObject($full);
+        else return $account->GetUserClientObject($full);
     }
 
     /**
@@ -413,7 +414,7 @@ class AccountsApp extends BaseApp
      * Creates a new user account
      * @throws Exceptions\AccountCreateDeniedException if the feature is disabled
      * @throws Exceptions\AccountExistsException if the account already exists
-     * @return AccountJ
+     * @return UserAccountJ
      */
     protected function CreateAccount(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : array
     {
@@ -472,7 +473,7 @@ class AccountsApp extends BaseApp
         if ($actionlog !== null)
             $actionlog->LogDetails('account',$account->ID()); 
 
-        return $account->GetClientObject(Account::OBJECT_FULL);
+        return $account->GetUserClientObject();
     }
 
     /**
@@ -490,7 +491,7 @@ class AccountsApp extends BaseApp
      * @throws Exceptions\UnknownClientException if the given client is invalid
      * @throws Exceptions\OldPasswordRequiredException if the old password is required to unlock crypto
      * @throws Exceptions\NewPasswordRequiredException if a new password is required to be set
-     * @return array{account:AccountJ, client:ClientJ}
+     * @return array{account:UserAccountJ, client:ClientJ}
      */
     protected function CreateSession(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : array
     {
@@ -547,7 +548,8 @@ class AccountsApp extends BaseApp
             $account = Account::CreateExternal($this->database, $username, $authsrc);
         }
         
-        if (!$account->isEnabled()) throw new Exceptions\AccountDisabledException();
+        if ($account->isDisabled() !== 0) 
+            throw new Exceptions\AccountDisabledException();
         
         if ($actionlog !== null) $actionlog->LogDetails('account',$account->ID()); 
         
@@ -620,7 +622,7 @@ class AccountsApp extends BaseApp
         $account->SetLoggedonDate();
         
         return array('client'=>$client->GetClientObject(true), 
-                     'account'=>$account->GetClientObject());
+                     'account'=>$account->GetUserClientObject());
     }
     
     /**
@@ -763,7 +765,7 @@ class AccountsApp extends BaseApp
             $authenticator->TryRequireTwoFactor();
         
         if ($actionlog !== null) $actionlog->LogDetails('account',
-            $account->GetClientObject(Account::OBJECT_ADMIN | Account::OBJECT_FULL), true);
+            $account->GetAdminClientObject(true), true);
         
         $account->Delete();
     }
@@ -922,7 +924,7 @@ class AccountsApp extends BaseApp
      * Searches for accounts identified with the given name prefix
      * @throws Exceptions\AuthenticationFailedException if not signed in
      * @throws Exceptions\SearchDeniedException if the feature is disabled
-     * @return array<string, AccountJ>
+     * @return array<string, PublicAccountJ>
      * @see Account::LoadAllMatchingInfo()
      */
     protected function SearchAccounts(SafeParams $params, ?Authenticator $authenticator) : array
@@ -940,7 +942,7 @@ class AccountsApp extends BaseApp
         $name = self::getUsername($params->GetParam('name')->CheckFunction(
             function(string $v){ return mb_strlen($v) >= 3; }));
 
-        return array_map(function(Account $account){ return $account->GetClientObject(); },
+        return array_map(function(Account $account){ return $account->GetPublicClientObject(); },
             Account::LoadAllMatchingInfo($this->database, $name, $limit));
     }
     
@@ -948,7 +950,7 @@ class AccountsApp extends BaseApp
      * Searches for groups identified with the given name prefix
      * @throws Exceptions\AuthenticationFailedException if not signed in
      * @throws Exceptions\SearchDeniedException if the feature is disabled
-     * @return array<string, GroupJ>
+     * @return array<string, PublicGroupJ>
      * @see Group::LoadAllMatchingName()
      */
     protected function SearchGroups(SafeParams $params, ?Authenticator $authenticator) : array
@@ -966,14 +968,14 @@ class AccountsApp extends BaseApp
         $name = $params->GetParam('name')->CheckFunction(
             function(string $v){ return mb_strlen($v) >= 3; })->GetName();
         
-        return array_map(function(Group $group){ return $group->GetClientObject(); },
+        return array_map(function(Group $group){ return $group->GetPublicClientObject(); },
             Group::LoadAllMatchingName($this->database, $name, $limit));
     }
     
     /**
      * Returns a list of all registered accounts
      * @throws Exceptions\AuthenticationFailedException if not admin
-     * @return array<string, AccountJ>
+     * @return array<string, AdminAccountJ>
      */
     protected function GetAccounts(SafeParams $params, ?Authenticator $authenticator) : array
     {
@@ -985,18 +987,17 @@ class AccountsApp extends BaseApp
         $offset = $params->GetOptParam('offset',null)->GetNullUint();
         
         $full = $params->GetOptParam("full",false)->GetBool();
-        $type = $full ? Account::OBJECT_ADMIN : 0;
         
         $accounts = Account::LoadAll($this->database, $limit, $offset);
         
-        return array_map(function(Account $account)use($type){ 
-            return $account->GetClientObject($type); }, $accounts);
+        return array_map(function(Account $account)use($full){ 
+            return $account->GetAdminClientObject($full); }, $accounts);
     }
     
     /**
      * Returns a list of all registered groups
      * @throws Exceptions\AuthenticationFailedException if not admin
-     * @return array<string,GroupJ>
+     * @return array<string,AdminGroupJ>
      */
     protected function GetGroups(SafeParams $params, ?Authenticator $authenticator) : array
     {
@@ -1010,14 +1011,14 @@ class AccountsApp extends BaseApp
         $groups = Group::LoadAll($this->database, $limit, $offset);
         
         return array_map(function(Group $group){ 
-            return $group->GetClientObject(Group::OBJECT_ADMIN); }, $groups);
+            return $group->GetAdminClientObject(); }, $groups);
     }
     
     /**
      * Creates a new account group
      * @throws Exceptions\AuthenticationFailedException if not admin
      * @throws Exceptions\GroupExistsException if the group name exists already
-     * @return GroupJ
+     * @return AdminGroupJ
      */
     protected function CreateGroup(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : array
     {
@@ -1036,14 +1037,14 @@ class AccountsApp extends BaseApp
         
         if ($actionlog !== null) $actionlog->LogDetails('group',$group->ID());
         
-        return $group->GetClientObject(Group::OBJECT_FULL | Group::OBJECT_ADMIN);
+        return $group->GetAdminClientObject(true);
     }    
     
     /**
      * Returns the requested group object
      * @throws Exceptions\AuthenticationFailedException if not admin
      * @throws Exceptions\UnknownGroupException if the group is invalid
-     * @return GroupJ
+     * @return AdminGroupJ
      */
     protected function GetGroup(SafeParams $params, ?Authenticator $authenticator) : array
     {
@@ -1056,7 +1057,7 @@ class AccountsApp extends BaseApp
         $group = Group::TryLoadByID($this->database, $groupid);
         if ($group === null) throw new Exceptions\UnknownGroupException();
         
-        return $group->GetClientObject(Group::OBJECT_FULL | Group::OBJECT_ADMIN);
+        return $group->GetAdminClientObject(true);
     }
 
     /**
@@ -1076,7 +1077,7 @@ class AccountsApp extends BaseApp
         if ($group === null) throw new Exceptions\UnknownGroupException();
         
         if ($actionlog !== null) $actionlog->LogDetails('group',
-            $group->GetClientObject(Group::OBJECT_ADMIN | Group::OBJECT_FULL), true);
+            $group->GetAdminClientObject(true), true);
             
         $group->Delete();
     }
@@ -1087,7 +1088,7 @@ class AccountsApp extends BaseApp
      * @throws Exceptions\UnknownAccountException if the account is not found
      * @throws Exceptions\UnknownGroupException if the group is not found
      * @throws Exceptions\DuplicateGroupMembershipException if the membership already exists
-     * @return GroupJ
+     * @return AdminGroupJ
      */
     protected function AddGroupMember(SafeParams $params, ?Authenticator $authenticator) : array
     {
@@ -1109,7 +1110,7 @@ class AccountsApp extends BaseApp
 
         GroupJoin::Create($this->database, $account, $group);
 
-        return $group->GetClientObject(Group::OBJECT_FULL | Group::OBJECT_ADMIN);
+        return $group->GetAdminClientObject(true);
     }
     
     /**
@@ -1118,7 +1119,7 @@ class AccountsApp extends BaseApp
      * @throws Exceptions\UnknownAccountException if the account is not found
      * @throws Exceptions\UnknownGroupException if the group is not found
      * @throws Exceptions\UnknownGroupMembershipException if the group membership does not exist
-     * @return GroupJ
+     * @return AdminGroupJ
      */
     protected function RemoveGroupMember(SafeParams $params, ?Authenticator $authenticator) : array
     {
@@ -1139,7 +1140,7 @@ class AccountsApp extends BaseApp
         if ($join !== null) $join->Delete();
         else throw new Exceptions\UnknownGroupMembershipException();
         
-        return $group->GetClientObject(Group::OBJECT_FULL | Group::OBJECT_ADMIN);
+        return $group->GetAdminClientObject(true);
     }
     
     /**
@@ -1275,7 +1276,7 @@ class AccountsApp extends BaseApp
      * Sets config on an account
      * @throws Exceptions\AuthenticationFailedException if not admin
      * @throws Exceptions\UnknownAccountException if the account is not found
-     * @return AccountJ
+     * @return AdminAccountJ
      */
     protected function EditAccount(SafeParams $params, ?Authenticator $authenticator) : array
     {
@@ -1291,14 +1292,14 @@ class AccountsApp extends BaseApp
         if ($params->GetOptParam("expirepw",false)->GetBool()) 
             $account->ResetPasswordDate();
         
-        return $account->SetProperties($params)->GetClientObject(Account::OBJECT_ADMIN);
+        return $account->SetProperties($params)->GetAdminClientObject();
     }
     
     /**
      * Sets config on a group
      * @throws Exceptions\AuthenticationFailedException if not admin
      * @throws Exceptions\UnknownGroupException if the group is not found
-     * @return GroupJ
+     * @return AdminGroupJ
      */
     protected function EditGroup(SafeParams $params, ?Authenticator $authenticator) : array
     {
@@ -1324,7 +1325,7 @@ class AccountsApp extends BaseApp
         if ($params->HasParam('priority'))
             $group->SetPriority($params->GetParam("priority")->GetInt8());
         
-        return $group->SetProperties($params)->GetClientObject(Group::OBJECT_FULL | Group::OBJECT_ADMIN);
+        return $group->SetProperties($params)->GetAdminClientObject(true);
     }
     
     /**
