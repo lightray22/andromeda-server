@@ -1,14 +1,24 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -e
 
 rm -rf docs/doctum_*
+php vendor/bin/doctum.php update tools/conf/doctum-conf.php -v
 
-php vendor/bin/doctum.php update tools/doctum-conf.php -v
-
-TEMPDB=$(mktemp); TEMPCONF=$(mktemp)
+TEMPDB=$(mktemp)
+TEMPCONF=$(mktemp)
 unset andromeda_auth_sessionid
 unset andromeda_auth_sudouser
-./andromeda-server core dbconf --driver sqlite --outfile $TEMPCONF --dbpath $TEMPDB
-./andromeda-server --dbconf $TEMPCONF core install
-./andromeda-server --dbconf $TEMPCONF core usage | grep "=>" |
-    sed 's/.*=> //g' | grep -v "^testutil" > docs/USAGE.txt
+
+./andromeda-install core dbconf --driver sqlite --outfile $TEMPCONF --dbpath $TEMPDB > /dev/null
+./andromeda-install --dbconf $TEMPCONF core install-all > /dev/null
+./andromeda-server --dbconf $TEMPCONF core scanapps --enable > /dev/null
+
+format_usage () {
+   grep "=>" | sed 's/.*=> //g' | grep -v "^testutil" | sed "s/^/$1 /"
+}
+
+rm docs/USAGE.txt
+./andromeda-install --dbconf $TEMPCONF core usage | format_usage andromeda-install >> docs/USAGE.txt
+./andromeda-server --dbconf $TEMPCONF core usage | format_usage andromeda-server >> docs/USAGE.txt
+
 rm $TEMPDB $TEMPCONF

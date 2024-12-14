@@ -1,49 +1,55 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -e
 
 TAG=$1
+TAG_=${TAG/\//_}
+RDIR=release_$TAG_
 
 if [ -z "$TAG" ]; then
     echo "tag required"; exit 1
 fi
 
-rm -Rf release || exit 2
-mkdir release; cd release
+rm -Rf ${RDIR} || true
+mkdir ${RDIR}; cd ${RDIR}
 
-git clone git@github.com:lightray22/andromeda-server.git api
-cd api; git checkout $TAG || exit 3
+git clone git@github.com:irondrive/andromeda-server.git api
+cd api; git checkout $TAG
 
-rm -rf tools Andromeda/Apps/Testutil
+# remove development materials
+rm -rf *.md tools Andromeda/Apps/Testutil
+find . -name _tests | while read -r i; do rm -rf $i; done
 
-find . -name tests | while read -r i; do rm -rf $i; done
-
+# install composer dependencies
 export XDEBUG_MODE=off
 composer install --no-dev --optimize-autoloader
 composer licenses --no-dev > vendor/LICENSES.txt
 rm composer.json composer.lock
 
+# reduce the size of the awk-sdk
 cd vendor/aws/aws-sdk-php
-
 mv src src2; mkdir src; cp -av src2/*.php src/; for dir in \
     Api Arn ClientSideMonitoring Credentials data Endpoint EndpointDiscovery Exception Handler Retry S3 Signature
     do cp -av "src2/$dir" src/; done; rm -rf src2
-
 cd src; mv data data2; mkdir data; cp -av data2/*.php data2/s3 data/; rm -rf data2
 
 cd ../../../.. # api
-
 cd .. # release
 
-git clone git@github.com:lightray22/andromeda-server-docs.git docs
-cd docs; git checkout $TAG || exit 4; cd ..
+# add the docs repo and wiki together
+(git clone git@github.com:irondrive/andromeda-server-docs.git docs && cd docs && git checkout $TAG && cd ..) \
+   || (echo "FAILED TO GET DOCS!"; read -p "Press enter to continue")
+mv api/wiki docs/
 
-git clone git@github.com:lightray22/andromeda-server.wiki.git docs/wiki
-
+# remove all git repository data
 find . -name ".git*" | while read -r i; do rm -rf $i; done
 
-tar -czvf andromeda-release-$TAG.tar.gz api
-zip -r andromeda-release-$TAG.zip api
+# make everything not writeable
+chmod -R -w api docs
 
-tar -czvf andromeda-docs-$TAG.tar.gz docs
-zip -r andromeda-docs-$TAG.zip docs
+tar -czvf andromeda-release-$TAG_.tar.gz api
+zip -r andromeda-release-$TAG_.zip api
+
+tar -czvf andromeda-docs-$TAG_.tar.gz docs
+zip -r andromeda-docs-$TAG_.zip docs
 
 ls *.tar.gz *.zip | while read -r i; do openssl sha256 $i > $i.sha256; done

@@ -1,17 +1,11 @@
-<?php namespace Andromeda\Apps\Files\Storage; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Apps\Files\Storage; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/Exceptions/Exceptions.php"); use Andromeda\Core\Exceptions;
-require_once(ROOT."/Core/Database/ObjectDatabase.php"); use Andromeda\Core\Database\ObjectDatabase;
-require_once(ROOT."/Core/IOFormat/Input.php"); use Andromeda\Core\IOFormat\Input;
-require_once(ROOT."/Core/IOFormat/SafeParam.php"); use Andromeda\Core\IOFormat\SafeParam;
-require_once(ROOT."/Core/IOFormat/SafeParams.php"); use Andromeda\Core\IOFormat\SafeParams;
+use Andromeda\Core\Database\{FieldTypes, ObjectDatabase};
+use Andromeda\Core\IOFormat\{Input, SafeParams};
 
 require_once(ROOT."/Apps/Files/Filesystem/FSManager.php"); use Andromeda\Apps\Files\Filesystem\FSManager;
 
-require_once(ROOT."/Apps/Accounts/FieldCrypt.php"); use Andromeda\Apps\Accounts\OptFieldCrypt;
-
-/** Exception indicating that this storage does not support folder functions */
-class FoldersUnsupportedException extends Exceptions\ClientErrorException { public $message = "STORAGE_FOLDERS_UNSUPPORTED"; }
+require_once(ROOT."/Apps/Accounts/Crypto/FieldCrypt.php"); use Andromeda\Apps\Accounts\Crypto\OptFieldCrypt;
 
 /** Trait for storage classes that store a possibly-encrypted username and password */
 trait UserPass
@@ -24,33 +18,35 @@ trait UserPass
     public static function GetFieldTemplate() : array
     {
         return array_merge(parent::GetFieldTemplate(), self::GetFieldCryptFieldTemplate(), array(
-            'username' => null, 'password' => null,
+            'username' => new FieldTypes\StringType(), 
+            'password' => new FieldTypes\StringType(),
         ));
     }
     
     /**
      * Returns the printable client object of this trait
-     * @return array `{username:?string, password:bool}`
+     * @return array<mixed> `{username:?string, password:bool}`
      * @see Storage::GetClientObject()
      */
     public function GetClientObject(bool $activate = false) : array
     {
-        return array_merge(parent::GetClientObject($activate), $this->GetFieldCryptClientObject(), array(
+        return parent::GetClientObject($activate) + $this->GetFieldCryptClientObject() + array(
             'username' => $this->TryGetUsername(),
             'password' => (bool)($this->TryGetPassword()),
-        ));
+        );
     }
     
     /** Returns the command usage for Create() */
-    public static function GetCreateUsage() : string { return parent::GetCreateUsage()." ".self::GetFieldCryptCreateUsage()." [--username alphanum] [--password raw]"; }
+    public static function GetCreateUsage() : string { return parent::GetCreateUsage()." ".self::GetFieldCryptCreateUsage()." [--username ?alphanum] [--password ?raw]"; }
     
     /** Performs cred-crypt level initialization on a new storage */
     public static function Create(ObjectDatabase $database, Input $input, FSManager $filesystem) : Storage
     {
-        return parent::Create($database, $input, $filesystem)->FieldCryptCreate($input)
-            ->SetPassword($input->GetOptParam('password', SafeParam::TYPE_RAW, SafeParams::PARAMLOG_NEVER))
-            ->SetUsername($input->GetOptParam('username', SafeParam::TYPE_ALPHANUM, 
-                SafeParams::PARAMLOG_ONLYFULL, null, SafeParam::MaxLength(255)));
+        $params = $input->GetParams();
+        
+        return parent::Create($database, $input, $filesystem)->FieldCryptCreate($params)
+            ->SetPassword($params->GetOptParam('password',null,SafeParams::PARAMLOG_NEVER)->GetNullRawString())
+            ->SetUsername($params->GetOptParam('username',null)->CheckLength(255)->GetNullAlphanum());
     }
     
     /** Returns the command usage for Edit() */
@@ -59,12 +55,13 @@ trait UserPass
     /** Performs cred-crypt level edit on an existing storage */
     public function Edit(Input $input) : Storage
     {
-        if ($input->HasParam('password')) $this->SetPassword($input->GetNullParam('password', 
-            SafeParam::TYPE_RAW, SafeParams::PARAMLOG_NEVER));
-        if ($input->HasParam('username')) $this->SetUsername($input->GetNullParam('username', 
-            SafeParam::TYPE_ALPHANUM, SafeParams::PARAMLOG_ONLYFULL, null, SafeParam::MaxLength(255)));
+        $params = $input->GetParams();
+        
+        if ($params->HasParam('password')) $this->SetPassword($params->GetParam('password',SafeParams::PARAMLOG_NEVER)->GetNullRawString());
+        if ($params->HasParam('username')) $this->SetUsername($params->GetParam('username')->CheckLength(255)->GetNullAlphanum());
 
-        $this->FieldCryptEdit($input); return parent::Edit($input);
+        $this->FieldCryptEdit($params);
+        return parent::Edit($input);
     }
     
     /** Returns the decrypted username */
@@ -117,22 +114,23 @@ trait BasePath
     public static function GetFieldTemplate() : array
     {
         return array_merge(parent::GetFieldTemplate(), array(
-            'path' => null
+            'path' => new FieldTypes\StringType()
         ));
     }
     
     public function GetClientObject(bool $activate = false) : array
     {
-        return array_merge(parent::GetClientObject($activate), array(
+        return parent::GetClientObject($activate) + array(
             'path' => $this->GetPath()
-        ));
+        );
     }
     
     public static function GetCreateUsage() : string { return parent::GetCreateUsage()." --path fspath"; }
     
     public static function Create(ObjectDatabase $database, Input $input, FSManager $filesystem) : Storage
     {
-        $path = $input->GetParam('path', SafeParam::TYPE_FSPATH);
+        $path = $input->GetParams()->GetParam('path')->GetFSPath();
+        
         return parent::Create($database, $input, $filesystem)->SetPath($path);
     }
     
@@ -140,8 +138,11 @@ trait BasePath
     
     public function Edit(Input $input) : Storage
     {
-        $path = $input->GetOptParam('path', SafeParam::TYPE_FSPATH);
-        if ($path !== null) $this->SetPath($path);
+        $params = $input->GetParams();
+        
+        if ($params->HasParam('path')) 
+            $this->SetPath($params->GetParam('path')->GetFSPath());
+        
         return parent::Edit($input);
     }
     

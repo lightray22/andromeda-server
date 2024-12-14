@@ -1,108 +1,12 @@
-<?php namespace Andromeda\Apps\Accounts; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Apps\Accounts; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/BaseApp.php"); use Andromeda\Core\{BaseApp, InstalledApp};
-require_once(ROOT."/Core/Main.php"); use Andromeda\Core\Main;
-require_once(ROOT."/Core/Utilities.php"); use Andromeda\Core\Utilities;
-require_once(ROOT."/Core/Exceptions/Exceptions.php"); use Andromeda\Core\Exceptions;
-require_once(ROOT."/Core/IOFormat/Input.php"); use Andromeda\Core\IOFormat\Input;
-require_once(ROOT."/Core/IOFormat/SafeParam.php"); use Andromeda\Core\IOFormat\SafeParam;
-require_once(ROOT."/Core/IOFormat/SafeParams.php"); use Andromeda\Core\IOFormat\SafeParams;
+use Andromeda\Core\{ApiPackage, BaseApp, Utilities};
+use Andromeda\Core\Database\QueryBuilder;
+use Andromeda\Core\Exceptions\{UnknownActionException, DecryptionFailedException};
+use Andromeda\Core\IOFormat\{Input, SafeParam, SafeParams};
+use Andromeda\Core\IOFormat\Exceptions\SafeParamInvalidException;
 
-require_once(ROOT."/Apps/Accounts/AccessLog.php");
-require_once(ROOT."/Apps/Accounts/Account.php");
-require_once(ROOT."/Apps/Accounts/Authenticator.php");
-require_once(ROOT."/Apps/Accounts/AuthObject.php");
-require_once(ROOT."/Apps/Accounts/Client.php");
-require_once(ROOT."/Apps/Accounts/Config.php");
-require_once(ROOT."/Apps/Accounts/Contact.php");
-require_once(ROOT."/Apps/Accounts/Group.php");
-require_once(ROOT."/Apps/Accounts/GroupStuff.php");
-require_once(ROOT."/Apps/Accounts/KeySource.php");
-require_once(ROOT."/Apps/Accounts/RecoveryKey.php");
-require_once(ROOT."/Apps/Accounts/Session.php");
-require_once(ROOT."/Apps/Accounts/TwoFactor.php");
-require_once(ROOT."/Apps/Accounts/Whitelist.php");
-
-require_once(ROOT."/Apps/Accounts/Auth/Manager.php");
-require_once(ROOT."/Apps/Accounts/Auth/Local.php");
-require_once(ROOT."/Apps/Accounts/Auth/LDAP.php");
-require_once(ROOT."/Apps/Accounts/Auth/IMAP.php");
-require_once(ROOT."/Apps/Accounts/Auth/FTP.php");
-
-use Andromeda\Core\UnknownActionException;
-use Andromeda\Core\DecryptionFailedException;
-
-/** Exception indicating that an account already exists under this username/email */
-class AccountExistsException extends Exceptions\ClientErrorException { public $message = "ACCOUNT_ALREADY_EXISTS"; }
-
-/** Exception indicating that a group already exists with this name */
-class GroupExistsException extends Exceptions\ClientErrorException { public $message = "GROUP_ALREADY_EXISTS"; }
-
-/** Exception indicating that this contact already exists */
-class ContactExistsException extends Exceptions\ClientErrorException { public $message = "CONTACT_ALREADY_EXISTS"; }
-
-/** Exception indicating that this group membership is for a default group and cannot be changed */
-class ImmutableGroupException extends Exceptions\ClientDeniedException { public $message = "GROUP_MEMBERSHIP_REQUIRED"; }
-
-/** Exception indicating that creating accounts is not allowed */
-class AccountCreateDeniedException extends Exceptions\ClientDeniedException { public $message = "ACCOUNT_CREATE_NOT_ALLOWED"; }
-
-/** Exception indicating that the requested username is not whitelisted */
-class AccountWhitelistException extends Exceptions\ClientDeniedException { public $message = "USERNAME_NOT_WHITELISTED"; }
-
-/** Exception indicating that deleting accounts is not allowed */
-class AccountDeleteDeniedException extends Exceptions\ClientDeniedException { public $message = "ACCOUNT_DELETE_NOT_ALLOWED"; }
-
-/** Exception indicating that account/group search is not allowed */
-class SearchDeniedException extends Exceptions\ClientDeniedException { public $message = "SEARCH_NOT_ALLOWED"; }
-
-/** Exception indicating that server-side crypto is not allowed */
-class CryptoNotAllowedException extends Exceptions\ClientDeniedException { public $message = "CRYPTO_NOT_ALLOWED"; }
-
-/** Exception indicating that this group membership already exists */
-class DuplicateGroupMembershipException extends Exceptions\ClientErrorException { public $message = "GROUP_MEMBERSHIP_EXISTS"; }
-
-/** Exception indicating that the password for an account using external authentication cannot be changed */
-class ChangeExternalPasswordException extends Exceptions\ClientErrorException { public $message = "CANNOT_CHANGE_EXTERNAL_PASSWORD"; }
-
-/** Exception indicating that a recovery key cannot be generated */
-class RecoveryKeyCreateException extends Exceptions\ClientErrorException { public $message = "CANNOT_GENERATE_RECOVERY_KEY"; }
-
-/** Exception indicating that the old password must be provided */
-class OldPasswordRequiredException extends Exceptions\ClientErrorException { public $message = "OLD_PASSWORD_REQUIRED"; }
-
-/** Exception indicating that a new password must be provided */
-class NewPasswordRequiredException extends Exceptions\ClientErrorException { public $message = "NEW_PASSWORD_REQUIRED"; }
-
-/** Exception indicating that an email address must be provided */
-class ContactRequiredException extends Exceptions\ClientDeniedException { public $message = "VALID_CONTACT_REQUIRED"; }
-
-/** Exception indicating that the test on the authentication source failed */
-class AuthSourceTestFailException extends Exceptions\ClientErrorException { public $message = "AUTH_SOURCE_TEST_FAIL"; }
-
-/** Exception indicating that an unknown authentication source was given */
-class UnknownAuthSourceException extends Exceptions\ClientNotFoundException { public $message = "UNKNOWN_AUTHSOURCE"; }
-
-/** Exception indicating that an unknown account was given */
-class UnknownAccountException extends Exceptions\ClientNotFoundException { public $message = "UNKNOWN_ACCOUNT"; }
-
-/** Exception indicating that an unknown group was given */
-class UnknownGroupException extends Exceptions\ClientNotFoundException { public $message = "UNKNOWN_GROUP"; }
-
-/** Exception indicating that an unknown client was given */
-class UnknownClientException extends Exceptions\ClientNotFoundException { public $message = "UNKNOWN_CLIENT"; }
-
-/** Exception indicating that an unknown session was given */
-class UnknownSessionException extends Exceptions\ClientNotFoundException { public $message = "UNKNOWN_SESSION"; }
-
-/** Exception indicating that an unknown twofactor was given */
-class UnknownTwoFactorException extends Exceptions\ClientNotFoundException { public $message = "UNKNOWN_TWOFACTOR"; }
-
-/** Exception indicating that an unknown contact was given */
-class UnknownContactException extends Exceptions\ClientNotFoundException { public $message = "UNKNOWN_CONTACT"; }
-
-/** Exception indicating that the group membership does not exist */
-class UnknownGroupMembershipException extends Exceptions\ClientNotFoundException { public $message = "UNKNOWN_GROUPMEMBERSHIP"; }
+use Andromeda\Apps\Accounts\Resource\{Client, Contact, RecoveryKey, Session, TwoFactor, RegisterAllow};
 
 /**
  * App for managing accounts and authenticating users.
@@ -111,40 +15,50 @@ class UnknownGroupMembershipException extends Exceptions\ClientNotFoundException
  * managing and validating contacts.  Supports account-crypto, two-factor 
  * authentication, multi-client/session management, authentication via external
  * sources, and granular per-account/per-group config.
+ * 
+ * @phpstan-import-type AccountJ from Account
+ * @phpstan-import-type ClientJ from Client
+ * @phpstan-import-type ConfigJ from Config
+ * @phpstan-import-type ContactJ from Contact
+ * @phpstan-import-type ExternalJ from AuthSource\External
+ * @phpstan-import-type GroupJ from Group
+ * @phpstan-import-type GroupJoinJ from GroupJoin
+ * @phpstan-import-type RecoveryKeyJ from RecoveryKey
+ * @phpstan-import-type RegisterAllowJ from RegisterAllow
+ * @phpstan-import-type TwoFactorJ from TwoFactor
  */
-class AccountsApp extends InstalledApp
+class AccountsApp extends BaseApp
 {
-    public static function getName() : string { return 'accounts'; }
+    private Config $config;
     
-    protected static function getLogClass() : string { return AccessLog::class; }
+    public function getName() : string { return 'accounts'; }
     
-    protected static function getConfigClass() : string { return Config::class; }
+    public function getVersion() : string { return andromeda_version; }
     
-    protected function GetConfig() : Config { return $this->config; }
+    /** @return class-string<ActionLog> */
+    public function getLogClass() : string { return ActionLog::class; }
     
-    protected static function getInstallFlags() : string { return '[--username alphanum --password raw]'; }
-    
-    public static function getUsage() : array 
+    public function getUsage() : array 
     { 
-        return array_merge(parent::getUsage(),array(
-            '- GENERAL AUTH: [--auth_sessionid id --auth_sessionkey alphanum] [--auth_sudouser text | --auth_sudoacct id]',
+        return array(
+            '- GENERAL AUTH: [--auth_sessionid id --auth_sessionkey randstr] [--auth_sudouser alphanum|email | --auth_sudoacct id]',
             'getconfig',
             'setconfig '.Config::GetSetConfigUsage(),
             'getaccount [--account id] [--full bool]',
             'setfullname --fullname name',
             'enablecrypto --auth_password raw [--auth_twofactor int]',
             'disablecrypto --auth_password raw',
-            'changepassword --new_password raw ((--username text --auth_password raw) | --auth_recoverykey text)',
-            'emailrecovery (--username text | '.Contact::GetFetchUsage().')',
+            'changepassword --new_password raw ((--username alphanum|email --auth_password raw) | --auth_recoverykey utf8)',
+            'sendrecovery (--username alphanum|email | '.Contact::GetFetchUsage().')',
             'createaccount (--username alphanum | '.Contact::GetFetchUsage().') --password raw [--admin bool]',
-            'createsession (--username text | '.Contact::GetFetchUsage().') --auth_password raw [--authsource id] [--old_password raw] [--new_password raw]',
-            '(createsession) [--auth_recoverykey text | --auth_twofactor int] [--name name]',
-            '(createsession) --auth_clientid id --auth_clientkey alphanum',
+            'createsession (--username alphanum|email | '.Contact::GetFetchUsage().') --auth_password raw [--authsource id] [--old_password raw] [--new_password raw]',
+            '(createsession) [--auth_recoverykey utf8 | --auth_twofactor int] [--name ?name]',
+            '(createsession) --auth_clientid id --auth_clientkey randstr',
             'createrecoverykeys --auth_password raw --auth_twofactor int [--replace bool]',
-            'createtwofactor --auth_password raw [--comment text]',
+            'createtwofactor --auth_password raw [--comment ?text]',
             'verifytwofactor --auth_twofactor int',
             'createcontact '.Contact::GetFetchUsage(),
-            'verifycontact --authkey text',
+            'verifycontact --authkey utf8',
             'deleteaccount --auth_password raw --auth_twofactor int',
             'deletesession [--session id --auth_password raw]',
             'deleteclient [--client id --auth_password raw]',
@@ -152,37 +66,36 @@ class AccountsApp extends InstalledApp
             'deletetwofactor --auth_password raw --twofactor id',
             'deletecontact --contact id',
             'editcontact --contact id [--usefrom bool] [--public bool]',
-            'searchaccounts --name text',
-            'searchgroups --name text',
-            'listaccounts [--limit uint] [--offset uint]',
-            'listgroups [--limit uint] [--offset uint]',
-            'creategroup --name name [--priority int8] [--comment text]',
-            'editgroup --group id [--name name] [--priority int8] [--comment ?text]',
+            'searchaccounts --name alphanum|email',
+            'searchgroups --name name',
+            'getaccounts [--limit ?uint] [--offset ?uint]',
+            'getgroups [--limit ?uint] [--offset ?uint]',
+            'creategroup --name name [--priority ?int8]',
             'getgroup --group id',
             'deletegroup --group id',
             'addgroupmember --account id --group id',
             'removegroupmember --account id --group id',
             'getmembership --account id --group id',
+            'editaccount --account id [--expirepw bool] '.PolicyBase::GetPropUsage(),
+            'editgroup --group id  [--name name] [--priority int8] '.PolicyBase::GetPropUsage(),
+            'sendmessage (--account id | --group id) --subject utf8 --text text [--html raw]',
             'getauthsources',
-            'createauthsource --auth_password raw '.Auth\Manager::GetPropUsage().' [--test_username text --test_password raw]',
-            ...array_map(function($u){ return "(createauthsource) $u"; }, Auth\Manager::GetPropUsages()),
-            'testauthsource --manager id [--test_username text --test_password raw]',
-            'editauthsource --manager id --auth_password raw '.Auth\Manager::GetPropUsage().' [--test_username text --test_password raw]',
-            'deleteauthsource --manager id --auth_password raw',
-            'setaccountprops --account id '.AuthEntity::GetPropUsage().' [--expirepw bool]',
-            'setgroupprops --group id '.AuthEntity::GetPropUsage(),
-            'sendmessage (--account id | --group id) --subject text --text text [--html raw]',
-            'addwhitelist --type '.implode('|',array_keys(Whitelist::TYPES)).' --value text',
-            'removewhitelist --type '.implode('|',array_keys(Whitelist::TYPES)).' --value text',
-            'getwhitelist'
-        ));
+            'createauthsource --auth_password raw '.AuthSource\External::GetPropUsage().' [--test_username text --test_password raw]',
+            ...array_map(function($u){ return "(createauthsource) $u"; }, AuthSource\External::GetPropUsages()),
+            'testauthsource --authsrc id [--test_username alphanum|email --test_password raw]',
+            'editauthsource --authsrc id --auth_password raw '.AuthSource\External::GetPropUsage().' [--test_username text --test_password raw]',
+            'deleteauthsource --authsrc id --auth_password raw',
+            'addregisterallow '.RegisterAllow::GetUsage(),
+            'removeregisterallow '.RegisterAllow::GetUsage(),
+            'getregisterallow'
+        );
     }
     
-    public function __construct(Main $api)
+    public function __construct(ApiPackage $api)
     {
         parent::__construct($api);
         
-        new Auth\Local(); // construct the singleton
+        $this->config = Config::GetInstance($this->database);
     }
 
     /**
@@ -192,166 +105,162 @@ class AccountsApp extends InstalledApp
      */
     public function Run(Input $input)
     {
-        if (($retval = parent::Run($input)) !== false) return $retval;
-        
         $authenticator = Authenticator::TryAuthenticate(
             $this->database, $input, $this->API->GetInterface());
+
+        $actionlog = null; if ($this->wantActionLog())
+        {
+            $actionlog = ActionLog::Create($this->database, $this->API->GetInterface(), $input);
+            $actionlog->SetAuth($authenticator);
+            $this->setActionLog($actionlog);
+        }
         
-        $accesslog = AccessLog::Create($this->database, $authenticator); $input->SetLogger($accesslog);
+        $params = $input->GetParams();
         
         switch($input->GetAction())
         {
-            case 'getconfig':           return $this->RunGetConfig($input, $authenticator);
-            case 'setconfig':           return $this->RunSetConfig($input, $authenticator);
+            case 'getconfig':           return $this->GetConfig($authenticator);
+            case 'setconfig':           return $this->SetConfig($params, $authenticator);
             
-            case 'getauthsources':      return $this->GetAuthSources($input, $authenticator);
-            case 'createauthsource':    return $this->CreateAuthSource($input, $authenticator, $accesslog);
-            case 'testauthsource':      return $this->TestAuthSource($input, $authenticator);
-            case 'editauthsource':      return $this->EditAuthSource($input, $authenticator);
-            case 'deleteauthsource':    $this->DeleteAuthSource($input, $authenticator, $accesslog); return;
+            case 'getauthsources':      return $this->GetAuthSources($authenticator);
+            case 'createauthsource':    return $this->CreateAuthSource($params, $authenticator, $actionlog);
+            case 'testauthsource':      return $this->TestAuthSource($params, $authenticator);
+            case 'editauthsource':      return $this->EditAuthSource($params, $authenticator);
+            case 'deleteauthsource':    $this->DeleteAuthSource($params, $authenticator, $actionlog); return null;
             
-            case 'getaccount':          return $this->GetAccount($input, $authenticator);
-            case 'setfullname':         $this->SetFullName($input, $authenticator); return;
-            case 'changepassword':      $this->ChangePassword($input, $authenticator); return;
+            case 'getaccount':          return $this->GetAccount($params, $authenticator);
+            case 'setfullname':         $this->SetFullName($params, $authenticator); return null;
+            case 'changepassword':      $this->ChangePassword($params, $authenticator); return null;
             
-            case 'emailrecovery':       $this->EmailRecovery($input); return;
+            case 'sendrecovery':        $this->SendRecovery($params); return null;
             
-            case 'createaccount':       return $this->CreateAccount($input, $authenticator, $accesslog);
-            case 'createsession':       return $this->CreateSession($input, $authenticator, $accesslog);
-            case 'enablecrypto':        return $this->EnableCrypto($input, $authenticator);
-            case 'disablecrypto':       $this->DisableCrypto($input, $authenticator); return;
+            case 'createaccount':       return $this->CreateAccount($params, $authenticator, $actionlog);
+            case 'createsession':       return $this->CreateSession($params, $authenticator, $actionlog);
+            case 'enablecrypto':        return $this->EnableCrypto($params, $authenticator);
+            case 'disablecrypto':       $this->DisableCrypto($authenticator); return null;
             
-            case 'createrecoverykeys':  return $this->CreateRecoveryKeys($input, $authenticator);
-            case 'createtwofactor':     return $this->CreateTwoFactor($input, $authenticator, $accesslog);
-            case 'verifytwofactor':     $this->VerifyTwoFactor($input, $authenticator); return;
-            case 'createcontact':       return $this->CreateContact($input, $authenticator, $accesslog);
-            case 'verifycontact':       $this->VerifyContact($input); return;
+            case 'createrecoverykeys':  return $this->CreateRecoveryKeys($params, $authenticator);
+            case 'createtwofactor':     return $this->CreateTwoFactor($params, $authenticator, $actionlog);
+            case 'verifytwofactor':     $this->VerifyTwoFactor($params, $authenticator); return null;
+            case 'createcontact':       return $this->CreateContact($params, $authenticator, $actionlog);
+            case 'verifycontact':       $this->VerifyContact($params); return null;
             
-            case 'deleteaccount':       $this->DeleteAccount($input, $authenticator, $accesslog); return;
-            case 'deletesession':       $this->DeleteSession($input, $authenticator, $accesslog); return;
-            case 'deleteclient':        $this->DeleteClient($input, $authenticator, $accesslog); return;
-            case 'deleteallauth':       $this->DeleteAllAuth($input, $authenticator); return;
-            case 'deletetwofactor':     $this->DeleteTwoFactor($input, $authenticator, $accesslog); return;
+            case 'deleteaccount':       $this->DeleteAccount($authenticator, $actionlog); return null;
+            case 'deletesession':       $this->DeleteSession($params, $authenticator, $actionlog); return null;
+            case 'deleteclient':        $this->DeleteClient($params, $authenticator, $actionlog); return null;
+            case 'deleteallauth':       $this->DeleteAllAuth($params, $authenticator); return null;
+            case 'deletetwofactor':     $this->DeleteTwoFactor($params, $authenticator, $actionlog); return null;
             
-            case 'deletecontact':       $this->DeleteContact($input, $authenticator, $accesslog); return;
-            case 'editcontact':         return $this->EditContact($input, $authenticator);
+            case 'deletecontact':       $this->DeleteContact($params, $authenticator, $actionlog); return null;
+            case 'editcontact':         return $this->EditContact($params, $authenticator);
             
-            case 'searchaccounts':      return $this->SearchAccounts($input, $authenticator);
-            case 'searchgroups':        return $this->SearchGroups($input, $authenticator);
-            case 'listaccounts':        return $this->ListAccounts($input, $authenticator);
-            case 'listgroups':          return $this->ListGroups($input, $authenticator);
-            case 'creategroup':         return $this->CreateGroup($input, $authenticator, $accesslog);
-            case 'editgroup':           return $this->EditGroup($input, $authenticator); 
-            case 'getgroup':            return $this->GetGroup($input, $authenticator);
-            case 'deletegroup':         $this->DeleteGroup($input, $authenticator, $accesslog); return;
-            case 'addgroupmember':      return $this->AddGroupMember($input, $authenticator);
-            case 'removegroupmember':   return $this->RemoveGroupmember($input, $authenticator);
-            case 'getmembership':       return $this->GetMembership($input, $authenticator);
+            case 'searchaccounts':      return $this->SearchAccounts($params, $authenticator);
+            case 'searchgroups':        return $this->SearchGroups($params, $authenticator);
+            case 'getaccounts':         return $this->GetAccounts($params, $authenticator);
+            case 'getgroups':           return $this->GetGroups($params, $authenticator);
+            case 'creategroup':         return $this->CreateGroup($params, $authenticator, $actionlog);
+            case 'getgroup':            return $this->GetGroup($params, $authenticator);
+            case 'deletegroup':         $this->DeleteGroup($params, $authenticator, $actionlog); return null;
+            case 'addgroupmember':      return $this->AddGroupMember($params, $authenticator);
+            case 'removegroupmember':   return $this->RemoveGroupMember($params, $authenticator);
+            case 'getmembership':       return $this->GetMembership($params, $authenticator);
             
-            case 'setaccountprops':     return $this->SetAccountProps($input, $authenticator);
-            case 'setgroupprops':       return $this->SetGroupProps($input, $authenticator);
+            case 'editaccount':     return $this->EditAccount($params, $authenticator);
+            case 'editgroup':       return $this->EditGroup($params, $authenticator);
             
-            case 'sendmessage':         $this->SendMessage($input, $authenticator); return;
+            case 'sendmessage':         $this->SendMessage($params, $authenticator); return null;
             
-            case 'addwhitelist':        return $this->AddWhitelist($input, $authenticator);
-            case 'removewhitelist':     $this->RemoveWhitelist($input, $authenticator); return;
-            case 'getwhitelist':        return $this->GetWhitelist($input, $authenticator);
+            case 'addregisterallow':        return $this->AddRegisterAllow($params, $authenticator);
+            case 'removeregisterallow':     $this->RemoveRegisterAllow($params, $authenticator); return null;
+            case 'getregisterallow':        return $this->GetRegisterAllow($authenticator);
             
-            default: throw new UnknownActionException();
+            default: throw new UnknownActionException($input->GetAction());
         }
     }
     
     /**
-     * {@inheritDoc}
-     * @see \Andromeda\Core\InstalledApp::Install()
-     * @see Account::GetClientObject()
-     * @return ?array Account if admin was created
+     * Get either an alphanum or email from the given param
+     * @param SafeParam $param param to extract value from
+     * @return string validated alphanum or email
      */
-    protected function Install(Input $input) : ?array
+    public static function getUsername(SafeParam $param) : string // TODO this should go away, user should specify --email or --username
     {
-        parent::Install($input);
-        
-        if ($input->HasParam('username'))
-        {
-            $username = $input->GetParam("username", SafeParam::TYPE_ALPHANUM, 
-                SafeParams::PARAMLOG_ALWAYS, null, SafeParam::MaxLength(127));
-            $password = $input->GetParam("password", SafeParam::TYPE_RAW, SafeParams::PARAMLOG_NEVER);
-            
-            return Account::Create($this->database, Auth\Local::GetInstance(), 
-                $username, $password)->setAdmin(true)->GetClientObject();
-        }
-        else return null;
+        try { return $param->GetAlphanum(); }
+        catch (SafeParamInvalidException $e) {
+            return $param->GetEmail(); }
     }
 
     /**
      * Gets config for this app
-     * @return array Config
-     * @see Config::GetClientObject()
+     * @return ConfigJ
      */
-    protected function RunGetConfig(Input $input, ?Authenticator $authenticator) : array
+    protected function GetConfig(?Authenticator $authenticator) : array
     {
         $admin = $authenticator !== null && $authenticator->isAdmin();
 
-        return $this->GetConfig()->GetClientObject($admin);
+        return $this->config->GetClientObject($admin);
     }
     
     /**
      * Sets config for this app
-     * @throws AuthenticationFailedException if not admin
-     * @return array Config
-     * @see Config::GetClientObject()
+     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @return ConfigJ
      */
-    protected function RunSetConfig(Input $input, ?Authenticator $authenticator) : array
+    protected function SetConfig(SafeParams $params, ?Authenticator $authenticator) : array
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();        
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();        
         $authenticator->RequireAdmin();
         
-        return $this->GetConfig()->SetConfig($input)->GetClientObject(true);
+        return $this->config->SetConfig($params)->GetClientObject(true);
     }
     
     /**
      * Returns a list of the configured authentication sources
-     * @return array [id:Auth\Manager]
-     * @see Auth\Manager::GetClientObject()
+     * @return array<string, ExternalJ>
      */
-    protected function GetAuthSources(Input $input, ?Authenticator $authenticator) : array
+    protected function GetAuthSources(?Authenticator $authenticator) : array
     {
         $admin = $authenticator !== null && $authenticator->isAdmin();
         
-        $auths = Auth\Manager::LoadAll($this->database);
+        $auths = AuthSource\External::LoadAll($this->database);
         
-        if (!$admin) $auths = array_filter($auths, function(Auth\Manager $m){ return $m->GetEnabled(); });
+        if (!$admin) $auths = array_filter($auths, function(AuthSource\External $m){ return $m->GetEnabled() !== 0; });
         
-        return array_map(function(Auth\Manager $m)use($admin){ return $m->GetClientObject($admin); }, $auths);
+        return array_map(function(AuthSource\External $m)use($admin){ 
+            return $m->GetClientObject($admin); }, $auths);
     }
 
     /**
      * Gets the current account object, or the specified one
-     * @throws UnknownAccountException if the specified account is not valid
-     * @return array Account
-     * @see Account::GetClientObject()
+     * @throws Exceptions\UnknownAccountException if the specified account is not valid
+     * @return AccountJ
      */
-    protected function GetAccount(Input $input, ?Authenticator $authenticator) : ?array
+    protected function GetAccount(SafeParams $params, ?Authenticator $authenticator) : ?array
     {
         if ($authenticator === null) return null;
         
-        $account = $input->GetOptParam("account", SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_ALWAYS);
-        
-        if ($account !== null)
+        if ($params->HasParam('account'))
         {
+            $account = $params->GetParam('account',SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
+            
             $account = Account::TryLoadByID($this->database, $account);
-            if ($account === null) throw new UnknownAccountException();
+            if ($account === null)
+                throw new Exceptions\UnknownAccountException();
         }
         else $account = $authenticator->GetAccount();
         
         $objtype = 0;
         
-        $admin = $authenticator->isAdmin();
+        $admin = $authenticator->isRealAdmin();
         if ($admin) $objtype |= Account::OBJECT_ADMIN;
         
-        $self = ($account === $authenticator->GetAccount());
-        $full = $input->GetOptParam("full", SafeParam::TYPE_BOOL);
-        if ($full && ($admin || $self)) $objtype |= Account::OBJECT_FULL;
+        if ($params->GetOptParam("full",false)->GetBool())
+        {
+            if ($admin || ($account === $authenticator->GetAccount()))
+                $objtype |= Account::OBJECT_FULL;
+            else throw new Exceptions\AdminRequiredException();
+        }
 
         return $account->GetClientObject($objtype);
     }
@@ -361,86 +270,82 @@ class AccountsApp extends InstalledApp
      * 
      * If currently logged in, this changes the password for the user's account (requiring the old one)
      * If not logged in, this allows account recovery by resetting the password via a recovery key.
-     * @throws AuthenticationFailedException if the given account or recovery key are invalid
-     * @throws ChangeExternalPasswordException if the user's account uses an non-local auth source
+     * @throws Exceptions\AuthenticationFailedException if the given account or recovery key are invalid
+     * @throws Exceptions\ChangeExternalPasswordException if the user's account uses an non-local auth source
      */
-    protected function ChangePassword(Input $input, ?Authenticator $authenticator) : void
-    {
-        $new_password = $input->GetParam('new_password', SafeParam::TYPE_RAW, SafeParams::PARAMLOG_NEVER);
-        $recoverykey = $input->GetOptParam('auth_recoverykey', SafeParam::TYPE_TEXT, SafeParams::PARAMLOG_NEVER);
+    protected function ChangePassword(SafeParams $params, ?Authenticator $authenticator) : void
+    {   
+        $new_password = $params->GetParam('new_password', SafeParams::PARAMLOG_NEVER)->GetRawString();
+        
+        $recoverykey = $params->HasParam('auth_recoverykey') ? 
+            $params->GetParam('auth_recoverykey',SafeParams::PARAMLOG_NEVER)->GetUTF8String() : null;
         
         if ($recoverykey !== null)
         {
-            $username = $input->GetParam("username", SafeParam::TYPE_TEXT, SafeParams::PARAMLOG_ALWAYS);
+            $username = self::getUsername($params->GetParam("username", SafeParams::PARAMLOG_ALWAYS));
             $account = Account::TryLoadByUsername($this->database, $username);
-            if ($account === null) throw new AuthenticationFailedException();
+            if ($account === null)
+                throw new Exceptions\AuthenticationFailedException();
+
+            if (!$account->CheckRecoveryKey($recoverykey)) 
+                throw new Exceptions\AuthenticationFailedException();
         }
         else
         {
-            if ($authenticator === null) throw new AuthenticationFailedException();
-            $account = $authenticator->GetAccount();   
+            if ($authenticator === null)
+                throw new Exceptions\AuthenticationFailedException();
+            $account = $authenticator->GetAccount();  
+
+            if (!$authenticator->isSudoUser()) 
+                $authenticator->RequirePassword();
         }       
         
-        if (!$account->GetAuthSource() instanceof Auth\Local) 
-            throw new ChangeExternalPasswordException();
-                
-        if ($recoverykey !== null)
-        {
-            if (!$account->CheckRecoveryKey($recoverykey)) 
-                throw new AuthenticationFailedException();
-        }
-        else if (!$authenticator->isSudoUser()) 
-            $authenticator->RequirePassword();
-        
-        Authenticator::StaticTryRequireCrypto($input, $account);
+        if (!$account->GetAuthSource() instanceof AuthSource\Local) 
+            throw new Exceptions\ChangeExternalPasswordException();
+
+        Authenticator::StaticTryRequireCrypto($params, $account);
         $account->ChangePassword($new_password);
-    }
-    
-    /** Returns the given string with each character after a space capitalized */
-    private static function capitalizeWords(string $str) : string 
-    { 
-        return implode(" ",array_map(function(string $p){ 
-            return Utilities::FirstUpper($p);
-        }, explode(" ", trim($str)))); 
     }
     
     /**
      * Sets the user's full (real) name
-     * @throws AuthenticationFailedException if not logged in
+     * @throws Exceptions\AuthenticationFailedException if not logged in
      */
-    protected function SetFullName(Input $input, ?Authenticator $authenticator) : void
+    protected function SetFullName(SafeParams $params, ?Authenticator $authenticator) : void
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         
-        $fullname = self::capitalizeWords($input->GetParam("fullname", SafeParam::TYPE_NAME));
+        $fullname = Utilities::CapitalizeWords($params->GetParam('fullname')->GetName());
         
         $authenticator->GetAccount()->SetFullName($fullname);
     }
     
     /**
-     * Emails a recovery key to the user's registered contacts
-     * @throws UnknownAccountException if the given username is invalid
-     * @throws RecoveryKeyCreateException if crypto or two factor are enabled
+     * Sends a recovery key to the user's registered contacts
+     * @throws Exceptions\UnknownAccountException if the given username is invalid
+     * @throws Exceptions\RecoveryKeyCreateException if crypto or two factor are enabled
      */
-    protected function EmailRecovery(Input $input) : void
+    protected function SendRecovery(SafeParams $params) : void
     {
-        if ($input->HasParam('username'))
+        if ($params->HasParam('username'))
         {
-            $username = $input->GetParam("username", SafeParam::TYPE_TEXT, SafeParams::PARAMLOG_ALWAYS);
+            $username = self::getUsername($params->GetParam("username", SafeParams::PARAMLOG_ALWAYS));
             $account = Account::TryLoadByUsername($this->database, $username);
         }
         else
         {
-            $contactInfo = Contact::FetchInfoFromInput($input);
-            $account = Account::TryLoadByContactInfo($this->database, $contactInfo);
+            $contact = Contact::TryLoadFromPair($this->database, Contact::FetchPairFromParams($params));
+            $account = ($contact === null) ? null : $contact->GetAccount();
         }        
         
-        if ($account === null) throw new UnknownAccountException();
+        if ($account === null)
+            throw new Exceptions\UnknownAccountException();
         
         if ($account->hasCrypto() || $account->HasValidTwoFactor()) 
-            throw new RecoveryKeyCreateException();
+            throw new Exceptions\RecoveryKeyCreateException();
 
-        $key = RecoveryKey::Create($this->database, $account)->GetFullKey();   
+        $key = RecoveryKey::Create($this->database, $account)->GetFullKey();
         
         $subject = "Andromeda Account Recovery Key";
         $body = "Your recovery key is: $key";       
@@ -454,34 +359,31 @@ class AccountsApp extends InstalledApp
      * Enables server-side crypto for an account and returns new recovery keys
      * 
      * Deletes any existing recovery keys, requiring two factor if they exist
-     * @throws AuthenticationFailedException if not signed in
-     * @return array [id:RecoveryKey] if crypto was not enabled
-     * @see RecoveryKey::GetClientObject()
+     * @throws Exceptions\AuthenticationFailedException if not signed in
+     * @return ?list<RecoveryKeyJ> if crypto was not enabled
      */
-    protected function EnableCrypto(Input $input, ?Authenticator $authenticator) : ?array
+    protected function EnableCrypto(SafeParams $params, ?Authenticator $authenticator) : ?array
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         $account = $authenticator->GetAccount();
         
         if ($account->hasCrypto()) return null;
         
-        if (!$account->GetAllowCrypto()) throw new CryptoNotAllowedException();
+        if (!$account->GetAllowCrypto())
+            throw new Exceptions\CryptoNotAllowedException();
         
         $authenticator->RequirePassword()->TryRequireTwoFactor();
         
-        $password = $input->GetParam('auth_password', SafeParam::TYPE_RAW, SafeParams::PARAMLOG_NEVER);
+        $password = $params->GetParam('auth_password', SafeParams::PARAMLOG_NEVER)->GetRawString();
 
-        if ($account->HasRecoveryKeys())
-        {
-            RecoveryKey::DeleteByAccount($this->database, $account);
-        }
+        RecoveryKey::DeleteByAccount($this->database, $account);
         
         $account->InitializeCrypto($password);
         
         if (($session = $authenticator->TryGetSession()) !== null)
         {
-            $session->InitializeCrypto();
-            
+            $session->InitializeCrypto(); // account has crypto, session key is available
             Session::DeleteByAccountExcept($this->database, $account, $session);
         }
         else Session::DeleteByAccount($this->database, $account);
@@ -492,11 +394,12 @@ class AccountsApp extends InstalledApp
     
     /**
      * Disables server side crypto for an account
-     * @throws AuthenticationFailedException if not signed in
+     * @throws Exceptions\AuthenticationFailedException if not signed in
      */
-    protected function DisableCrypto(Input $input, ?Authenticator $authenticator) : void
+    protected function DisableCrypto(?Authenticator $authenticator) : void
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         $account = $authenticator->GetAccount();
         
         if (!$account->hasCrypto()) return;
@@ -508,62 +411,66 @@ class AccountsApp extends InstalledApp
     
     /**
      * Creates a new user account
-     * @throws AccountCreateDeniedException if the feature is disabled
-     * @throws AccountExistsException if the account already exists
-     * @return array Account
-     * @see Account::GetClientObject()
+     * @throws Exceptions\AccountCreateDeniedException if the feature is disabled
+     * @throws Exceptions\AccountExistsException if the account already exists
+     * @return AccountJ
      */
-    protected function CreateAccount(Input $input, ?Authenticator $authenticator, ?AccessLog $accesslog) : array
+    protected function CreateAccount(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : array
     {
         $admin = $authenticator !== null; 
         if ($admin) $authenticator->RequireAdmin();
         
-        $allowCreate = $this->GetConfig()->GetAllowCreateAccount();
+        $allowCreate = $this->config->GetAllowCreateAccount();
         
-        if (!$admin && !$allowCreate) throw new AccountCreateDeniedException();
+        if (!$admin && $allowCreate === 0)
+            throw new Exceptions\AccountCreateDeniedException();
         
-        $userIsContact = $this->GetConfig()->GetUsernameIsContact();
-        $requireContact = $this->GetConfig()->GetRequireContact();
+        $userIsContact = $this->config->GetUsernameIsContact();
+        $requireContact = $this->config->GetRequireContact();
                
         if ($userIsContact || $requireContact >= Config::CONTACT_EXIST)
         {
-            $contactInfo = Contact::FetchInfoFromInput($input);
-            if ($userIsContact) $username = $contactInfo->info;
+            $cpair = Contact::FetchPairFromParams($params);
+            if ($userIsContact) $username = $cpair['address'];
         }
         
-        $username ??= $input->GetParam("username", SafeParam::TYPE_ALPHANUM, 
-            SafeParams::PARAMLOG_ALWAYS, null, SafeParam::MaxLength(127));
+        $username ??= $params->GetParam("username", 
+            SafeParams::PARAMLOG_ALWAYS)->CheckLength(127)->GetAlphanum();
 
-        if (!$admin && $allowCreate == Config::CREATE_WHITELIST)
+        if (!$admin && $allowCreate === Config::CREATE_ALLOWLIST)
         {
-            $ok = Whitelist::ExistsTypeAndValue($this->database, Whitelist::TYPE_USERNAME, $username);
+            if (!RegisterAllow::ExistsTypeAndValue($this->database, RegisterAllow::TYPE_USERNAME, $username))
+                throw new Exceptions\AccountRegisterAllowException();
             
-            if (isset($contactInfo)) $ok |= Whitelist::ExistsTypeAndValue($this->database, Whitelist::TYPE_CONTACT, $contactInfo->info);
-            
-            if (!$ok) throw new AccountWhitelistException();
+            if (isset($cpair) && !RegisterAllow::ExistsTypeAndValue(
+                $this->database, Contact::ChildClassToType($cpair['class']), $cpair['address']))
+                    throw new Exceptions\AccountRegisterAllowException();
         }
 
-        $password = $input->GetParam("password", SafeParam::TYPE_RAW, SafeParams::PARAMLOG_NEVER);
+        $password = $params->GetParam("password", SafeParams::PARAMLOG_NEVER)->GetRawString();
         
-        if (Account::TryLoadByUsername($this->database, $username) !== null) throw new AccountExistsException();
+        if (Account::TryLoadByUsername($this->database, $username) !== null)
+            throw new Exceptions\AccountExistsException();
 
-        $account = Account::Create($this->database, Auth\Local::GetInstance(), $username, $password);
+        $account = Account::Create($this->database, $username, $password);
        
-        if (isset($contactInfo)) 
+        if (isset($cpair)) 
         {
-            if (Contact::TryLoadByInfoPair($this->database, $contactInfo) !== null)
-                throw new ContactExistsException();
+            if (Contact::TryLoadFromPair($this->database, $cpair) !== null)
+                throw new Exceptions\ContactExistsException();
             
             $valid = $requireContact >= Config::CONTACT_VALID;
             
-            if ($valid) $account->setDisabled(Account::DISABLE_PENDING_CONTACT);
+            if ($valid) $account->SetDisabled(Account::DISABLE_PENDING_CONTACT);
             
-            Contact::Create($this->database, $account, $contactInfo, $valid);
+            Contact::CreateFromPair($this->database, $account, $cpair, $valid);
         }
         
-        if ($admin && $input->GetOptParam('admin',SafeParam::TYPE_BOOL)) $account->setAdmin(true);
+        if ($admin && $params->GetOptParam('admin',false)->GetBool())
+            $account->SetAdmin(true);
         
-        if ($accesslog) $accesslog->LogDetails('account',$account->ID()); 
+        if ($actionlog !== null)
+            $actionlog->LogDetails('account',$account->ID()); 
 
         return $account->GetClientObject(Account::OBJECT_FULL);
     }
@@ -577,107 +484,104 @@ class AccountsApp extends InstalledApp
      * client object in use, creating one and checking extra auth if not provided.
      * Account crypto is checked, password age is checked, dates are updated.
      * Then finally, the session is created and the client is returned.
-     * @throws Exceptions\ClientDeniedException if already logged in
-     * @throws UnknownAuthSourceException if the given auth source is invalid
-     * @throws AuthenticationFailedException if the given username/password are wrong
-     * @throws AccountDisabledException if the account is not enabled
-     * @throws UnknownClientException if the given client is invalid
-     * @throws OldPasswordRequiredException if the old password is required to unlock crypto
-     * @throws NewPasswordRequiredException if a new password is required to be set
-     * @return array `{client:Client, account:Account}`
-     * @see Client::GetClientObject()
-     * @see Account::GetClientObject()
+     * @throws Exceptions\UnknownAuthSourceException if the given auth source is invalid
+     * @throws Exceptions\AuthenticationFailedException if the given username/password are wrong
+     * @throws Exceptions\AccountDisabledException if the account is not enabled
+     * @throws Exceptions\UnknownClientException if the given client is invalid
+     * @throws Exceptions\OldPasswordRequiredException if the old password is required to unlock crypto
+     * @throws Exceptions\NewPasswordRequiredException if a new password is required to be set
+     * @return array{account:AccountJ, client:ClientJ}
      */
-    protected function CreateSession(Input $input, ?Authenticator $authenticator, ?AccessLog $accesslog) : array
+    protected function CreateSession(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : array
     {
-        if ($input->HasParam('username'))
+        if ($params->HasParam('username'))
         {
-            $username = $input->GetParam("username", SafeParam::TYPE_TEXT, SafeParams::PARAMLOG_ALWAYS);
+            $username = self::getUsername($params->GetParam("username", SafeParams::PARAMLOG_ALWAYS));
             $account = Account::TryLoadByUsername($this->database, $username);
         }
         else 
         {
-            $cinfo = Contact::FetchInfoFromInput($input);
-            $account = Account::TryLoadByContactInfo($this->database, $cinfo);
-            if ($account === null) // can't log in externally with contact info
-                throw new AuthenticationFailedException();
-            $username = $account->GetUsername(); // phpstan
+            $contact = Contact::TryLoadFromPair($this->database, Contact::FetchPairFromParams($params));
+            if ($contact === null) // can't log in externally via contact info
+                throw new Exceptions\AuthenticationFailedException();
+            
+            $account = $contact->GetAccount();
+            $username = $account->GetUsername();
         }
         
-        $password = $input->GetParam("auth_password", SafeParam::TYPE_RAW, SafeParams::PARAMLOG_NEVER);
+        $password = $params->GetParam("auth_password", SafeParams::PARAMLOG_NEVER)->GetRawString();
         
-        $reqauthman = null; if ($input->HasParam('authsource'))
+        $reqauthsrc = null; if ($params->HasParam('authsource'))
         {
-            $reqauthman = Auth\Manager::TryLoadByID($this->database,
-                $input->GetParam('authsource',SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_ALWAYS));
+            $mgrid = $params->GetParam('authsource', SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
             
-            if ($reqauthman === null) throw new UnknownAuthSourceException();
+            $reqauthsrc = AuthSource\External::TryLoadByID($this->database,$mgrid);
+            if ($reqauthsrc === null) throw new Exceptions\UnknownAuthSourceException();
         }
         
         if ($account !== null) /** check password */
         {
-            $authsource = $account->GetAuthSource();
-            $authman = ($authsource instanceof Auth\External)
-                ? $authsource->GetManager() : null;
+            $authsrc = $account->GetAuthSource();
             
-            /** check the authmanager matches if given */
-            if ($reqauthman !== null && $reqauthman !== $authman)
-                throw new AuthenticationFailedException();
+            /** check the authsrc matches if given */
+            if ($reqauthsrc !== null && $reqauthsrc !== $authsrc)
+                throw new Exceptions\AuthenticationFailedException();
             
-            if ($authman !== null && !$authman->GetEnabled())
-                 throw new AuthenticationFailedException();
+            if ($authsrc instanceof AuthSource\External && $authsrc->GetEnabled() === 0)
+                 throw new Exceptions\AuthenticationFailedException();
              
             if (!$account->VerifyPassword($password))
-                throw new AuthenticationFailedException();
+                throw new Exceptions\AuthenticationFailedException();
         }
         else /** create account on the fly if external auth */
         {
-            $authman = $reqauthman ?? $this->GetConfig()->GetDefaultAuth();
-            if ($authman === null) throw new UnknownAuthSourceException();
+            $authsrc = $reqauthsrc ?? $this->config->GetDefaultAuth();
+            if ($authsrc === null) throw new Exceptions\UnknownAuthSourceException();
             
-            if ($authman->GetEnabled() < Auth\Manager::ENABLED_FULL)
-                throw new AuthenticationFailedException();
+            if ($authsrc->GetEnabled() < AuthSource\External::ENABLED_FULL)
+                throw new Exceptions\AuthenticationFailedException();
             
-            $authsource = $authman->GetAuthSource();
-            if (!$authsource->VerifyUsernamePassword($username, $password))
-                throw new AuthenticationFailedException();
+            if (!$authsrc->VerifyUsernamePassword($username, $password))
+                throw new Exceptions\AuthenticationFailedException();
             
-            $account = Account::Create($this->database, $authsource, $username);
+            $account = Account::CreateExternal($this->database, $username, $authsrc);
         }
         
-        if (!$account->isEnabled()) throw new AccountDisabledException();
+        if (!$account->isEnabled()) throw new Exceptions\AccountDisabledException();
         
-        if ($accesslog) $accesslog->LogDetails('account',$account->ID()); 
-        
-        $clientid = $input->GetOptParam("auth_clientid", SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_NEVER);
-        $clientkey = $input->GetOptParam("auth_clientkey", SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_NEVER);
+        if ($actionlog !== null) $actionlog->LogDetails('account',$account->ID()); 
         
         $interface = $this->API->GetInterface();
         
         /* if a clientid is provided, check that it and the clientkey are correct */
-        if ($clientid !== null && $clientkey !== null)
+        if ($params->HasParam('auth_clientid') && $params->HasParam('auth_clientkey'))
         {
+            $clientid = $params->GetParam("auth_clientid", SafeParams::PARAMLOG_NEVER)->GetRandstr();
+            $clientkey = $params->GetParam("auth_clientkey", SafeParams::PARAMLOG_NEVER)->GetRandstr();
+            
             if ($account->GetForceUseTwoFactor() && $account->HasValidTwoFactor()) 
-                Authenticator::StaticTryRequireTwoFactor($input, $account);
+                Authenticator::StaticTryRequireTwoFactor($params, $account);
             
             $client = Client::TryLoadByID($this->database, $clientid);
-            if ($client === null || !$client->CheckMatch($interface, $clientkey)) 
-                throw new UnknownClientException();
+            if ($client === null || !$client->CheckKeyMatch($interface, $clientkey)) 
+                throw new Exceptions\UnknownClientException();
         } 
         else /* if no clientkey, require either a recoverykey or twofactor, create a client */
         { 
-            if (($recoverykey = $input->GetOptParam('auth_recoverykey', SafeParam::TYPE_TEXT, SafeParams::PARAMLOG_NEVER)) !== null)
+            if ($params->HasParam('auth_recoverykey'))
             {
+                $recoverykey = $params->GetParam('auth_recoverykey',SafeParams::PARAMLOG_NEVER)->GetUTF8String();
+                
                 if (!$account->CheckRecoveryKey($recoverykey))
-                    throw new AuthenticationFailedException();
+                    throw new Exceptions\AuthenticationFailedException();
             }
-            else Authenticator::StaticTryRequireTwoFactor($input, $account);
+            else Authenticator::StaticTryRequireTwoFactor($params, $account);
             
-            $cname = $input->GetOptParam('name', SafeParam::TYPE_NAME);
+            $cname = $params->GetOptParam('name',null)->GetNullName();
             $client = Client::Create($interface, $this->database, $account, $cname);
         }
         
-        if ($accesslog) $accesslog->LogDetails('client',$client->ID()); 
+        if ($actionlog !== null) $actionlog->LogDetails('client',$client->ID()); 
         
         /* unlock account crypto - failure means the password source must've changed without updating crypto */
         if ($account->hasCrypto())
@@ -685,8 +589,8 @@ class AccountsApp extends InstalledApp
             try { $account->UnlockCryptoFromPassword($password); }
             catch (DecryptionFailedException $e)
             {
-                $old_password = $input->GetOptParam("old_password", SafeParam::TYPE_RAW, SafeParams::PARAMLOG_NEVER);
-                if ($old_password === null) throw new OldPasswordRequiredException();
+                if (!$params->HasParam('old_password')) throw new Exceptions\OldPasswordRequiredException();
+                $old_password = $params->GetParam("old_password",SafeParams::PARAMLOG_NEVER)->GetRawString();
                 $account->UnlockCryptoFromPassword($old_password);
                 
                 $account->ChangePassword($password);
@@ -696,8 +600,9 @@ class AccountsApp extends InstalledApp
         /* check account password age, possibly require a new one */
         if (!$account->CheckPasswordAge())
         {
-            $new_password = $input->GetOptParam('new_password',SafeParam::TYPE_RAW, SafeParams::PARAMLOG_NEVER);
-            if ($new_password === null) throw new NewPasswordRequiredException();
+            if (!$params->HasParam('new_password')) throw new Exceptions\NewPasswordRequiredException();
+            $new_password = $params->GetParam('new_password',SafeParams::PARAMLOG_NEVER)->GetRawString();
+            
             $account->ChangePassword($new_password);
         }
         
@@ -705,13 +610,14 @@ class AccountsApp extends InstalledApp
         Session::PruneOldFor($this->database, $account);
         
         /* delete old session associated with this client, create a new one */
-        $session = Session::Create($this->database, $account, $client->DeleteSession());
+        Session::DeleteByClient($this->database, $client);
+        $session = Session::Create($this->database, $account, $client);
         
-        if ($accesslog) $accesslog->LogDetails('session',$session->ID()); 
+        if ($actionlog !== null) $actionlog->LogDetails('session',$session->ID()); 
         
         /* update object dates */
-        $client->setLoggedonDate();
-        $account->setLoggedonDate()->setActiveDate();
+        $client->SetLoggedonDate();
+        $account->SetLoggedonDate();
         
         return array('client'=>$client->GetClientObject(true), 
                      'account'=>$account->GetClientObject());
@@ -719,18 +625,18 @@ class AccountsApp extends InstalledApp
     
     /**
      * Creates a set of recovery keys, optionally replacing existing
-     * @throws AuthenticationFailedException if not logged in
-     * @return array `[id:RecoveryKey]`
-     * @see RecoveryKey::GetClientObject()
+     * @throws Exceptions\AuthenticationFailedException if not logged in
+     * @return list<RecoveryKeyJ>
      */
-    protected function CreateRecoveryKeys(Input $input, ?Authenticator $authenticator) : array
+    protected function CreateRecoveryKeys(SafeParams $params, ?Authenticator $authenticator) : array
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         $account = $authenticator->GetAccount();
         
         $authenticator->RequirePassword()->TryRequireTwoFactor()->TryRequireCrypto();        
         
-        if ($input->GetOptParam('replace',SafeParam::TYPE_BOOL))
+        if ($params->GetOptParam('replace',false)->GetBool())
             RecoveryKey::DeleteByAccount($this->database, $account);
         
         $keys = RecoveryKey::CreateSet($this->database, $account);
@@ -744,24 +650,23 @@ class AccountsApp extends InstalledApp
      * 
      * Also activates crypto for the account, if allowed and not active.
      * Doing so will delete all other sessions for the account.
-     * @throws AuthenticationFailedException if not signed in
-     * @return array `{twofactor:TwoFactor,recoverykeys:[id:RecoveryKey]}` \
-     *  - recovery keys are returned only if they don't already exist
-     * @see TwoFactor::GetClientObject()
-     * @see RecoveryKey::GetClientObject()
+     * @throws Exceptions\AuthenticationFailedException if not signed in
+     * @return array{twofactor:TwoFactorJ, recoverykeys?:list<RecoveryKeyJ>} \
+     *  recovery keys are returned only if they don't already exist
      */
-    protected function CreateTwoFactor(Input $input, ?Authenticator $authenticator, ?AccessLog $accesslog) : array
+    protected function CreateTwoFactor(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : array
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         $account = $authenticator->GetAccount();
         
         $authenticator->RequirePassword()->TryRequireCrypto();
         
-        $comment = $input->GetOptParam('comment', SafeParam::TYPE_TEXT);
+        $comment = $params->GetOptParam('comment',null)->GetNullHTMLText();
         
         $twofactor = TwoFactor::Create($this->database, $account, $comment);
         
-        if ($accesslog) $accesslog->LogDetails('twofactor',$twofactor->ID()); 
+        if ($actionlog !== null) $actionlog->LogDetails('twofactor',$twofactor->ID()); 
 
         $retval = array('twofactor'=>$twofactor->GetClientObject(true));
         
@@ -778,249 +683,262 @@ class AccountsApp extends InstalledApp
     
     /**
      * Verifies a two factor source
-     * @throws AuthenticationFailedException if not signed in
+     * @throws Exceptions\AuthenticationFailedException if not signed in
      */
-    protected function VerifyTwoFactor(Input $input, ?Authenticator $authenticator) : void
+    protected function VerifyTwoFactor(SafeParams $params, ?Authenticator $authenticator) : void
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         
         $authenticator->TryRequireCrypto(); // can't use authenticator's RequireTwoFactor yet
         
         $account = $authenticator->GetAccount();
         
-        $code = $input->GetParam("auth_twofactor", SafeParam::TYPE_ALPHANUM, SafeParams::PARAMLOG_NEVER); // not an int (leading zeroes)
+        $code = $params->GetParam("auth_twofactor",SafeParams::PARAMLOG_NEVER)->GetAlphanum(); // not an int (leading zeroes)
         
         if (!$account->CheckTwoFactor($code, true)) 
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
     }
     
     /**
      * Adds a contact to the account
-     * @throws AuthenticationFailedException if not signed in
-     * @throws ContactExistsException if the contact info is used
-     * @return array Contact
-     * @see Contact::GetClientObject()
+     * @throws Exceptions\AuthenticationFailedException if not signed in
+     * @throws Exceptions\ContactExistsException if the contact info is used
+     * @return ContactJ
      */
-    protected function CreateContact(Input $input, ?Authenticator $authenticator, ?AccessLog $accesslog) : array
+    protected function CreateContact(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : array
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         $account = $authenticator->GetAccount();
         
-        $verify = $this->GetConfig()->GetRequireContact() >= Config::CONTACT_VALID;
+        $verify = $this->config->GetRequireContact() >= Config::CONTACT_VALID;
         
-        $info = Contact::FetchInfoFromInput($input);
+        $cpair = Contact::FetchPairFromParams($params);
         
-        if (Contact::TryLoadByInfoPair($this->database, $info) !== null) throw new ContactExistsException();
+        if (Contact::TryLoadFromPair($this->database, $cpair) !== null) 
+            throw new Exceptions\ContactExistsException();
 
-        $contact = Contact::Create($this->database, $account, $info, $verify);
+        $contact = Contact::CreateFromPair($this->database, $account, $cpair, $verify);
         
-        if ($accesslog) $accesslog->LogDetails('contact',$contact->ID()); 
+        if ($actionlog !== null)
+            $actionlog->LogDetails('contact',$contact->ID()); 
         
         return $contact->GetClientObject();
     }
     
     /**
      * Verifies an account contact
-     * @throws AuthenticationFailedException if the given key is invalid
-     * @throws UnknownContactException if the contact does not exist
+     * @throws Exceptions\AuthenticationFailedException if the given key is invalid
+     * @throws Exceptions\UnknownContactException if the contact does not exist
      */
-    protected function VerifyContact(Input $input) : void
+    protected function VerifyContact(SafeParams $params) : void
     {
-        $authkey = $input->GetParam('authkey',SafeParam::TYPE_TEXT, SafeParams::PARAMLOG_NEVER);
+        $authkey = $params->GetParam('authkey',SafeParams::PARAMLOG_NEVER)->GetUTF8String();
         
         $contact = Contact::TryLoadByFullKey($this->database, $authkey);
-        if ($contact === null) throw new UnknownContactException();
+        if ($contact === null) throw new Exceptions\UnknownContactException();
         
-        if (!$contact->CheckFullKey($authkey)) throw new AuthenticationFailedException();
+        if (!$contact->CheckFullKey($authkey)) throw new Exceptions\AuthenticationFailedException();
     }
     
     /**
      * Deletes the current account (and signs out)
-     * @throws AuthenticationFailedException if not signed in
-     * @throws AccountDeleteDeniedException if delete is not allowed
+     * @throws Exceptions\AuthenticationFailedException if not signed in
+     * @throws Exceptions\AccountDeleteDeniedException if delete is not allowed
      */
-    protected function DeleteAccount(Input $input, ?Authenticator $authenticator, ?AccessLog $accesslog) : void
+    protected function DeleteAccount(?Authenticator $authenticator, ?ActionLog $actionlog) : void
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         
         $account = $authenticator->GetAccount();
         
         if (!$authenticator->isRealAdmin() && !$account->GetAllowUserDelete()) 
-            throw new AccountDeleteDeniedException();
+            throw new Exceptions\AccountDeleteDeniedException();
         
         $authenticator->RequirePassword();
         
         if (!$authenticator->isSudoUser()) 
             $authenticator->TryRequireTwoFactor();
         
-        if ($accesslog && AccessLog::isFullDetails()) $accesslog->LogDetails('account',
-            $account->GetClientObject(Account::OBJECT_ADMIN | Account::OBJECT_FULL));
+        if ($actionlog !== null) $actionlog->LogDetails('account',
+            $account->GetClientObject(Account::OBJECT_ADMIN | Account::OBJECT_FULL), true);
         
         $account->Delete();
     }
     
     /**
      * Deletes an account session (signing it out)
-     * @throws AuthenticationFailedException if not signed in
-     * @throws UnknownSessionException if an invalid session was provided
+     * @throws Exceptions\AuthenticationFailedException if not signed in
+     * @throws Exceptions\UnknownSessionException if an invalid session was provided
      */
-    protected function DeleteSession(Input $input, ?Authenticator $authenticator, ?AccessLog $accesslog) : void
+    protected function DeleteSession(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : void
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
+        
         $account = $authenticator->GetAccount();
         $session = $authenticator->GetSession();
 
-        $sessionid = $input->GetOptParam("session", SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_ALWAYS);
-        
-        if (($authenticator->isSudoUser()) && $sessionid === null)
-            throw new UnknownSessionException();
+        $specify = $params->HasParam('session');
+        if (($authenticator->isSudoUser()) && !$specify)
+            throw new Exceptions\UnknownSessionException();
 
-        if ($sessionid !== null)
+        if ($specify)
         {
+            $sessionid = $params->GetParam("session",SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
             $session = Session::TryLoadByAccountAndID($this->database, $account, $sessionid);
-            if ($session === null) throw new UnknownSessionException();
+            if ($session === null) throw new Exceptions\UnknownSessionException();
         }
         
-        if ($accesslog && AccessLog::isFullDetails()) 
-            $accesslog->LogDetails('session', $session->GetClientObject());
+        if ($actionlog !== null) 
+            $actionlog->LogDetails('session', $session->GetClientObject(), true);
         
         $session->Delete();
     }
     
     /**
      * Deletes an account session and client (signing out fully)
-     * @throws AuthenticationFailedException if not signed in
-     * @throws UnknownClientException if an invalid client was provided
+     * @throws Exceptions\AuthenticationFailedException if not signed in
+     * @throws Exceptions\UnknownClientException if an invalid client was provided
      */
-    protected function DeleteClient(Input $input, ?Authenticator $authenticator, ?AccessLog $accesslog) : void
+    protected function DeleteClient(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : void
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
+        
         $account = $authenticator->GetAccount();
         $client = $authenticator->GetClient();
 
-        $clientid = $input->GetOptParam("client", SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_ALWAYS);
-        
-        if (($authenticator->isSudoUser()) && $clientid === null)
-            throw new UnknownClientException();
+        $specify = $params->HasParam('client');
+        if (($authenticator->isSudoUser()) && !$specify)
+            throw new Exceptions\UnknownClientException();
             
-        if ($clientid !== null)
+        if ($specify)
         {
+            $clientid = $params->GetParam("client",SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
             $client = Client::TryLoadByAccountAndID($this->database, $account, $clientid);
-            if ($client === null) throw new UnknownClientException();
+            if ($client === null) throw new Exceptions\UnknownClientException();
         }
         
-        if ($accesslog && AccessLog::isFullDetails()) 
-            $accesslog->LogDetails('client', $client->GetClientObject());
+        if ($actionlog !== null) 
+            $actionlog->LogDetails('client', $client->GetClientObject(), true);
         
         $client->Delete();
     }
     
     /**
      * Deletes all registered clients/sessions for an account
-     * @throws AuthenticationFailedException if not signed in
+     * @throws Exceptions\AuthenticationFailedException if not signed in
      */
-    protected function DeleteAllAuth(Input $input, ?Authenticator $authenticator) : void
+    protected function DeleteAllAuth(SafeParams $params, ?Authenticator $authenticator) : void
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         
         $authenticator->RequirePassword();
         
-        if ($input->GetOptParam('everyone',SafeParam::TYPE_BOOL) ?? false)
+        if ($params->GetOptParam('everyone',false)->GetBool())
         {
             $authenticator->RequireAdmin()->TryRequireTwoFactor();
-            Client::DeleteAll($this->database);
+            $this->database->DeleteObjectsByQuery(Client::class, new QueryBuilder()); // delete ALL
         }
-        else $authenticator->GetAccount()->DeleteClients();
+        else Client::DeleteByAccount($this->database, $authenticator->GetAccount());
     }
     
     /**
      * Deletes a two factor source for an account
      * 
      * If this leaves the account without two factor, crypto is disabled
-     * @throws AuthenticationFailedException if not signed in
-     * @throws UnknownTwoFactorException if the given twofactor is invalid
+     * @throws Exceptions\AuthenticationFailedException if not signed in
+     * @throws Exceptions\UnknownTwoFactorException if the given twofactor is invalid
      */
-    protected function DeleteTwoFactor(Input $input, ?Authenticator $authenticator, ?AccessLog $accesslog) : void
+    protected function DeleteTwoFactor(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : void
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         $authenticator->RequirePassword();
         $account = $authenticator->GetAccount();
         
-        $twofactorid = $input->GetParam("twofactor", SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_ALWAYS);
+        $twofactorid = $params->GetParam("twofactor", SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
         $twofactor = TwoFactor::TryLoadByAccountAndID($this->database, $account, $twofactorid); 
-        if ($twofactor === null) throw new UnknownTwoFactorException();
+        if ($twofactor === null) throw new Exceptions\UnknownTwoFactorException();
         
-        if ($accesslog && AccessLog::isFullDetails()) 
-            $accesslog->LogDetails('twofactor', $twofactor->GetClientObject());
+        if ($actionlog !== null) 
+            $actionlog->LogDetails('twofactor', $twofactor->GetClientObject(), true);
 
         $twofactor->Delete();
     }    
     
     /**
      * Deletes a contact from an account
-     * @throws AuthenticationFailedException if not signed in
-     * @throws UnknownContactException if the contact is invalid
-     * @throws ContactRequiredException if a valid contact is required
+     * @throws Exceptions\AuthenticationFailedException if not signed in
+     * @throws Exceptions\UnknownContactException if the contact is invalid
+     * @throws Exceptions\ContactRequiredException if a valid contact is required
      */
-    protected function DeleteContact(Input $input, ?Authenticator $authenticator, ?AccessLog $accesslog) : void
+    protected function DeleteContact(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : void
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         $account = $authenticator->GetAccount();
         
-        $cid = $input->GetParam('contact',SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_ALWAYS);
+        $cid = $params->GetParam('contact',SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
         $contact = Contact::TryLoadByAccountAndID($this->database, $account, $cid);
-        if ($contact === null) throw new UnknownContactException();
+        if ($contact === null) throw new Exceptions\UnknownContactException();
 
-        if ($this->GetConfig()->GetRequireContact() && $contact->GetIsValid() && count($account->GetContacts()) <= 1)
-            throw new ContactRequiredException();
+        if ($this->config->GetRequireContact() !== 0 && $contact->GetIsValid() && count($account->GetContacts()) <= 1)
+            throw new Exceptions\ContactRequiredException();
         
-        if ($accesslog && AccessLog::isFullDetails()) 
-            $accesslog->LogDetails('contact', $contact->GetClientObject());
+        if ($actionlog !== null) 
+            $actionlog->LogDetails('contact', $contact->GetClientObject(), true);
     
         $contact->Delete();
     }
     
     /**
      * Edits a contact for an account
-     * @throws AuthenticationFailedException
-     * @throws UnknownContactException
+     * @throws Exceptions\AuthenticationFailedException
+     * @throws Exceptions\UnknownContactException
+     * @return ContactJ
      */
-    protected function EditContact(Input $input, ?Authenticator $authenticator) : array
+    protected function EditContact(SafeParams $params, ?Authenticator $authenticator) : array
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         $account = $authenticator->GetAccount();
         
-        $cid = $input->GetParam('contact',SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_ALWAYS);
+        $cid = $params->GetParam('contact',SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
         $contact = Contact::TryLoadByAccountAndID($this->database, $account, $cid);
-        if ($contact === null) throw new UnknownContactException();
+        if ($contact === null) throw new Exceptions\UnknownContactException();
         
-        if ($input->HasParam('usefrom')) $contact->setUseFrom($input->GetParam('usefrom',SafeParam::TYPE_BOOL));        
-        if ($input->HasParam('public')) $contact->setIsPublic($input->GetParam('public',SafeParam::TYPE_BOOL));
+        if ($params->HasParam('usefrom')) $contact->SetUseAsFrom($params->GetParam('usefrom')->GetBool());        
+        if ($params->HasParam('public')) $contact->SetIsPublic($params->GetParam('public')->GetBool());
         
         return $contact->GetClientObject();
     }
     
     /**
      * Searches for accounts identified with the given name prefix
-     * @throws AuthenticationFailedException if not signed in
-     * @throws SearchDeniedException if the feature is disabled
-     * @return array Account
+     * @throws Exceptions\AuthenticationFailedException if not signed in
+     * @throws Exceptions\SearchDeniedException if the feature is disabled
+     * @return array<string, AccountJ>
      * @see Account::LoadAllMatchingInfo()
-     * @see Account::GetClientObject()
      */
-    protected function SearchAccounts(Input $input, ?Authenticator $authenticator) : array
+    protected function SearchAccounts(SafeParams $params, ?Authenticator $authenticator) : array
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         
         $limit = Account::DEFAULT_SEARCH_MAX;
         
         $account = $authenticator->TryGetAccount();
         if ($account !== null) $limit = $account->GetAllowAccountSearch();
         
-        if (!$limit) throw new SearchDeniedException();
+        if ($limit <= 0) throw new Exceptions\SearchDeniedException();
 
-        $name = $input->GetParam('name', SafeParam::TYPE_TEXT, SafeParams::PARAMLOG_ONLYFULL, null,
-            function($v){ return mb_strlen($v) >= 3; });
+        $name = self::getUsername($params->GetParam('name')->CheckFunction(
+            function(string $v){ return mb_strlen($v) >= 3; }));
 
         return array_map(function(Account $account){ return $account->GetClientObject(); },
             Account::LoadAllMatchingInfo($this->database, $name, $limit));
@@ -1028,25 +946,25 @@ class AccountsApp extends InstalledApp
     
     /**
      * Searches for groups identified with the given name prefix
-     * @throws AuthenticationFailedException if not signed in
-     * @throws SearchDeniedException if the feature is disabled
-     * @return array Group
+     * @throws Exceptions\AuthenticationFailedException if not signed in
+     * @throws Exceptions\SearchDeniedException if the feature is disabled
+     * @return array<string, GroupJ>
      * @see Group::LoadAllMatchingName()
-     * @see Group::GetClientObject()
      */
-    protected function SearchGroups(Input $input, ?Authenticator $authenticator) : array
+    protected function SearchGroups(SafeParams $params, ?Authenticator $authenticator) : array
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         
         $limit = Account::DEFAULT_SEARCH_MAX;
         
         $account = $authenticator->TryGetAccount();
         if ($account !== null) $limit = $account->GetAllowGroupSearch();
         
-        if (!$limit) throw new SearchDeniedException();
+        if ($limit <= 0) throw new Exceptions\SearchDeniedException();
         
-        $name = $input->GetParam('name', SafeParam::TYPE_TEXT, SafeParams::PARAMLOG_ONLYFULL, null,
-            function($v){ return mb_strlen($v) >= 3; });
+        $name = $params->GetParam('name')->CheckFunction(
+            function(string $v){ return mb_strlen($v) >= 3; })->GetName();
         
         return array_map(function(Group $group){ return $group->GetClientObject(); },
             Group::LoadAllMatchingName($this->database, $name, $limit));
@@ -1054,233 +972,201 @@ class AccountsApp extends InstalledApp
     
     /**
      * Returns a list of all registered accounts
-     * @throws AuthenticationFailedException if not admin
-     * @return array [id:Account]
-     * @see Account::GetClientObject()
+     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @return array<string, AccountJ>
      */
-    protected function ListAccounts(Input $input, ?Authenticator $authenticator) : array
+    protected function GetAccounts(SafeParams $params, ?Authenticator $authenticator) : array
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         $authenticator->RequireAdmin();
         
-        $limit = $input->GetOptNullParam("limit", SafeParam::TYPE_UINT);
-        $offset = $input->GetOptNullParam("offset", SafeParam::TYPE_UINT);
+        $limit = $params->GetOptParam('limit',null)->GetNullUint();
+        $offset = $params->GetOptParam('offset',null)->GetNullUint();
         
-        $full = $input->GetOptParam("full", SafeParam::TYPE_BOOL) ?? false;
+        $full = $params->GetOptParam("full",false)->GetBool();
         $type = $full ? Account::OBJECT_ADMIN : 0;
         
-        $accounts = Account::LoadAll($this->database, $limit, $offset);        
-        return array_map(function(Account $account)use($type){ return $account->GetClientObject($type); }, $accounts);
+        $accounts = Account::LoadAll($this->database, $limit, $offset);
+        
+        return array_map(function(Account $account)use($type){ 
+            return $account->GetClientObject($type); }, $accounts);
     }
     
     /**
      * Returns a list of all registered groups
-     * @throws AuthenticationFailedException if not admin
-     * @return array [id:Group]
-     * @see Group::GetClientObject()
+     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @return array<string,GroupJ>
      */
-    protected function ListGroups(Input $input, ?Authenticator $authenticator) : array
+    protected function GetGroups(SafeParams $params, ?Authenticator $authenticator) : array
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         $authenticator->RequireAdmin();
         
-        $limit = $input->GetOptNullParam("limit", SafeParam::TYPE_UINT);
-        $offset = $input->GetOptNullParam("offset", SafeParam::TYPE_UINT);
+        $limit = $params->GetOptParam('limit',null)->GetNullUint();
+        $offset = $params->GetOptParam('offset',null)->GetNullUint();
         
         $groups = Group::LoadAll($this->database, $limit, $offset);
-        return array_map(function(Group $group){ return $group->GetClientObject(Group::OBJECT_ADMIN); }, $groups);
+        
+        return array_map(function(Group $group){ 
+            return $group->GetClientObject(Group::OBJECT_ADMIN); }, $groups);
     }
     
     /**
      * Creates a new account group
-     * @throws AuthenticationFailedException if not admin
-     * @throws GroupExistsException if the group name exists already
-     * @return array Group
-     * @see Group::GetClientObject()
+     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @throws Exceptions\GroupExistsException if the group name exists already
+     * @return GroupJ
      */
-    protected function CreateGroup(Input $input, ?Authenticator $authenticator, ?AccessLog $accesslog) : array
+    protected function CreateGroup(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : array
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         $authenticator->RequireAdmin();
         
-        $name = $input->GetParam("name", SafeParam::TYPE_NAME,
-            SafeParams::PARAMLOG_ONLYFULL, null, SafeParam::MaxLength(127));
+        $name = $params->GetParam("name")->CheckLength(127)->GetName();
         
-        $priority = $input->GetOptParam("priority", SafeParam::TYPE_INT8);
-        $comment = $input->GetOptParam("comment", SafeParam::TYPE_TEXT);
+        $priority = $params->GetOptParam('priority',null)->GetNullInt8();
         
         $duplicate = Group::TryLoadByName($this->database, $name);
-        if ($duplicate !== null) throw new GroupExistsException();
+        if ($duplicate !== null) throw new Exceptions\GroupExistsException();
 
-        $group = Group::Create($this->database, $name, $priority, $comment);
+        $group = Group::Create($this->database, $name, $priority);
         
-        if ($accesslog) $accesslog->LogDetails('group',$group->ID()); 
+        if ($actionlog !== null) $actionlog->LogDetails('group',$group->ID());
         
-        return $group->Initialize()->GetClientObject(Group::OBJECT_FULL | Group::OBJECT_ADMIN);
+        return $group->GetClientObject(Group::OBJECT_FULL | Group::OBJECT_ADMIN);
     }    
     
     /**
-     * Edits properties of an existing group
-     * @throws AuthenticationFailedException if not admin
-     * @throws UnknownGroupException if the group is not found
-     * @return array Group
-     * @see Group::GetClientObject()
-     */
-    protected function EditGroup(Input $input, ?Authenticator $authenticator) : array
-    {
-        if ($authenticator === null) throw new AuthenticationFailedException();
-        $authenticator->RequireAdmin();
-        
-        $groupid = $input->GetParam("group", SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_ALWAYS);
-        
-        $group = Group::TryLoadByID($this->database, $groupid);
-        if ($group === null) throw new UnknownGroupException();
-        
-        if ($input->HasParam('name')) 
-        {
-            $name = $input->GetParam("name", SafeParam::TYPE_NAME, 
-                SafeParams::PARAMLOG_ONLYFULL, null, SafeParam::MaxLength(127));
-            
-            $duplicate = Group::TryLoadByName($this->database, $name);
-            if ($duplicate !== null) throw new GroupExistsException();
-            
-            $group->SetDisplayName($name);
-        }
- 
-        if ($input->HasParam('priority')) $group->SetPriority($input->GetParam("priority", SafeParam::TYPE_INT8));
-        if ($input->HasParam('comment')) $group->SetComment($input->GetNullParam("comment", SafeParam::TYPE_TEXT));
-        
-        return $group->GetClientObject(Group::OBJECT_ADMIN);
-    }
-    
-    /**
      * Returns the requested group object
-     * @throws AuthenticationFailedException if not admin
-     * @throws UnknownGroupException if the group is invalid
-     * @return array Group
-     * @see Group::GetClientObject()
+     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @throws Exceptions\UnknownGroupException if the group is invalid
+     * @return GroupJ
      */
-    protected function GetGroup(Input $input, ?Authenticator $authenticator) : array
+    protected function GetGroup(SafeParams $params, ?Authenticator $authenticator) : array
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         $authenticator->RequireAdmin();
         
-        $groupid = $input->GetParam("group", SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_ALWAYS);
+        $groupid = $params->GetParam("group",SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
         
         $group = Group::TryLoadByID($this->database, $groupid);
-        if ($group === null) throw new UnknownGroupException();
+        if ($group === null) throw new Exceptions\UnknownGroupException();
         
         return $group->GetClientObject(Group::OBJECT_FULL | Group::OBJECT_ADMIN);
     }
 
     /**
      * Deletes an account group
-     * @throws AuthenticationFailedException if not admin 
-     * @throws UnknownGroupException if the group does not exist
+     * @throws Exceptions\AuthenticationFailedException if not admin 
+     * @throws Exceptions\UnknownGroupException if the group does not exist
      */
-    protected function DeleteGroup(Input $input, ?Authenticator $authenticator, ?AccessLog $accesslog) : void
+    protected function DeleteGroup(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : void
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         $authenticator->RequireAdmin();
         
-        $groupid = $input->GetParam("group", SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_ALWAYS);
+        $groupid = $params->GetParam("group",SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
         
         $group = Group::TryLoadByID($this->database, $groupid);
-        if ($group === null) throw new UnknownGroupException();
+        if ($group === null) throw new Exceptions\UnknownGroupException();
         
-        if ($accesslog && AccessLog::isFullDetails()) $accesslog->LogDetails('group',
-            $group->GetClientObject(Group::OBJECT_ADMIN | Group::OBJECT_FULL));
+        if ($actionlog !== null) $actionlog->LogDetails('group',
+            $group->GetClientObject(Group::OBJECT_ADMIN | Group::OBJECT_FULL), true);
             
         $group->Delete();
     }
     
     /**
      * Adds an account to a group
-     * @throws AuthenticationFailedException if not admin
-     * @throws UnknownAccountException if the account is not found
-     * @throws UnknownGroupException if the group is not found
-     * @throws DuplicateGroupMembershipException if the membership already exists
-     * @return array Group
-     * @see Group::GetClientObject()
+     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @throws Exceptions\UnknownAccountException if the account is not found
+     * @throws Exceptions\UnknownGroupException if the group is not found
+     * @throws Exceptions\DuplicateGroupMembershipException if the membership already exists
+     * @return GroupJ
      */
-    protected function AddGroupMember(Input $input, ?Authenticator $authenticator) : array
+    protected function AddGroupMember(SafeParams $params, ?Authenticator $authenticator) : array
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         $authenticator->RequireAdmin();
         
-        $accountid = $input->GetParam("account", SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_ALWAYS);
-        $groupid = $input->GetParam("group", SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_ALWAYS);
+        $accountid = $params->GetParam("account",SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
+        $groupid = $params->GetParam("group",SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
         
         $account = Account::TryLoadByID($this->database, $accountid);
-        if ($account === null) throw new UnknownAccountException();
+        if ($account === null) throw new Exceptions\UnknownAccountException();
         
         $group = Group::TryLoadByID($this->database, $groupid);
-        if ($group === null) throw new UnknownGroupException();
+        if ($group === null) throw new Exceptions\UnknownGroupException();
 
-        if (!$account->HasGroup($group)) $account->AddGroup($group);
-        else throw new DuplicateGroupMembershipException();
+        if (GroupJoin::TryLoadByMembership($this->database, $account, $group) !== null)
+            throw new Exceptions\DuplicateGroupMembershipException();
+
+        GroupJoin::Create($this->database, $account, $group);
 
         return $group->GetClientObject(Group::OBJECT_FULL | Group::OBJECT_ADMIN);
     }
     
     /**
      * Removes an account from a group
-     * @throws AuthenticationFailedException if not admin 
-     * @throws UnknownAccountException if the account is not found
-     * @throws UnknownGroupException if the group is not found
-     * @throws ImmutableGroupException if the group is a default group
-     * @throws UnknownGroupMembershipException if the group membership does not exist
-     * @return array Group
-     * @see Group::GetClientObject()
+     * @throws Exceptions\AuthenticationFailedException if not admin 
+     * @throws Exceptions\UnknownAccountException if the account is not found
+     * @throws Exceptions\UnknownGroupException if the group is not found
+     * @throws Exceptions\UnknownGroupMembershipException if the group membership does not exist
+     * @return GroupJ
      */
-    protected function RemoveGroupMember(Input $input, ?Authenticator $authenticator) : array
+    protected function RemoveGroupMember(SafeParams $params, ?Authenticator $authenticator) : array
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         $authenticator->RequireAdmin();
         
-        $accountid = $input->GetParam("account", SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_ALWAYS);
-        $groupid = $input->GetParam("group", SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_ALWAYS);
+        $accountid = $params->GetParam("account",SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
+        $groupid = $params->GetParam("group",SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
         
         $account = Account::TryLoadByID($this->database, $accountid);
-        if ($account === null) throw new UnknownAccountException();
+        if ($account === null) throw new Exceptions\UnknownAccountException();
         
         $group = Group::TryLoadByID($this->database, $groupid);
-        if ($group === null) throw new UnknownGroupException();
+        if ($group === null) throw new Exceptions\UnknownGroupException();
         
-        if (array_key_exists($group->ID(), $account->GetDefaultGroups()))
-            throw new ImmutableGroupException();
-        
-        if ($account->HasGroup($group)) $account->RemoveGroup($group);
-        else throw new UnknownGroupMembershipException();
+        $join = GroupJoin::TryLoadByMembership($this->database, $account, $group);
+        if ($join !== null) $join->Delete();
+        else throw new Exceptions\UnknownGroupMembershipException();
         
         return $group->GetClientObject(Group::OBJECT_FULL | Group::OBJECT_ADMIN);
     }
     
     /**
      * Gets metadata for an account group membership
-     * @throws AuthenticationFailedException if not admin
-     * @throws UnknownAccountException if given an invalid account
-     * @throws UnknownGroupException if given an invalid group
-     * @throws UnknownGroupMembershipException if the account is not in the group
-     * @return array GroupJoin
-     * @see GroupJoin::GetClientObject()
+     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @throws Exceptions\UnknownAccountException if given an invalid account
+     * @throws Exceptions\UnknownGroupException if given an invalid group
+     * @throws Exceptions\UnknownGroupMembershipException if the account is not in the group
+     * @return GroupJoinJ
      */
-    protected function GetMembership(Input $input, ?Authenticator $authenticator) : ?array
+    protected function GetMembership(SafeParams $params, ?Authenticator $authenticator) : ?array
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         $authenticator->RequireAdmin();
         
-        $accountid = $input->GetParam("account", SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_ALWAYS);
-        $groupid = $input->GetParam("group", SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_ALWAYS);
+        $accountid = $params->GetParam("account",SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
+        $groupid = $params->GetParam("group",SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
         
         $account = Account::TryLoadByID($this->database, $accountid);
-        if ($account === null) throw new UnknownAccountException();
+        if ($account === null) throw new Exceptions\UnknownAccountException();
         
         $group = Group::TryLoadByID($this->database, $groupid);
-        if ($group === null) throw new UnknownGroupException();
+        if ($group === null) throw new Exceptions\UnknownGroupException();
         
-        $joinobj = $account->GetGroupJoin($group);
-        if ($joinobj === null) throw new UnknownGroupMembershipException();
+        $joinobj = GroupJoin::TryLoadByMembership($this->database, $account, $group);
+        if ($joinobj === null) throw new Exceptions\UnknownGroupMembershipException();
         
         return $joinobj->GetClientObject();
     }
@@ -1290,228 +1176,239 @@ class AccountsApp extends InstalledApp
      * 
      * This authorizes automatically creating an account for anyone
      * that successfully authenticates against the auth source
-     * @throws AuthenticationFailedException if not admin
-     * @return array Auth\Manager
-     * @see Auth\Manager::GetClientObject()
+     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @return ExternalJ
      */
-    protected function CreateAuthSource(Input $input, ?Authenticator $authenticator, ?AccessLog $accesslog) : array
+    protected function CreateAuthSource(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : array
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         $authenticator->RequireAdmin()->RequirePassword();
 
-        $manager = Auth\Manager::Create($this->database, $input);
+        $authsrc = AuthSource\External::Create($this->database, $params);
         
-        if ($input->HasParam('test_username'))
+        if ($params->HasParam('test_username'))
         {
-            $input->AddParam('manager',$manager->ID());
-            $this->TestAuthSource($input, $authenticator);
+            $params->AddParam('authsrc',$authsrc->ID());
+            $this->TestAuthSource($params, $authenticator);
         }
         
-        if ($accesslog) $accesslog->LogDetails('manager',$manager->ID()); 
+        if ($actionlog !== null)
+            $actionlog->LogDetails('authsrc',$authsrc->ID()); 
         
-        return $manager->GetClientObject(true);
+        return $authsrc->GetClientObject(true);
     }
     
     /**
      * Tests an auth source by running an auth query on it
-     * @throws AuthenticationFailedException if not admin
-     * @throws UnknownAuthSourceException if the auth source is not found
-     * @throws AuthSourceTestFailException if the test fails
-     * @return array Auth\Manager
-     * @see Auth\Manager::GetClientObject()
+     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @throws Exceptions\UnknownAuthSourceException if the auth source is not found
+     * @throws Exceptions\AuthSourceTestFailException if the test fails
+     * @return ExternalJ
      */
-    protected function TestAuthSource(Input $input, ?Authenticator $authenticator) : array
+    protected function TestAuthSource(SafeParams $params, ?Authenticator $authenticator) : array
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         $authenticator->RequireAdmin();
         
-        $manager = $input->GetParam('manager', SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_ALWAYS);
+        $authsrc = $params->GetParam('authsrc',SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
         
-        $manager = Auth\Manager::TryLoadByID($this->database, $manager);
-        if ($manager === null) throw new UnknownAuthSourceException();        
+        $authsrc = AuthSource\External::TryLoadByID($this->database, $authsrc);
+        if ($authsrc === null) throw new Exceptions\UnknownAuthSourceException();        
         
-        $testuser = $input->GetParam('test_username',SafeParam::TYPE_TEXT, SafeParams::PARAMLOG_NEVER);
-        $testpass = $input->GetParam('test_password',SafeParam::TYPE_RAW, SafeParams::PARAMLOG_NEVER);
+        $testuser = self::getUsername($params->GetParam('test_username'));
+        $testpass = $params->GetParam('test_password',SafeParams::PARAMLOG_NEVER)->GetRawString();
         
-        if (!$manager->GetAuthSource()->VerifyUsernamePassword($testuser, $testpass))
-            throw new AuthSourceTestFailException();        
+        if (!$authsrc->VerifyUsernamePassword($testuser, $testpass))
+            throw new Exceptions\AuthSourceTestFailException();        
            
-        return $manager->GetClientObject(true);
+        return $authsrc->GetClientObject(true);
     }
     
     /**
      * Edits the properties of an existing auth source, optionally testing it
-     * @throws AuthenticationFailedException if not admin
-     * @throws UnknownAuthSourceException if the auth source is not found
-     * @return array Auth\Manager
-     * @see Auth\Manager::GetClientObject()
+     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @throws Exceptions\UnknownAuthSourceException if the auth source is not found
+     * @return ExternalJ
      */
-    protected function EditAuthSource(Input $input, ?Authenticator $authenticator) : array
+    protected function EditAuthSource(SafeParams $params, ?Authenticator $authenticator) : array
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         $authenticator->RequireAdmin()->RequirePassword();
         
-        $manager = $input->GetParam('manager', SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_ALWAYS);
+        $authsrc = $params->GetParam('authsrc',SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
         
-        $manager = Auth\Manager::TryLoadByID($this->database, $manager);
-        if ($manager === null) throw new UnknownAuthSourceException();
+        $authsrc = AuthSource\External::TryLoadByID($this->database, $authsrc);
+        if ($authsrc === null) throw new Exceptions\UnknownAuthSourceException();
         
-        if ($input->HasParam('test_username')) 
-            $this->TestAuthSource($input, $authenticator);
+        if ($params->HasParam('test_username')) 
+            $this->TestAuthSource($params, $authenticator);
         
-        return $manager->Edit($input)->GetClientObject(true);
+        return $authsrc->Edit($params)->GetClientObject(true);
     }
     
     /**
      * Removes an external auth source, deleting accounts associated with it!
-     * @throws AuthenticationFailedException if not an admin
-     * @throws UnknownAuthSourceException if the auth source does not exist
+     * @throws Exceptions\AuthenticationFailedException if not an admin
+     * @throws Exceptions\UnknownAuthSourceException if the auth source does not exist
      */
-    protected function DeleteAuthSource(Input $input, ?Authenticator $authenticator, ?AccessLog $accesslog) : void
+    protected function DeleteAuthSource(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : void
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         $authenticator->RequireAdmin()->RequirePassword()->TryRequireTwoFactor();
         
-        $manager = $input->GetParam('manager', SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_ALWAYS);
+        $authsrc = $params->GetParam('authsrc',SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
         
-        $manager = Auth\Manager::TryLoadByID($this->database, $manager);
-        if ($manager === null) throw new UnknownAuthSourceException();
+        $authsrc = AuthSource\External::TryLoadByID($this->database, $authsrc);
+        if ($authsrc === null) throw new Exceptions\UnknownAuthSourceException();
         
-        if ($accesslog && AccessLog::isFullDetails()) 
-            $accesslog->LogDetails('manager', $manager->GetClientObject(true));
+        if ($actionlog !== null)
+            $actionlog->LogDetails('authsrc', $authsrc->GetClientObject(true), true);
         
-        $manager->Delete();
+        $authsrc->Delete();
     }
     
     /**
      * Sets config on an account
-     * @throws AuthenticationFailedException if not admin
-     * @throws UnknownAccountException if the account is not found
-     * @return array Account
-     * @see Account::GetClientObject()
+     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @throws Exceptions\UnknownAccountException if the account is not found
+     * @return AccountJ
      */
-    protected function SetAccountProps(Input $input, ?Authenticator $authenticator) : array
+    protected function EditAccount(SafeParams $params, ?Authenticator $authenticator) : array
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         $authenticator->RequireAdmin();
         
-        $acctid = $input->GetParam("account", SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_ALWAYS);
+        $acctid = $params->GetParam("account",SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
         
         $account = Account::TryLoadByID($this->database, $acctid);
-        if ($account === null) throw new UnknownAccountException();
+        if ($account === null) throw new Exceptions\UnknownAccountException();
         
-        if ($input->GetOptParam("expirepw", SafeParam::TYPE_BOOL) ?? false) $account->resetPasswordDate();
+        if ($params->GetOptParam("expirepw",false)->GetBool()) 
+            $account->ResetPasswordDate();
         
-        return $account->SetProperties($input)->GetClientObject(Account::OBJECT_ADMIN);
+        return $account->SetProperties($params)->GetClientObject(Account::OBJECT_ADMIN);
     }
     
     /**
      * Sets config on a group
-     * @throws AuthenticationFailedException if not admin
-     * @throws UnknownGroupException if the group is not found
-     * @return array Group
-     * @see Group::GetClientObject()
+     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @throws Exceptions\UnknownGroupException if the group is not found
+     * @return GroupJ
      */
-    protected function SetGroupProps(Input $input, ?Authenticator $authenticator) : array
+    protected function EditGroup(SafeParams $params, ?Authenticator $authenticator) : array
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         $authenticator->RequireAdmin();
         
-        $groupid = $input->GetParam("group", SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_ALWAYS);
+        $groupid = $params->GetParam("group",SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
         
         $group = Group::TryLoadByID($this->database, $groupid);
-        if ($group === null) throw new UnknownGroupException();
+        if ($group === null) throw new Exceptions\UnknownGroupException();
 
-        return $group->SetProperties($input)->GetClientObject(Group::OBJECT_FULL | Group::OBJECT_ADMIN);
+        if ($params->HasParam('name')) 
+        {
+            $name = $params->GetParam("name")->CheckLength(127)->GetName();
+            
+            $duplicate = Group::TryLoadByName($this->database, $name);
+            if ($duplicate !== null) throw new Exceptions\GroupExistsException();
+            
+            $group->SetDisplayName($name);
+        }
+ 
+        if ($params->HasParam('priority'))
+            $group->SetPriority($params->GetParam("priority")->GetInt8());
+        
+        return $group->SetProperties($params)->GetClientObject(Group::OBJECT_FULL | Group::OBJECT_ADMIN);
     }
     
     /**
      * Sends a message to the given account or group's contacts
-     * @throws AuthenticationFailedException if not admin 
-     * @throws UnknownGroupException if the given group is not found
-     * @throws UnknownAccountException if the given account is not found
+     * @throws Exceptions\AuthenticationFailedException if not admin 
+     * @throws Exceptions\UnknownGroupException if the given group is not found
+     * @throws Exceptions\UnknownAccountException if the given account is not found
      */
-    protected function SendMessage(Input $input, ?Authenticator $authenticator) : void
+    protected function SendMessage(SafeParams $params, ?Authenticator $authenticator) : void
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         $authenticator->RequireAdmin();
         
-        if ($input->HasParam('group'))
+        if ($params->HasParam('group'))
         {
-            $groupid = $input->GetParam('group',SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_ALWAYS);
+            $groupid = $params->GetParam('group',SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
             
             if (($dest = Group::TryLoadByID($this->database, $groupid)) === null) 
-                throw new UnknownGroupException();
+                throw new Exceptions\UnknownGroupException();
         }
-        else if ($input->HasParam('account'))
+        else if ($params->HasParam('account'))
         {
-            $acctid = $input->GetParam('account',SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_ALWAYS);
+            $acctid = $params->GetParam('account',SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
             
             if (($dest = Account::TryLoadByID($this->database, $acctid)) === null)
-                throw new UnknownAccountException();
+                throw new Exceptions\UnknownAccountException();
         }
-        else throw new UnknownAccountException();
+        else throw new Exceptions\UnknownAccountException();
         
-        $subject = $input->GetParam('subject',SafeParam::TYPE_TEXT);
+        $subject = $params->GetParam('subject')->GetUTF8String();
         
-        $text = $input->GetParam('text',SafeParam::TYPE_TEXT, SafeParams::PARAMLOG_NEVER);
-        $html = $input->GetOptParam('html',SafeParam::TYPE_RAW, SafeParams::PARAMLOG_NEVER);
+        $text = $params->GetParam('text',SafeParams::PARAMLOG_NEVER)->GetHTMLText();
+        $html = $params->GetOptParam('html',SafeParams::PARAMLOG_NEVER)->GetRawString();
         
         $dest->SendMessage($subject, $html, $text);
     }
     
     /**
-     * Adds a new entry to the account create whitelist
-     * @throws AuthenticationFailedException if not admin
-     * @return array Whitelist
-     * @see Whitelist::GetClientObject()
+     * Adds a new entry to the account create registerallow
+     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @return RegisterAllowJ
      */
-    protected function AddWhitelist(Input $input, ?Authenticator $authenticator) : array
+    protected function AddRegisterAllow(SafeParams $params, ?Authenticator $authenticator) : array
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         $authenticator->RequireAdmin();
         
-        $type = $input->GetParam('type', SafeParam::TYPE_ALPHANUM, 
-            SafeParams::PARAMLOG_ALWAYS, array_keys(Whitelist::TYPES));
+        $pair = RegisterAllow::FetchPairFromParams($params);
         
-        $type = Whitelist::TYPES[$type];
-        
-        $value = $input->GetParam('value', SafeParam::TYPE_TEXT, SafeParams::PARAMLOG_ALWAYS);
-        
-        return Whitelist::Create($this->database, $type, $value)->GetClientObject();
+        return RegisterAllow::Create($this->database, $pair['type'], $pair['value'])->GetClientObject();
     }
     
     /**
-     * Removes an entry from the account create whitelist
-     * @throws AuthenticationFailedException if not admin
+     * Removes an entry from the account create registerallow
+     * @throws Exceptions\AuthenticationFailedException if not admin
      */
-    protected function RemoveWhitelist(Input $input, ?Authenticator $authenticator) : void
+    protected function RemoveRegisterAllow(SafeParams $params, ?Authenticator $authenticator) : void
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
-        $authenticator->RequireAdmin();
-        
-        $type = $input->GetParam('type', SafeParam::TYPE_ALPHANUM, 
-            SafeParams::PARAMLOG_ALWAYS, array_keys(Whitelist::TYPES));
-        
-        $type = Whitelist::TYPES[$type];
-        
-        $value = $input->GetParam('value', SafeParam::TYPE_TEXT, SafeParams::PARAMLOG_ALWAYS);
-        
-        Whitelist::DeleteByTypeAndValue($this->database, $type, $value);
-    }
-    
-    /**
-     * Gets all entries in the account whitelist
-     * @throws AuthenticationFailedException if not admin
-     * @return array [id:Whitelist]
-     * @see Whitelist::GetClientObject()
-     */
-    protected function GetWhitelist(Input $input, ?Authenticator $authenticator) : array
-    {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         $authenticator->RequireAdmin();
 
-        return array_map(function(Whitelist $w){ return $w->GetClientObject(); }, Whitelist::LoadAll($this->database));
+        $pair = RegisterAllow::FetchPairFromParams($params);
+        
+        RegisterAllow::DeleteByTypeAndValue($this->database, $pair['type'], $pair['value']);
+    }
+    
+    /**
+     * Gets all entries in the account registerallow
+     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @return array<string, RegisterAllowJ>
+     */
+    protected function GetRegisterAllow(?Authenticator $authenticator) : array
+    {
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
+        $authenticator->RequireAdmin();
+        
+        $list = RegisterAllow::LoadAll($this->database);
+
+        return array_map(function(RegisterAllow $w){ 
+            return $w->GetClientObject(); }, $list);
     }
 }
 

@@ -1,2 +1,0 @@
-#!/bin/sh
-cd Andromeda; python3 Core/_tests/integration/main.py $@

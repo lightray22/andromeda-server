@@ -1,10 +1,7 @@
-<?php namespace Andromeda\Apps\Files\Limits; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Apps\Files\Limits; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/Database/StandardObject.php"); use Andromeda\Core\Database\StandardObject;
-require_once(ROOT."/Core/Database/ObjectDatabase.php"); use Andromeda\Core\Database\ObjectDatabase;
-require_once(ROOT."/Core/Database/FieldTypes.php"); use Andromeda\Core\Database\FieldTypes;
-require_once(ROOT."/Core/Database/QueryBuilder.php"); use Andromeda\Core\Database\QueryBuilder;
-require_once(ROOT."/Core/IOFormat/Input.php"); use Andromeda\Core\IOFormat\Input;
+use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, QueryBuilder};
+use Andromeda\Core\IOFormat\SafeParams;
 
 require_once(ROOT."/Apps/Files/File.php"); use Andromeda\Apps\Files\File;
 require_once(ROOT."/Apps/Files/Folder.php"); use Andromeda\Apps\Files\Folder;
@@ -21,14 +18,14 @@ require_once(ROOT."/Apps/Files/Folder.php"); use Andromeda\Apps\Files\Folder;
  * While not currently implemented, this infrastructure could be extended
  * to, for example, set limits on individual files and folders also.
  */
-abstract class Base extends StandardObject
+abstract class Base extends BaseObject // TODO was StandardObject
 {
     public static function GetFieldTemplate() : array
     {
         return array_merge(parent::GetFieldTemplate(), array(
-            'object' => new FieldTypes\ObjectPoly(StandardObject::class),
-            'features__track_items' => null,
-            'features__track_dlstats' => null
+            'obj_object' => new FieldTypes\ObjectPoly(BasedObject::class),
+            'track_items' => new FieldTypes\IntType(),
+            'track_dlstats' => new FieldTypes\IntType()
         ));
     }
 
@@ -43,16 +40,16 @@ abstract class Base extends StandardObject
      *
      * This is abstract since different concrete limit types may use them differently.
      */
-    protected abstract function SetBaseLimits(Input $input) : void;
+    protected abstract function SetBaseLimits(SafeParams $params) : void;
     
     /** Returns the command usage for BaseConfigLimits() */
     public abstract static function BaseConfigUsage() : string;
     
     /** Configures the common (at some level) limit properites for the given object with the given input */
-    protected abstract static function BaseConfigLimits(ObjectDatabase $database, StandardObject $obj, Input $input);
+    protected abstract static function BaseConfigLimits(ObjectDatabase $database, BaseObject $obj, SafeParams $params);
     
     /** Returns the object that is subject to the limits */
-    public function GetLimitedObject() : StandardObject { return $this->GetObject('object'); }
+    public function GetLimitedObject() : BaseObject { return $this->GetObject('object'); }
 
     /** Returns true if we should track size, item count, and share count */
     protected function canTrackItems() : bool { return $this->TryGetFeatureBool('track_items') ?? false; }
@@ -171,7 +168,7 @@ abstract class Base extends StandardObject
     /** Returns the share counter for the limited object */
     protected function GetShares() : int { return $this->GetCounter('shares'); }  
     
-    /** @return array `{limited:id}` */
+    /** @return array<mixed> `{limited:id}` */
     public function GetClientObject(bool $full) : array
     {
         return array('limited' => $this->GetLimitedObject()->ID());
@@ -183,7 +180,7 @@ abstract class Base extends StandardObject
     public static function LoadAll(ObjectDatabase $database, ?int $limit = null, ?int $offset = null) : array
     {
         // since different limit types are stored in the same table, load rows matching the correct type of limited object
-        $q = new QueryBuilder(); $w = $q->Like('object','%'.FieldTypes\ObjectPoly::GetIDTypeDBValue("",static::GetObjectClass()),true);
+        $q = new QueryBuilder(); $w = $q->Like('obj_object','%'.FieldTypes\ObjectPoly::GetIDTypeDBValue("",static::GetObjectClass()),true);
         
         return static::LoadByQuery($database, $q->Where($w)->Limit($limit)->Offset($offset));
     }

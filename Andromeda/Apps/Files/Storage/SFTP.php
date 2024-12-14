@@ -1,24 +1,12 @@
-<?php namespace Andromeda\Apps\Files\Storage; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Apps\Files\Storage; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/Database/ObjectDatabase.php"); use Andromeda\Core\Database\ObjectDatabase;
-require_once(ROOT."/Core/Exceptions/Exceptions.php"); use Andromeda\Core\Exceptions;
-require_once(ROOT."/Core/IOFormat/Input.php"); use Andromeda\Core\IOFormat\Input;
-require_once(ROOT."/Core/IOFormat/SafeParam.php"); use Andromeda\Core\IOFormat\SafeParam;
-require_once(ROOT."/Core/IOFormat/SafeParams.php"); use Andromeda\Core\IOFormat\SafeParams;
+use Andromeda\Core\Database\{FieldTypes, ObjectDatabase};
+use Andromeda\Core\IOFormat\{Input, SafeParams};
 
 require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
 require_once(ROOT."/Apps/Files/Filesystem/FSManager.php"); use Andromeda\Apps\Files\Filesystem\FSManager;
 require_once(ROOT."/Apps/Files/Storage/Exceptions.php");
 require_once(ROOT."/Apps/Files/Storage/FWrapper.php");
-
-/** Exception indicating that the SSH connection failed */
-class SSHConnectionFailure extends ActivateException     { public $message = "SSH_CONNECTION_FAILURE"; use Exceptions\Copyable; }
-
-/** Exception indicating that SSH authentication failed */
-class SSHAuthenticationFailure extends ActivateException { public $message = "SSH_AUTHENTICATION_FAILURE"; use Exceptions\Copyable; }
-
-/** Exception indicating that the server's public key has changed */
-class HostKeyMismatchException extends ActivateException { public $message = "SSH_HOST_KEY_MISMATCH"; }
 
 Account::RegisterCryptoHandler(function(ObjectDatabase $database, Account $account, bool $init){ 
     if (!$init) SFTP::DecryptAccount($database, $account); });
@@ -38,28 +26,28 @@ class SFTP extends SFTPBase2
     public static function GetFieldTemplate() : array
     {
         return array_merge(parent::GetFieldTemplate(), array(
-            'hostname' => null,
-            'port' => null,
-            'hostkey' => null,
-            'privkey' => null, // private key material for auth
-            'keypass' => null, // key for unlocking the private key
+            'hostname' => new FieldTypes\StringType(),
+            'port' => new FieldTypes\IntType(),
+            'hostkey' => new FieldTypes\StringType(),
+            'privkey' => new FieldTypes\StringType(), // private key material for auth
+            'keypass' => new FieldTypes\StringType(), // key for unlocking the private key
         ));
     }
     
     /**
      * Returns a printable client object of this SFTP storage
-     * @return array `{hostname:string, port:?int, pubkey:bool, keypass:bool}`
+     * @return array<mixed> `{hostname:string, port:?int, pubkey:bool, keypass:bool}`
      * @see Storage::GetClientObject()
      */
     public function GetClientObject(bool $activate = false) : array
     {
-        return array_merge(parent::GetClientObject($activate), array(
+        return parent::GetClientObject($activate) + array(
             'hostname' => $this->GetScalar('hostname'),
             'port' => $this->TryGetScalar('port'),
             'hostkey' => $this->TryGetHostKey(),
             'privkey' => (bool)($this->TryGetScalar('privkey')),
             'keypass' => (bool)($this->TryGetScalar('keypass')),
-        ));
+        );
     }
 
     /** Returns the configured username (mandatory) */
@@ -89,14 +77,16 @@ class SFTP extends SFTPBase2
     /** Sets the cached host public key to the given value */
     protected function SetHostKey(?string $val) : self { return $this->SetScalar('hostkey',$val); }
     
-    public static function GetCreateUsage() : string { return parent::GetCreateUsage()." --hostname alphanum [--port uint16] [--privkey% path | --privkey-] [--keypass raw]"; }
+    public static function GetCreateUsage() : string { return parent::GetCreateUsage()." --hostname alphanum [--port ?uint16] [--privkey% path | --privkey-] [--keypass ?raw]"; }
     
     public static function Create(ObjectDatabase $database, Input $input, FSManager $filesystem) : self
     { 
+        $params = $input->GetParams();
+        
         $obj = parent::Create($database, $input, $filesystem)
-            ->SetScalar('hostname', $input->GetParam('hostname', SafeParam::TYPE_HOSTNAME))
-            ->SetScalar('port', $input->GetOptParam('port', SafeParam::TYPE_UINT16))
-            ->SetKeypass($input->GetOptParam('keypass', SafeParam::TYPE_RAW, SafeParams::PARAMLOG_NEVER));         
+            ->SetScalar('hostname', $params->GetParam('hostname')->GetHostname())
+            ->SetScalar('port', $params->GetOptParam('port',null)->GetNullUint16())
+            ->SetKeypass($params->GetOptParam('keypass',null,SafeParams::PARAMLOG_NEVER)->GetNullRawString());
         
         if ($input->HasFile('privkey')) $obj->SetPrivkey($input->GetFile('privkey')->GetData());
         
@@ -107,13 +97,15 @@ class SFTP extends SFTPBase2
     
     public function Edit(Input $input) : self
     {
-        if ($input->HasParam('hostname')) $this->SetScalar('hostname',$input->GetParam('hostname', SafeParam::TYPE_HOSTNAME));
-        if ($input->HasParam('port')) $this->SetScalar('port',$input->GetNullParam('port', SafeParam::TYPE_UINT16));
+        $params = $input->GetParams();
         
-        if ($input->HasParam('keypass')) $this->SetKeypass($input->GetNullParam('keypass',SafeParam::TYPE_RAW, SafeParams::PARAMLOG_NEVER));
-        if ($input->HasFile('privkey')) $this->SetPrivkey($input->GetFile('privkey')->GetData());
+        if ($params->HasParam('hostname')) $this->SetScalar('hostname',$params->GetParam('hostname')->GetHostname());
+        if ($params->HasParam('port')) $this->SetScalar('port',$params->GetParam('port')->GetNullUint16());
         
-        if ($input->GetOptParam('resethost',SafeParam::TYPE_BOOL)) $this->SetHostKey(null);
+        if ($params->HasParam('keypass')) $this->SetKeypass($params->GetParam('keypass',SafeParams::PARAMLOG_NEVER)->GetNullRawString());
+        if ($params->HasFile('privkey')) $this->SetPrivkey($input->GetFile('privkey')->GetData());
+        
+        if ($params->GetOptParam('resethost',false)->GetBool()) $this->SetHostKey(null);
         
         return parent::Edit($input);
     }
@@ -139,7 +131,7 @@ class SFTP extends SFTPBase2
             if ($cached === null) $this->SetHostKey($hostkey);
             else if ($cached !== $hostkey) throw new HostKeyMismatchException();            
         }
-        catch (Exceptions\PHPError $e) { throw SSHConnectionFailure::Append($e); }
+        catch (BaseExceptions\PHPError $e) { throw SSHConnectionFailure::Append($e); }
 
         try
         {

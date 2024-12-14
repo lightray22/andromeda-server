@@ -1,0 +1,43 @@
+{
+    "interfaces":
+    {
+        "cli": ".",
+        "http": "http://localhost/api/index.php"
+    },
+    "databases":
+    {
+        "sqlite": 
+        {
+            "dbpath":"../integration.s3db"
+        },
+        "mysql":
+        {
+            "dbname": "a2test",
+            "host": "localhost",
+            "user": "root", 
+            "password": "password",
+            "persistent": true
+        },
+        "pgsql":
+        {
+            "dbname": "a2test",
+            "host": "localhost",
+            "user": "postgres",
+            "password": "password" 
+        }
+    },
+    "core":
+    {
+        "datadir":"../inttest_data",
+        "email":
+        {
+            "type":"smtp",
+            "host":"myserver",
+            "from_address":"mytest@test.com",
+            "username":"mytest@test.com",
+            "password":"password",
+            "use_reply":false,
+            "test":"mytest@test.com"
+        }
+    }
+}

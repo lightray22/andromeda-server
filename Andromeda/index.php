@@ -1,7 +1,4 @@
-<?php require_once(__DIR__.'/init.php');
-
-if (file_exists(ROOT.'/user-defs.php'))
-    require_once(ROOT.'/user-defs.php');
+<?php declare(strict_types=1); require_once(__DIR__.'/init.php');
 
 /** 
  * An Andromeda API is a pure-PHP transactional REST-ish API.
@@ -11,37 +8,19 @@ if (file_exists(ROOT.'/user-defs.php'))
  * 
  * The entire lifetime of the request happens under a single transaction.
  * Any exceptions encountered will roll back the entire request safely.
- * Multiple commands can be given to run in a single request/transaction.
  */
 
-require_once(ROOT."/Core/Main.php"); use Andromeda\Core\Main;
-require_once(ROOT."/Core/IOFormat/Input.php"); use Andromeda\Core\IOFormat\Input;
-require_once(ROOT."/Core/IOFormat/Output.php"); use Andromeda\Core\IOFormat\Output;
+use Andromeda\Core\{ApiPackage, AppRunner};
+use Andromeda\Core\IOFormat\IOInterface;
+use Andromeda\Core\Errors\ErrorManager;
 
-require_once(ROOT."/Core/IOFormat/IOInterface.php"); use Andromeda\Core\IOFormat\IOInterface;
-require_once(ROOT."/Core/Exceptions/ErrorManager.php"); use Andromeda\Core\Exceptions\ErrorManager;
+$interface = IOInterface::TryGet(); 
+if ($interface === null) die('INTERFACE_ERROR');
 
-/** 
- * The basic procedure is to create the Main application, parse an array 
- * of commands from the interface, run the Main application for each 
- * command given, commit the transaction, and display output
- */
+$errman = new ErrorManager($interface, true);
 
-$interface = IOInterface::TryGet(); if (!$interface) die('Unknown Interface');
+// check input early (before db), but after errman
+$input = $interface->GetInput();
 
-$main = new Main($interface, new ErrorManager($interface)); 
-
-$inputs = $interface->GetInputs($main->TryGetConfig());
-
-$retvals = array_map(function(Input $input)use($main){
-    return $main->Run($input); }, $inputs);
-
-$output = Output::Success($retvals);
-
-$main->commit();
-
-if ($interface->UserOutput($output)) $main->commit();
-
-$main->FinalizeOutput($output);
-
-$interface->WriteOutput($output);
+$apipack = new ApiPackage($interface, $errman);
+(new AppRunner($apipack))->Run($input);

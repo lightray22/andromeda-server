@@ -1,0 +1,8 @@
+#!/bin/bash
+
+if [ "$1" == "" ]; then
+   echo "how many?"; exit 1
+fi
+
+URL="http://localhost/Andromeda2/api/index.php?_app=testutil&_act=benchdb"
+for i in `seq 1 $1`; do (wget -qO - "$URL" &); done

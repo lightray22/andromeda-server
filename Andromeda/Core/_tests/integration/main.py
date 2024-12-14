@@ -1,30 +1,41 @@
 #!/usr/bin/env python3
 
-import os, sys, json, getopt, atexit, time, random, importlib
+import os, sys, json, getopt, atexit, time, random, importlib, getpass, re
 
-import Interface, Database, TestUtils
+from Interface import Interface, HTTP, CLI
+from Database import Database, SQLite, MySQL, PostgreSQL
+from InstallTests import InstallTests
+from InterfaceTests import HTTPTests, CLITests
+from TestUtils import *
 
 class Main():
 
-    phproot = '.'
-    verbose = False
-    doInstall = True
+    phproot = os.getcwd() # Andromeda dir
+    verbose = 0        # verbosity level
+    config:dict = None # dictionary of config
+    dbconfig:str = None # path to DBConfig.php
 
-    random = None
-    randseed = 0
+    random = random.Random()
+    randseed = None # seed for randomness
 
-    appMap = { } # map of app name to test object
-    servApps = [ ] # array of apps enabled on the server
+    interfaces:list[Interface] = [ ] # interfaces to test
+    databases:list[Database] = [ ] # databases to test
 
-    interfaces = [ ]
-    databases = [ ]
+    appList:list[str] = [ ] # apps that exist
+    appModules:dict[str] = { } # app test modules
 
-    testMatch = None
+    testMatch:str = None # filter tests to run
+    appMatch:str = None # filter apps to test
 
-    def __init__(self, config):
+    testCount = 0 # total number of tests run
+    assertCount = 0 # total number of assertions
 
-        shortargs = "hvp:s:t:n"
-        longargs = ["help","verbose","phproot=","seed=","test=","noinst"]
+    def __init__(self, configPath:str):
+        """The method to run all tests with the given config path"""
+
+        # process command line args
+        shortargs = "hvp:s:f:a:"
+        longargs = ["help","verbose","phproot=","seed=","filter=","apptest="]
         opts, args = getopt.getopt(sys.argv[1:],shortargs,longargs)
 
         for opt,arg in opts:
@@ -33,140 +44,152 @@ class Main():
             if opt in ('-p','--phproot'):
                 self.phproot = arg
             if opt in ('-v','--verbose'):
-                self.verbose = True
-            if opt in ('-s','--seed'):
+                self.verbose += 1
+            if opt in ('-s','--randseed'):
                 self.randseed = arg
-            if opt in ('-t','--test'):
+            if opt in ('-f','--filter'):
                 self.testMatch = arg
-            if opt in ('-n','--noinst'):
-                self.doInstall = False
+            if opt in ('-a','--apptest'):
+                self.appMatch = arg
 
-        if not os.path.exists(self.phproot+'/index.php'):
-            raise Exception("cannot find index.php")            
+        if not os.path.exists(self.phproot+'/init.php'):
+            raise Exception("cannot find /Andromeda")
+        if not os.path.exists(configPath):
+            raise Exception(f"cannot find {configPath}")
 
-        with open(config) as file:
+        if self.randseed is None:
+            self.randseed = self.random.randint(0, sys.maxsize)
+        self.random.seed(self.randseed)
+        print("randomness seeded to", self.randseed)
+
+        # load the config file, process
+        with open(configPath) as file:
             self.config = json.load(file)
-  
-        if 'cli' in self.config and self.config['cli']:
-            self.interfaces.append(Interface.CLI(
-                self, self.phproot, self.config['cli'], self.verbose))
-        if 'ajax' in self.config and self.config['ajax']:
-            self.interfaces.append(Interface.AJAX(
-                self, self.config['ajax'], self.verbose))
+
+        interfaces = self.config['interfaces']
+        if 'cli' in interfaces:
+            self.interfaces.append(CLI(
+                interfaces['cli'], self.verbose))
+        if 'http' in interfaces:
+            self.interfaces.append(HTTP(
+                interfaces['http'], self.verbose))
+            if getpass.getuser() != "www-data":
+                printBlackOnYellow("WARNING HTTP is configured but not running as www-data!")
 
         if not len(self.interfaces):
             raise Exception("no interfaces configured")
 
-        if self.doInstall and 'sqlite' in self.config:
-            self.databases.append(Database.SQLite(self.config['sqlite']))
-        if self.doInstall and 'mysql' in self.config:
-            self.databases.append(Database.MySQL(self.config['mysql']))
-        if self.doInstall and 'pgsql' in self.config:
-            self.databases.append(Database.PostgreSQL(self.config['pgsql']))
+        # check for an existing DBConfig
+        self.dbconfig = self.phproot+'/DBConfig.php'
+        if os.path.exists(self.dbconfig):
+            os.rename(self.dbconfig, self.dbconfig+'.old')
+        atexit.register(self.restoreConfig)
 
-        if not self.doInstall: self.databases.append(None)
+        databases = self.config['databases']
+        if 'sqlite' in databases:
+            self.databases.append(SQLite(
+                databases['sqlite'],self.dbconfig))
+        if 'mysql' in databases:
+            self.databases.append(MySQL(
+                databases['mysql'],self.dbconfig))
+        if 'pgsql' in databases:
+            self.databases.append(PostgreSQL(
+                databases['pgsql'],self.dbconfig))
 
         if not len(self.databases):
             raise Exception("no databases configured")
-
-        if self.doInstall:
-            self.dbconfig = self.phproot+'/DBConfig.php'
-            if os.path.exists(self.dbconfig):
-                os.rename(self.dbconfig, self.dbconfig+'.old')
-            atexit.register(self.restoreConfig)
-
-        self.random = random.Random()
-        self.random.seed(self.randseed)
-
-        for database in self.databases:
-            for interface in self.interfaces: 
-                print();print("------------------------------------")
-                print("--- TEST SUITE -",interface,database,'---')
-                print("------------------------------------")
-
-                self.runTests(interface, database)
         
-        count = 0
-        for iface in self.interfaces: count += iface.count
-        print();print("!! ALL TESTS COMPLETE! RAN {} COMMANDS!".format(count))
+        runPairs:list[tuple[Interface,Database]] = []
+        for interface in self.interfaces:
+            for database in self.databases:
+                runPairs.append((interface, database))
+        self.random.shuffle(runPairs)
 
+        # build the app list by scanning
+        for appname in os.listdir(self.phproot+'/Apps'): 
+            if appname == "Accounts" or appname == "Files": continue # TODO TEMP accounts enable files/accounts when they work!
+            path = self.phproot+'/Apps/'+appname+'/'+appname+'App.php'
+            if not os.path.exists(path): continue 
+            else: self.appList.append(appname.lower())
 
-    def runTests(self, interface, database):
-
-        # test usage command works pre-configure
-        TestUtils.assertOk(interface.run(app='core',action='usage'))
-        TestUtils.assertError(interface.run(app='core',action='getconfig'),
-            503, 'DATABASE_CONFIG_MISSING')
-
-        if self.doInstall:
-            atexit.register(database.deinstall)
-            database.install(interface)
-
-        # build list of server apps
-        if self.doInstall:
-            for app in os.listdir(self.phproot+'/Apps'): 
-                path = self.phproot+'/Apps/'+app+'/'+app+'App.php'
-                if not os.path.exists(path): continue 
-                else: self.servApps.append(app.lower())
-        else:
-            config = TestUtils.assertOk(interface.run(app='core',action='getconfig'))
-            self.servApps = config['config']['apps'].keys()
-
-        # load app test modules
-        for app in self.servApps:
-            path = self.phproot+'/Apps/'+app.capitalize()+'/_tests/integration'
+        for appname in self.appList:
+            if self.appMatch is not None and re.search(self.appMatch, appname) is None: continue
+            path = self.phproot+'/Apps/'+appname.capitalize()+'/_tests/integration/AppTests.py'
             if not os.path.exists(path): continue
+            self.appModules[appname] = self.loadModule('AppTests', path)
 
-            spec = importlib.util.spec_from_file_location('AppTests', path+'/AppTests.py')
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+        assert 'core' in self.appModules
+        assert 'testutil' in self.appList
+        print("Apps to test:", list(self.appModules.keys()))
 
-            appConfig = None
-            if app in self.config: appConfig = self.config[app]
-            self.appMap[app] = module.AppTests(interface, appConfig)
-
-        if self.verbose: print("APPS FOUND:", list(self.appMap.keys()))
+        # run tests for every database/interface combination
+        for interface, database in runPairs:
+            print(); printBlackOnWhite(
+                "------------------------------------", os.linesep,
+                "--- TEST SUITE -",interface,database,'---', os.linesep,
+                "------------------------------------"); print()
+            self.runTests(interface, database)
+    
+        apiCount = 0
+        for iface in self.interfaces: 
+            apiCount += iface.apiCount
         
-        appTests = list(self.appMap.values())
-        self.random.shuffle(appTests)
+        print(); printBlackOnGreen("!! ALL TESTS COMPLETE! "
+            f"RAN {self.testCount} TESTS, {apiCount} API CALLS, {self.assertCount} ASSERTS!")
 
-        # install everything
-        if self.doInstall:
-            print(" -- BEGIN INSTALLS -- ")
 
-            # test usage command works pre-install
-            TestUtils.assertOk(interface.run(app='core',action='usage'))
-            TestUtils.assertError(interface.run(app='core',action='getconfig'),
-                503, 'APP_INSTALL_REQUIRED: core')
+    def runTests(self, interface:Interface, database:Database):
+        """ Run all tests for the given interface and database config """
 
-            # test installing everything at once
-            params = { }
-            for app in appTests:
-                for key,val in app.getInstallParams().items():
-                    params[key] = val
-            appNames = TestUtils.assertOk(interface.run(app='core',action='install',params=params))
-            TestUtils.assertEquals(set(self.servApps), set(appNames))
+        testUtils = TestUtils(self.random)
+        # load the python test module for every app
+        appTestMap:dict[str] = { }
+        for appname, module in self.appModules.items():
+            appConfig = None
+            if appname in self.config: appConfig = self.config[appname]
+            appTestMap[appname] = module.AppTests(testUtils, interface, self.verbose, appConfig)
 
-            database.deinstall()
-            os.remove(self.dbconfig)
-            database.install(interface)
-
-            # test installing everything separately
-            appNames = TestUtils.assertOk(interface.run(app='core',action='install',params={'noapps':True}))
-            TestUtils.assertEquals(set(self.servApps), set(appNames))
-            for app in appTests: app.install()
+        printCyanOnBlack("-- BEGIN INSTALLS -- ")
+        InstallTests(self.verbose).run(testUtils, interface, database, appTestMap)
 
         # run all test modules
-        print(" -- BEGIN", interface, "TESTS --"); interface.runTests()
-        for app in appTests: print(" -- BEGIN", app, "TESTS --"); app.runTests()
+        printCyanOnBlack("-- BEGIN", interface, "TESTS --")
+        if isinstance(interface, HTTP):
+            ifaceTests = HTTPTests(testUtils, interface, self.verbose)
+        if isinstance(interface, CLI):
+            ifaceTests = CLITests(testUtils, interface, self.verbose)
+        testCount = ifaceTests.runTests(self.testMatch)
+        
+        appTestList:list = list(appTestMap.values())
+        self.random.shuffle(appTestList)
+        for app in appTestList:
+            app.afterInstall()
+        for app in appTestList: 
+            printCyanOnBlack("-- BEGIN", app, "TESTS --"); 
+            testCount += app.runTests(self.testMatch)
 
-        if self.doInstall:
-            atexit.unregister(database.deinstall)
-            database.deinstall()
-            os.remove(self.dbconfig)
+        if self.verbose >= 1:
+            printYellowOnBlack("CHECKING ERROR LOG")
+        ifaceTests.checkForErrors() # LAST
+
+        database.deinstall()
+        self.testCount += testCount
+        self.assertCount += testUtils.assertCounter
+        printGreenOnBlack(f"{testCount} TESTS COMPLETE!")
     
+    
+    def loadModule(self, name:str, path:str):
+        """ Loads and returns a python module at the given path """
+        sys.path.append(os.path.dirname(path))
+        spec = importlib.util.spec_from_file_location(name, path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
     def restoreConfig(self):
+        """ Restores the original DBConfig.php that existed before testing """
         if os.path.exists(self.dbconfig+'.old'):
             os.rename(self.dbconfig+'.old', self.dbconfig)
 
-if __name__ == "__main__": Main(config=os.getcwd()+'/../tools/pytest-config.json')
+if __name__ == "__main__": # cwd is Andromeda
+    Main(configPath='../tools/conf/pytest-config.json')

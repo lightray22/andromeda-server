@@ -1,22 +1,38 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -e
 
 cd tools; if [ ! -d mysql2sqlite ]; then
    git clone https://github.com/dumblob/mysql2sqlite.git
 fi; cd ..
 
+if [ "$1" == "" ]; then
+   echo "which app?"; exit 1
+fi
+
+echo "running pgtransfer..."
 tools/pgtransfer
+
+read -sp "MySQL password: " MYSQL_PWD; echo
+export MYSQL_PWD
 
 cd Andromeda; for i in Apps/* Core; do if [ -f $i/andromeda.mysql.sql ]; then
 
-   il=${i,,}; TABLES=$(mysql -D andromeda -u root -p -se "SHOW TABLES LIKE '%${il//\//_}%'")
-   mysqldump andromeda $TABLES --skip-comments --no-create-db --no-data \
-      --skip-add-drop-table -h localhost -u root -p > $i/andromeda.mysql.sql
+   NAME=`basename $i`; if [ "${1,,}" != "${NAME,,}" ]; then continue; fi
 
-   pg_dump --schema-only --table public.a2obj_${il//\//_}"*" --dbname andromeda \
+   echo "exporting mysql template for $i..."
+   il=${i,,}; TABLES=$(mysql -D andromeda -u root -se "SHOW TABLES LIKE '%${il//\//_}%'")
+   echo "tables:" $TABLES
+
+   mysqldump andromeda $TABLES --skip-comments --no-create-db --no-data \
+      --skip-add-drop-table -h localhost -u root > $i/andromeda.mysql.sql
+
+   echo "exporting pgsql template for $i..."
+   pg_dump --schema-only --table public.a2obj_"*"${il//\//_}"*" --dbname andromeda \
       --host localhost --username postgres --no-owner | grep -v "^--" > $i/andromeda.pgsql.sql
    sed -i "s/DEFAULT '\\\x4e554c4c'::bytea/DEFAULT NULL::bytea/" $i/andromeda.pgsql.sql
 
+   echo "exporting sqlite template for $i..."
    ../tools/mysql2sqlite/mysql2sqlite "$i"/andromeda.mysql.sql \
-      | grep -v TRANSACTION | grep -v "PRAGMA synchronous" > $i/andromeda.sqlite.sql
+      | grep -v "TRANSACTION\|PRAGMA synchronous\|PRAGMA journal_mode" > $i/andromeda.sqlite.sql
 
 fi; done

@@ -1,3 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -e
 
-vendor/bin/phpmetrics --report-html=metrics Andromeda
+vendor/bin/phpmetrics --report-html=metrics --exclude="_tests" Andromeda

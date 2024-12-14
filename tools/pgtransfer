@@ -1,14 +1,15 @@
 #!/bin/bash
 
-read -sp "MySQL password: " MYSQLPW
-read -sp "PGSQL password: " PGSQLPW
+read -sp "MySQL password: " MYSQL_PWD; echo
+read -sp "PGSQL password: " PGPASSWORD; echo
 
+export PGPASSWORD
 dropdb -h localhost -U postgres andromeda
 createdb -h localhost -U postgres andromeda
 
 echo "LOAD DATABASE
-    FROM mysql://root:$MYSQLPW@localhost/andromeda
-    INTO pgsql://postgres:$PGSQLPW@localhost/andromeda
+    FROM mysql://root:$MYSQL_PWD@localhost/andromeda
+    INTO pgsql://postgres:$PGPASSWORD@localhost/andromeda
 ALTER SCHEMA 'andromeda' rename to 'public';" > tmp.load
 
-pgloader tmp.load; rm tmp.load
+pgloader tmp.load; RET=$?; rm tmp.load; exit $RET

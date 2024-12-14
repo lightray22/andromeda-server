@@ -1,11 +1,8 @@
-<?php namespace Andromeda\Apps\Files\Limits; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Apps\Files\Limits; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/Utilities.php"); use Andromeda\Core\Utilities;
-require_once(ROOT."/Core/Database/StandardObject.php"); use Andromeda\Core\Database\StandardObject;
-require_once(ROOT."/Core/Database/ObjectDatabase.php"); use Andromeda\Core\Database\ObjectDatabase;
-require_once(ROOT."/Core/Database/FieldTypes.php"); use Andromeda\Core\Database\FieldTypes;
-require_once(ROOT."/Core/IOFormat/Input.php"); use Andromeda\Core\IOFormat\Input;
-require_once(ROOT."/Core/IOFormat/SafeParam.php"); use Andromeda\Core\IOFormat\SafeParam;
+use Andromeda\Core\Utilities;
+use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase};
+use Andromeda\Core\IOFormat\SafeParams;
 
 require_once(ROOT."/Apps/Files/Limits/Base.php");
 
@@ -24,22 +21,22 @@ abstract class Total extends Base
     public static function GetFieldTemplate() : array
     {
         return array_merge(parent::GetFieldTemplate(), array(
-            'dates__download' => null,
-            'dates__upload' => null,
-            'features__itemsharing' => null,
-            'features__share2groups' => null,
-            'features__share2everyone' => null,
-            'features__publicupload' => null,
-            'features__publicmodify' => null,
-            'features__randomwrite' => null,
-            'counters__pubdownloads' => new FieldTypes\Counter(),
-            'counters__bandwidth' => new FieldTypes\Counter(true),
-            'counters__size' => new FieldTypes\Counter(),
-            'counters__items' => new FieldTypes\Counter(),
-            'counters__shares' => new FieldTypes\Counter(),
-            'counters_limits__size' => null,
-            'counters_limits__items' => null,
-            'counters_limits__shares' => null
+            'date_download' => new FieldTypes\Timestamp(),
+            'date_upload' => new FieldTypes\Timestamp(),
+            'itemsharing' => new FieldTypes\BoolType(),
+            'share2groups' => new FieldTypes\BoolType(),
+            'share2everyone' => new FieldTypes\BoolType(),
+            'publicupload' => new FieldTypes\BoolType(),
+            'publicmodify' => new FieldTypes\BoolType(),
+            'randomwrite' => new FieldTypes\BoolType(),
+            'count_pubdownloads' => new FieldTypes\Counter(),
+            'count_bandwidth' => new FieldTypes\Counter(true),
+            'count_size' => new FieldTypes\Counter(),
+            'count_items' => new FieldTypes\Counter(),
+            'count_shares' => new FieldTypes\Counter(),
+            'limit_size' => new FieldTypes\Limit(),
+            'limit_items' => new FieldTypes\Limit(),
+            'limit_shares' => new FieldTypes\Limit()
         ));
     }
     
@@ -47,7 +44,7 @@ abstract class Total extends Base
      * Loads the limit object corresponding to the given limited object 
      * @return static
      */
-    public static function LoadByClient(ObjectDatabase $database, StandardObject $obj) : ?self
+    public static function LoadByClient(ObjectDatabase $database, BaseObject $obj) : ?self
     {
         if (!array_key_exists($obj->ID(), static::$cache))
         {
@@ -58,7 +55,7 @@ abstract class Total extends Base
     }
     
     /** Deletes the limit object corresponding to the given limited object */
-    public static function DeleteByClient(ObjectDatabase $database, StandardObject $obj) : void
+    public static function DeleteByClient(ObjectDatabase $database, BaseObject $obj) : void
     {
         if (array_key_exists($obj->ID(), static::$cache)) static::$cache[$obj->ID()] = null;
         
@@ -93,9 +90,9 @@ abstract class Total extends Base
      * Creates and caches a new limit object for the given limited object 
      * @return static
      */
-    protected static function Create(ObjectDatabase $database, StandardObject $obj) : self
+    protected static function Create(ObjectDatabase $database, BaseObject $obj) : self
     {
-        $newobj = parent::BaseCreate($database)->SetObject('object',$obj);
+        $newobj = static::BaseCreate($database)->SetObject('object',$obj);
         
         static::$cache[$obj->ID()] = $newobj; return $newobj;
     }
@@ -106,22 +103,22 @@ abstract class Total extends Base
                                                                "[--itemsharing ?bool] [--share2groups ?bool] [--share2everyone ?bool] ".
                                                                "[--max_size ?uint] [--max_items ?uint32] [--max_shares ?uint32]"; }
         
-    protected static function BaseConfigLimits(ObjectDatabase $database, StandardObject $obj, Input $input) : self
+    protected static function BaseConfigLimits(ObjectDatabase $database, BaseObject $obj, SafeParams $params) : self
     {
         $lim = static::LoadByClient($database, $obj) ?? static::Create($database, $obj);
         
-        $lim->SetBaseLimits($input);
+        $lim->SetBaseLimits($params);
         
-        if ($input->HasParam('randomwrite')) $lim->SetFeatureBool('randomwrite', $input->GetNullParam('randomwrite', SafeParam::TYPE_BOOL));
-        if ($input->HasParam('publicmodify')) $lim->SetFeatureBool('publicmodify', $input->GetNullParam('publicmodify', SafeParam::TYPE_BOOL));
-        if ($input->HasParam('publicupload')) $lim->SetFeatureBool('publicupload', $input->GetNullParam('publicupload', SafeParam::TYPE_BOOL));
-        if ($input->HasParam('itemsharing')) $lim->SetFeatureBool('itemsharing', $input->GetNullParam('itemsharing', SafeParam::TYPE_BOOL));
-        if ($input->HasParam('share2groups')) $lim->SetFeatureBool('share2groups', $input->GetNullParam('share2groups', SafeParam::TYPE_BOOL));
-        if ($input->HasParam('share2everyone')) $lim->SetFeatureBool('share2everyone', $input->GetNullParam('share2everyone', SafeParam::TYPE_BOOL));
+        if ($params->HasParam('randomwrite')) $lim->SetFeatureBool('randomwrite', $params->GetParam('randomwrite')->GetNullBool());
+        if ($params->HasParam('publicmodify')) $lim->SetFeatureBool('publicmodify', $params->GetParam('publicmodify')->GetNullBool());
+        if ($params->HasParam('publicupload')) $lim->SetFeatureBool('publicupload', $params->GetParam('publicupload')->GetNullBool());
+        if ($params->HasParam('itemsharing')) $lim->SetFeatureBool('itemsharing', $params->GetParam('itemsharing')->GetNullBool());
+        if ($params->HasParam('share2groups')) $lim->SetFeatureBool('share2groups', $params->GetParam('share2groups')->GetNullBool());
+        if ($params->HasParam('share2everyone')) $lim->SetFeatureBool('share2everyone', $params->GetParam('share2everyone')->GetNullBool());
         
-        if ($input->HasParam('max_size')) $lim->SetCounterLimit('size', $input->GetNullParam('max_size', SafeParam::TYPE_UINT));
-        if ($input->HasParam('max_items')) $lim->SetCounterLimit('items', $input->GetNullParam('max_items', SafeParam::TYPE_UINT32));
-        if ($input->HasParam('max_shares')) $lim->SetCounterLimit('shares', $input->GetNullParam('max_shares', SafeParam::TYPE_UINT32));
+        if ($params->HasParam('max_size')) $lim->SetCounterLimit('size', $params->GetParam('max_size')->GetNullUint());
+        if ($params->HasParam('max_items')) $lim->SetCounterLimit('items', $params->GetParam('max_items')->GetNullUint32());
+        if ($params->HasParam('max_shares')) $lim->SetCounterLimit('shares', $params->GetParam('max_shares')->GetNullUint32());
 
         if ($lim->isCreated()) $lim->Initialize();
         
@@ -145,19 +142,19 @@ abstract class Total extends Base
     
     /**
      * Returns a printable client object of this timed limit
-     * @param bool $full if false, show features only (no dates,counters,limits)
-     * @return array `{dates:{created:float, download:?float, upload:?float}, features:{itemsharing:?bool, \
+     * @param bool $full if false, show config only (no dates,counters,limits)
+     * @return array<mixed> `{dates:{created:float, download:?float, upload:?float}, config:{itemsharing:?bool, \
         share2everyone:?bool, share2groups:?bool, publicupload:?bool, publicmodify:?bool, randomwrite:?bool},
         limits:{size:?int, items:?int, shares:?int}, counters:{size:int, items:int, shares:int, pubdownloads:int, bandwidth:int}}`
      * @see Base::GetClientObject()
      */
     public function GetClientObject(bool $full) : array
     {
-        $retval = array_merge(parent::GetClientObject($full), array(
-            'features' => Utilities::array_map_keys(function($p){ return $this->TryGetFeatureBool($p); },
+        $retval = parent::GetClientObject($full) + array(
+            'config' => Utilities::array_map_keys(function($p){ return $this->TryGetFeatureBool($p); },
                 array('itemsharing','share2everyone','share2groups',
                       'publicupload','publicmodify','randomwrite'))
-        ));
+        );
         
         if ($full)
         {

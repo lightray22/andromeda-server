@@ -1,54 +1,29 @@
-<?php namespace Andromeda\Core; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Core; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/Database/FieldTypes.php"); use Andromeda\Core\Database\FieldTypes;
-require_once(ROOT."/Core/Database/ObjectDatabase.php"); use Andromeda\Core\Database\ObjectDatabase;
-require_once(ROOT."/Core/Database/StandardObject.php"); use Andromeda\Core\Database\StandardObject;
-require_once(ROOT."/Core/IOFormat/Input.php"); use Andromeda\Core\IOFormat\Input;
-require_once(ROOT."/Core/IOFormat/SafeParam.php"); use Andromeda\Core\IOFormat\SafeParam;
-require_once(ROOT."/Core/IOFormat/SafeParams.php"); use Andromeda\Core\IOFormat\SafeParams;
-require_once(ROOT."/Core/Exceptions/ErrorManager.php"); use Andromeda\Core\Exceptions\ErrorManager;
-require_once(ROOT."/Core/Exceptions/Exceptions.php");
+use PHPMailer\PHPMailer; // via autoloader
 
-use \PHPMailer\PHPMailer; // via autoloader
-
-/** Exception indicating that sending mail failed */
-class MailSendException extends Exceptions\ServerException { public $message = "MAIL_SEND_FAILURE"; use Exceptions\Copyable; }
-
-/** Exception indicating that no recipients were given */
-class EmptyRecipientsException extends MailSendException { public $message = "NO_RECIPIENTS_GIVEN"; }
-
-/** Exception indicating that the configured mailer driver is invalid */
-class InvalidMailTypeException extends MailSendException { public $message = "INVALID_MAILER_TYPE"; }
-
-/** A name and address pair email recipient */
-class EmailRecipient
-{
-    private ?string $name; 
-    private string $address;
-    
-    public function GetName() : ?string { return $this->name; }
-    public function GetAddress() : string { return $this->address; }
-    public function __construct(string $address, ?string $name = null) {
-        $this->address = $address; $this->name = $name; }
-        
-    public function ToString() : string
-    {
-        $addr = $this->GetAddress(); $name = $this->GetName();        
-        if ($name === null) return $addr;
-        else return "$name <$addr>";
-    }
-}
+use Andromeda\Core\Utilities;
+use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, QueryBuilder, TableTypes};
+use Andromeda\Core\IOFormat\SafeParams;
 
 /** 
  * A configured email service stored in the database 
  * 
  * Manages PHPMailer configuration and wraps its usage
+ * @phpstan-import-type ScalarArray from Utilities
+ * @phpstan-type EmailerJ array{id:string, type:string, hosts:?ScalarArray, username:?string, password:bool,
+ *    from_address:string, from_name:?string, use_reply:bool, date_created:float}
  */
-class Emailer extends StandardObject
-{    
+class Emailer extends BaseObject
+{
+    use TableTypes\TableNoChildren;
+    
+    protected const IDLength = 4;
+    
     private PHPMailer\PHPMailer $mailer;
     
     private const SMTP_TIMEOUT = 15;
+    private const DEFAULT_FROM = 'Andromeda';
     
     public const TYPE_PHPMAIL = 0; 
     public const TYPE_SENDMAIL = 1; 
@@ -61,132 +36,191 @@ class Emailer extends StandardObject
         'qmail'=>self::TYPE_QMAIL, 
         'smtp'=>self::TYPE_SMTP);
     
-    public static function GetFieldTemplate() : array
+    /** Date of object creation */
+    private FieldTypes\Timestamp $date_created;
+    /** Type of emailer (see usage) */
+    private FieldTypes\IntType $type;
+    /** 
+     * Array of hostnames to try, in order 
+     * @var FieldTypes\NullJsonArray<list<string>>
+     */
+    private FieldTypes\NullJsonArray $hosts;
+    /** Optional SMTP username */
+    private FieldTypes\NullStringType $username;
+    /** Optional SMTP password */
+    private FieldTypes\NullStringType $password;
+    /** From email address */
+    private FieldTypes\StringType $from_address;
+    /** Optional from email name */
+    private FieldTypes\NullStringType $from_name;
+    /** If true, add a Reply-To header */
+    private FieldTypes\NullBoolType $use_reply;
+    
+    protected function CreateFields() : void
     {
-        return array_merge(parent::GetFieldTemplate(), array(
-            'type' => null,
-            'hosts' => new FieldTypes\JSON(), // array of hosts to try, in-order
-            'username' => null,
-            'password' => null,
-            'from_address' => null,
-            'from_name' => null,
-            'features__reply' => null // if true, add a Reply-To header
-        ));
-    }    
+        $fields = array();
+        
+        $fields[] = $this->date_created = new FieldTypes\Timestamp('date_created');
+        $fields[] = $this->type =         new FieldTypes\IntType('type');
+        $fields[] = $this->hosts =        new FieldTypes\NullJsonArray('hosts');
+        $fields[] = $this->username =     new FieldTypes\NullStringType('username');
+        $fields[] = $this->password =     new FieldTypes\NullStringType('password');
+        $fields[] = $this->from_address = new FieldTypes\StringType('from_address');
+        $fields[] = $this->from_name =    new FieldTypes\NullStringType('from_name');
+        $fields[] = $this->use_reply =    new FieldTypes\NullBoolType('use_reply');
+        
+        $this->RegisterFields($fields, self::class);
+        
+        parent::CreateFields();
+    }
     
     /** Returns a string with the CLI usage for creating an emailer */
-    public static function GetCreateUsage() : string { return "--type ".implode('|',array_keys(self::MAIL_TYPES))." --from_address email [--from_name name] [--use_reply bool]"; }
+    public static function GetCreateUsage() : string { return "--type ".implode('|',array_keys(self::MAIL_TYPES))." --from_address email [--from_name ?name] [--use_reply ?bool]"; }
     
-    /** Returns a array of strings with the CLI usage for each specific driver */
-    public static function GetCreateUsages() : array { return array("--type smtp ((--host alphanum [--port uint16] [--proto ssl|tls]) | --hosts json[]) [--username text] [--password raw]"); }
+    /** 
+     * Returns a array of strings with the CLI usage for each specific driver
+     * @return array<int,string>
+     */
+    public static function GetCreateUsages() : array { return array("--type smtp ((--host hostname [--port ?uint16] [--proto ?ssl|tls]) | --hosts json[]) [--username ?utf8] [--password ?raw]"); }
     
     /** Creates a new email backend in the database with the given input (see CLI usage) */
-    public static function Create(ObjectDatabase $database, Input $input) : self
+    public static function Create(ObjectDatabase $database, SafeParams $params) : self
     {
-        $mailer = parent::BaseCreate($database);
+        $mailer = $database->CreateObject(static::class);
+        $mailer->date_created->SetTimeNow();
         
-        $type = $input->GetParam('type', SafeParam::TYPE_ALPHANUM, 
-            SafeParams::PARAMLOG_ONLYFULL, array_keys(self::MAIL_TYPES));
+        $type = self::MAIL_TYPES[$params->GetParam('type')->FromAllowlist(array_keys(self::MAIL_TYPES))];
         
-        $type = self::MAIL_TYPES[$type];
+        $mailer->type->SetValue($type);
         
-        $mailer->SetScalar('type',$type)
-            ->SetScalar('from_address',$input->GetParam('from_address',SafeParam::TYPE_EMAIL))
-            ->SetScalar('from_name',$input->GetOptParam('from_name',SafeParam::TYPE_NAME))
-            ->SetFeatureBool('reply',$input->GetOptParam('use_reply',SafeParam::TYPE_BOOL));
+        $mailer->from_address->SetValue($params->GetParam('from_address')->GetEmail());
         
-        if ($type == self::TYPE_SMTP)
+        $mailer->from_name->SetValue($params->GetOptParam('from_name',null)->GetNullName());
+        $mailer->use_reply->SetValue($params->GetOptParam('use_reply',null)->GetNullBool());
+
+        if ($type === self::TYPE_SMTP)
         {
-            $mailer->SetScalar('username',$input->GetOptParam('username',SafeParam::TYPE_TEXT));
-            $mailer->SetScalar('password',$input->GetOptParam('password',SafeParam::TYPE_RAW,SafeParams::PARAMLOG_NEVER));
-            
-            if (($hosts = $input->GetParam('hosts',SafeParam::TYPE_OBJECT | SafeParam::TYPE_ARRAY)) !== null)
+            $mailer->username->SetValue($params->GetOptParam('username',null)->GetNullUTF8String());
+            $mailer->password->SetValue($params->GetOptParam('password',null,SafeParams::PARAMLOG_NEVER)->GetNullRawString());
+
+            if ($params->HasParam('hosts'))
             {
-                $hosts = array_map(function($i){ return self::BuildHostFromParams($i); }, $hosts);
-            }
-            else $hosts = array(self::BuildHostFromParams($input->GetParams()));
+                $hosts = $params->GetParam('hosts')->GetObjectArray();
                 
-            $mailer->SetScalar('hosts',$hosts);
+                $hosts = array_map(function(SafeParams $p){ 
+                    return self::BuildHostFromParams($p); }, $hosts);
+            }
+            else $hosts = array(self::BuildHostFromParams($params));
+                
+            $mailer->hosts->SetArray($hosts);
         }
         
         return $mailer;
     }
     
-    /** Build a PHPMailer-formatted host string from an input */
-    private static function BuildHostFromParams(SafeParams $input) : string
+    /** 
+     * Returns any available (random) Emailer object 
+     * @throws Exceptions\MailerUnavailableException if none configured
+     */
+    public static function LoadAny(ObjectDatabase $database) : self
     {
-        $host = $input->GetParam('host',SafeParam::TYPE_HOSTNAME);
-        $port = $input->GetOptParam('port',SafeParam::TYPE_UINT16);
-        $proto = $input->GetOptParam('proto',SafeParam::TYPE_ALPHANUM,
-            SafeParams::PARAMLOG_ONLYFULL, array('tls','ssl'));
+        $mailers = static::LoadAll($database);
         
-        if ($port) $host .= ":$port";
-        if ($proto) $host = "$proto://$host";        
+        if (count($mailers) === 0) 
+            throw new Exceptions\MailerUnavailableException();
+        
+        return $mailers[array_rand($mailers)];
+    }
+
+    /** Build a PHPMailer-formatted host string from an input */
+    private static function BuildHostFromParams(SafeParams $params) : string
+    {
+        $host = $params->GetParam('host')->GetHostname();
+        
+        $port = $params->GetOptParam('port',null)->GetNullUint16();
+        $proto =  $params->GetOptParam('proto',null)->FromAllowlistNull(array('tls','ssl'));
+        
+        if ($port !== null) $host .= ":$port";
+        if ($proto !== null) $host = "$proto://$host";
         return $host;
     }
     
     /** Returns whether or not to use the server from address for reply-to */
-    private function GetUseReply() : bool { return $this->TryGetFeatureBool('reply') ?? false; }
+    private function GetUseReply() : bool { return $this->use_reply->TryGetValue() ?? false; }
     
     /**
      * Gets the config as a printable client object
-     * @return array `{type:enum, hosts:?string, username:?string, password:bool,
-         from_address:string, from_name:?string, features:{reply:bool}, dates:{created:float}}`
+     * @return EmailerJ
      */
     public function GetClientObject() : array
     {
         return array(
-            'type' => array_flip(self::MAIL_TYPES)[$this->GetScalar('type')],
-            'hosts' => $this->TryGetScalar('hosts'),
-            'username' => $this->TryGetScalar('username'),
-            'password' => (bool)($this->TryGetScalar('password')),
-            'from_address' => $this->GetScalar('from_address'),
-            'from_name' => $this->TryGetScalar('from_name'),
-            'dates' => array(
-                'created' => $this->GetDateCreated(),
-            ),
-            'features' => array(
-                'reply' => $this->GetUseReply()
-            )
+            'id'           => $this->ID(),
+            'date_created' => $this->date_created->GetValue(),
+            'type' =>         array_flip(self::MAIL_TYPES)[$this->type->GetValue()],
+            'hosts' =>        $this->hosts->TryGetArray(),
+            'username' =>     $this->username->TryGetValue(),
+            'password' =>     (bool)$this->password->TryGetValue(),
+            'from_address' => $this->from_address->GetValue(),
+            'from_name' =>    $this->from_name->TryGetValue(),
+            'use_reply' =>    $this->GetUseReply()
         );        
     }
     
     /** Initializes the PHPMailer instance */
-    public function Activate() : self
+    private function Initialize() : void
     {        
         $mailer = new PHPMailer\PHPMailer(true);
         
         $mailer->Timeout = self::SMTP_TIMEOUT;
         
-        $type = $this->GetScalar('type');
-        switch ($type)
+        switch ($type = $this->type->GetValue())
         {
             case self::TYPE_PHPMAIL: $mailer->isMail(); break;
             case self::TYPE_SENDMAIL: $mailer->isSendmail(); break;
             case self::TYPE_QMAIL: $mailer->isQmail(); break;
             case self::TYPE_SMTP: $mailer->isSMTP(); break;
-            default: throw new InvalidMailTypeException();
+            default: throw new Exceptions\InvalidMailTypeException();
         }
         
-        $mailer->SMTPDebug = Main::GetInstance()->GetDebugLevel() >= Config::ERRLOG_DETAILS ? PHPMailer\SMTP::DEBUG_CONNECTION : 0;    
+        $debug = $this->GetApiPackage()->GetDebugLevel() >= Config::ERRLOG_DETAILS;
+        $mailer->SMTPDebug = $debug ? PHPMailer\SMTP::DEBUG_CONNECTION : 0;
         
-        $mailer->Debugoutput = function($str, $level){ 
-            if (!preg_match('//u', $str)) $str = base64_encode($str); // check UTF-8
-            ErrorManager::GetInstance()->LogDebug("PHPMailer $level: $str"); };
+        $mailer->Debugoutput = function(string $str, int $level)
+        { 
+            if (!Utilities::isUTF8($str)) $str = base64_encode($str);
+            $this->GetApiPackage()->GetErrorManager()->LogDebugHint("PHPMailer $level: $str"); 
+        };
         
-        $mailer->setFrom($this->GetScalar('from_address'), $this->TryGetScalar('from_name') ?? 'Andromeda');
+        $mailer->setFrom(
+            $this->from_address->GetValue(), 
+            $this->from_name->TryGetValue() ?? self::DEFAULT_FROM);
         
-        if ($type == self::TYPE_SMTP)
+        if ($type === self::TYPE_SMTP)
         {
-            $mailer->Username = $this->TryGetScalar('username');
-            $mailer->Password = $this->TryGetScalar('password');
-            if ($mailer->Username !== null) $mailer->SMTPAuth = true;
-
-            $mailer->Host = implode(';', $this->TryGetScalar('hosts'));
+            if (($username = $this->username->TryGetValue()) !== null)
+            {
+                $mailer->SMTPAuth = true;
+                $mailer->Username = $username;
+                
+                if (($password = $this->password->TryGetValue()) !== null)
+                    $mailer->Password = $password;
+            }
+            
+            if (($hostsJ = $this->hosts->TryGetArray()) === null)
+                throw new Exceptions\MissingHostsException();
+            else
+            {
+                $hosts = array(); foreach ($hostsJ as $host) // check array shape
+                {
+                    if (is_string($host)) $hosts[] = $host;
+                    else throw new Exceptions\MissingHostsException();
+                }
+                $mailer->Host = implode(';', $hosts);
+            }
         }
     
         $this->mailer = $mailer;
-        return $this;
     }
     
     /**
@@ -197,23 +231,36 @@ class Emailer extends StandardObject
      * @param EmailRecipient $from a different from to send as
      * @param bool $isHtml true if the body is HTML
      * @param bool $usebcc true if the recipients should use BCC
-     * @throws EmptyRecipientsException if no recipients were given
-     * @throws MailSendException if sending the message fails
+     * @throws Exceptions\EmailDisabledException if email is not enabled
+     * @throws Exceptions\EmptyRecipientsException if no recipients were given
+     * @throws Exceptions\MailSendException if sending the message fails
      */
     public function SendMail(string $subject, string $message, bool $isHtml, array $recipients, bool $usebcc, ?EmailRecipient $from = null) : void
     {
-        if (!count($recipients)) throw new EmptyRecipientsException();
+        if (!$this->GetApiPackage()->GetConfig()->GetEnableEmail())
+            throw new Exceptions\EmailDisabledException();
         
+        if (count($recipients) === 0) 
+            throw new Exceptions\EmptyRecipientsException();
+        
+        if (!isset($this->mailer)) $this->Initialize();
         $mailer = $this->mailer;
         
-        if ($from === null && $this->GetUseReply())
-            $mailer->addReplyTo($this->GetScalar('from_address'), $this->TryGetScalar('from_name') ?? 'Andromeda');        
-        else if ($from !== null) $mailer->addReplyTo($from->GetAddress(), $from->GetName());
+        if ($from !== null) 
+        {
+            $mailer->addReplyTo($from->GetAddress(), $from->TryGetName() ?? "");
+        }
+        else if ($this->GetUseReply())
+        {
+            $mailer->addReplyTo(
+                $this->from_address->GetValue(),
+                $this->from_name->TryGetValue() ?? self::DEFAULT_FROM); 
+        }
         
         foreach ($recipients as $recipient) 
         {
-            if ($usebcc) $mailer->addBCC($recipient->GetAddress(), $recipient->GetName());
-            else $mailer->addAddress($recipient->GetAddress(), $recipient->GetName());          
+            if ($usebcc) $mailer->addBCC($recipient->GetAddress(), $recipient->TryGetName() ?? "");
+            else $mailer->addAddress($recipient->GetAddress(), $recipient->TryGetName() ?? "");
         }
         
         $mailer->Subject = $subject; 
@@ -221,9 +268,15 @@ class Emailer extends StandardObject
         if ($isHtml) $mailer->msgHTML($message);
         else $mailer->Body = $message;
         
-        try { if (!$mailer->send()) throw new MailSendException($mailer->ErrorInfo); }
-        catch (\Throwable $e) { throw MailSendException::Append($e); }
+        try 
+        { 
+            if (!$mailer->send())
+                throw new Exceptions\PHPMailerFalseException($mailer->ErrorInfo);
+        }
+        catch (PHPMailer\Exception $e) { 
+            throw new Exceptions\PHPMailThrowException($e); }
         
-        $mailer->clearAddresses(); $mailer->clearAttachments();
+        $mailer->clearAddresses(); 
+        $mailer->clearAttachments();
     }
 }

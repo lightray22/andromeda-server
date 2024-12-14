@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -e
+
+tools/analyze
+tools/unittests; sleep 1
+tools/inttests
+
+tools/count total
+echo "---- ALL CHECKS OK! ----"

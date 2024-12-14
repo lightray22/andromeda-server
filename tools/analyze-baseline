@@ -1,7 +1,0 @@
-#!/bin/sh
-
-cd tools
-
-truncate -s 0 phpstan-baseline.neon
-
-../vendor/bin/phpstan analyse -c phpstan.neon --generate-baseline "$@"

@@ -1,6 +1,6 @@
-<?php namespace Andromeda\Apps\Files\Filesystem; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Apps\Files\Filesystem; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/Database/ObjectDatabase.php"); use Andromeda\Core\Database\ObjectDatabase;
+use Andromeda\Core\Database\ObjectDatabase;
 require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
 
 require_once(ROOT."/Apps/Files/Filesystem/Native.php");
@@ -77,7 +77,7 @@ class External extends BaseFileFS
      * @param ?FolderCreator $folderCr MUST BE NULL (unit testing only)
      */
     public function RefreshFolder(Folder $folder, bool $doContents = true, 
-        ?FileCreator $fileCr = null, ?FolderCreator $folderCr = null) : self
+        string $fileClass = File::class, string $folderClass = Folder::class) : self
     {
         $storage = $this->GetStorage();
         $path = $this->GetItemPath($folder);
@@ -112,15 +112,11 @@ class External extends BaseFileFS
                     unset($dbitems[$fsname]);
                 else
                 {
-                    $sw = $isfile ? $fileCr : $folderCr;
-                    $class = $isfile ? File::class : SubFolder::class;
-                    
                     $database = $this->GetDatabase();
                     $owner = $this->GetFSManager()->GetOwner();
                     
-                    if ($sw !== null) 
-                            $dbitem = $sw->NotifyCreate($database, $folder, $owner, $fsname);
-                    else $dbitem = $class::NotifyCreate($database, $folder, $owner, $fsname);
+                    $class = $isfile ? $fileClass : $folderClass;
+                    $dbitem = $class::NotifyCreate($database, $folder, $owner, $fsname);
                     
                     $dbitem->Refresh()->Save(); // update metadata, and insert to the DB immediately
                 }

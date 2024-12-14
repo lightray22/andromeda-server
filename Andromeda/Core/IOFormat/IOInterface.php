@@ -1,41 +1,14 @@
-<?php namespace Andromeda\Core\IOFormat; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Core\IOFormat; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/Config.php"); use Andromeda\Core\Config;
-require_once(ROOT."/Core/Utilities.php"); use Andromeda\Core\Singleton;
-require_once(ROOT."/Core/Exceptions/Exceptions.php"); use Andromeda\Core\Exceptions;
-
-require_once(ROOT."/Core/IOFormat/Input.php");
-require_once(ROOT."/Core/IOFormat/Output.php");
-require_once(ROOT."/Core/IOFormat/Interfaces/AJAX.php");
-require_once(ROOT."/Core/IOFormat/Interfaces/CLI.php");
-
-if (!function_exists('json_encode')) die("PHP JSON Extension Required".PHP_EOL);
-
-/** Exception indicating that an app action does not allow batches */
-class BatchNotAllowedException extends Exceptions\ClientErrorException { public $message = "METHOD_DISALLOWS_BATCH"; }
-
-/** Class for custom app output routines */
-class OutputHandler
-{
-    private $getbytes; private $output;
-    
-    public function __construct(callable $getbytes, callable $output){
-        $this->getbytes = $getbytes; $this->output = $output; }
-    
-    /** Return the number of bytes that will be output */
-    public function GetBytes() : ?int { return ($this->getbytes)(); }
-    
-    /** Do the actual output routine */
-    public function DoOutput(Output $output) : void { ($this->output)($output); }
-}
+use Andromeda\Core\Config;
 
 /** Describes an abstract PHP I/O interface abstraction */
-abstract class IOInterface extends Singleton
+abstract class IOInterface
 {
     /** Constructs and returns a singleton of the appropriate interface type */
-    public static function TryGet() : ?self
+    final public static function TryGet() : ?self
     {
-        if (Interfaces\AJAX::isApplicable()) return new Interfaces\AJAX();
+        if (Interfaces\HTTP::isApplicable()) return new Interfaces\HTTP();
         else if (Interfaces\CLI::isApplicable()) return new Interfaces\CLI();
         else return null;
     }
@@ -45,38 +18,41 @@ abstract class IOInterface extends Singleton
     
     /** Returns whether or not the interface grants privileged access */
     abstract public static function isPrivileged() : bool;
-    
-    /** Called during API construction to initialize the interface, e.g. to gather global arguments */
-    public function Initialize() : void { }
-    
-    /** @var array<Input> */
-    protected array $inputs;
+
+    /** Returns true if the interface is considered "interactive" */
+    abstract public static function isInteractive() : bool;
+
+    /** The parsed input object */
+    protected ?Input $input = null;
 
     /** 
-     * Retrieves an array of input objects to run 
-     * @return Input[]
+     * Retrieves the input object to run (if not cached)
+     * 
+     * Also modifies internal state related to the input (debug, dryrun, etc.)
+     * which can be transferred to config via AdjustConfig()
+     * @return Input
      */
-    public function GetInputs(?Config $config) : array
+    public function GetInput() : Input
     {
-        if (isset($this->inputs)) return $this->inputs;
-        else return ($this->inputs = $this->subGetInputs($config));
+        if ($this->input === null)
+            $this->input = $this->LoadInput(); // cache
+        return $this->input;
     }
     
-    /** @see self::GetInputs() */
-    abstract protected function subGetInputs(?Config $config) : array;
+    /** Sets temporary config parameters requested by the interface */
+    public function AdjustConfig(Config $config) : self { return $this; }
     
-    /** Asserts that only one output was given */
-    public function DisallowBatch() : void
-    {
-        if (isset($this->inputs) && count($this->inputs) > 1)
-            throw new BatchNotAllowedException();
-    }
-        
+    /** Retrieves the input object to run (subclasses implement) */
+    abstract protected function LoadInput() : Input;
+    
     /** Returns the address of the user on the interface */
     abstract public function getAddress() : string;    
     
     /** Returns the user agent string on the interface */
     abstract public function getUserAgent() : string;
+    
+    /** Returns true if the interface requested a dry-run */
+    public function isDryRun() : bool { return false; }
     
     /** Returns the debugging level requested by the interface */
     public function GetDebugLevel() : int { return 0; }
@@ -87,78 +63,72 @@ abstract class IOInterface extends Singleton
     /** Returns the path to the DB config file requested by the interface */
     public function GetDBConfigFile() : ?string { return null; }
     
-    const OUTPUT_PLAIN = 1; const OUTPUT_JSON = 2; const OUTPUT_PRINTR = 3;
+    public const OUTPUT_TYPES = array(
+        'none'=>0, 
+        'plain'=>self::OUTPUT_PLAIN, 
+        'json'=>self::OUTPUT_JSON, 
+        'printr'=>self::OUTPUT_PRINTR);
+    
+    public const OUTPUT_PLAIN = 1; 
+    public const OUTPUT_JSON = 2; 
+    public const OUTPUT_PRINTR = 3;
 
     /** Gets the default output mode for the interface */
     abstract public static function GetDefaultOutmode() : int;
     
-    protected ?int $outmode;
+    protected int $outmode;
     
     public function __construct(){ $this->outmode = static::GetDefaultOutmode(); }
+    
+    /** Returns the output mode currently selected */
+    public function GetOutputMode() : int { return $this->outmode; }
 
-    /** Sets the output mode to the given mode or null (none) - NOT USED in "multi-output" mode! */
-    public function SetOutputMode(?int $mode) : self { $this->outmode = $mode; return $this; }
-    
-    private $retfuncs = array();
-    private int $numretfuncs = 0;
-    
     /** 
-     * Registers a user output handler function to run after the initial commit 
-     * 
-     * Sets the output mode to null if bytes !== null and will cause "multi-output" 
-     * mode to be used if > 1 functions that return > 0 bytes are defined
-     * @see IOInterface::isMultiOutput()
+     * Sets the output mode to the given mode or 0 for (none)
+     * @throws Exceptions\MultiOutputException if mode is not 0 and a user output function with non-null bytes is set
      */
-    public function RegisterOutputHandler(OutputHandler $f) : self 
+    public function SetOutputMode(int $mode) : self 
     {
-        if ($f->GetBytes() !== null)
-        {
-            $this->outmode = null; 
-            $this->numretfuncs++;
-        }
-        
-        if ($this->isMultiOutput()) 
-            $this->outmode = self::OUTPUT_JSON;
-        
-        $this->retfuncs[] = $f; return $this; 
+        if ($mode !== 0 && $this->userfunc !== null && $this->userfunc->GetBytes() !== null)
+            throw new Exceptions\MultiOutputException($mode);
+
+        $this->outmode = $mode; return $this; 
     }
+
+    /** The custom user output function if set */
+    private ?OutputHandler $userfunc = null;
     
     /** 
-     * Returns true if the output is using multi-output mode 
-     * 
-     * Multi-output mode is used when more than one user output function wants to run.
-     * To accomodate this, each section will be prefaced with the number of bytes written.
-     * In multi-output mode, the requested global output mode is ignored and the request
-     * is always finished with JSON output (also with the # of bytes prefixed)
-     * @see IOInterface::formatSize()
+     * Sets a user output handler function to run after the initial commit 
+     * NOTE Sets the output mode to null if bytes !== null
+     * @throws Exceptions\MultiOutputException if set more than once
      */
-    protected function isMultiOutput() : bool { return $this->numretfuncs > 1; }
-    
-    /** 
-     * Returns the binary-packed version of the given integer size 
-     * 
-     * unsigned long long (always 64 bit, big-endian byte order)
-     */
-    protected static function formatSize(int $size) : string { return pack("J", $size); }
-    
+    public function SetOutputHandler(?OutputHandler $f = null) : self 
+    {
+        if ($f !== null && $this->userfunc !== null)
+            throw new Exceptions\MultiOutputException();
+
+        if ($f !== null && $f->GetBytes() !== null)
+            $this->outmode = 0;
+        
+        $this->userfunc = $f; return $this; 
+    }
+
     /** 
      * Tells the interface to run the custom user output functions
-     * @return bool true if a custom function was run
+     * @return bool true if a custom function was run (regardless of output bytes)
      */
     public function UserOutput(Output $output) : bool
     {
-        $multi = $this->isMultiOutput();
-        
-        foreach ($this->retfuncs as $handler) 
+        if ($this->userfunc !== null)
         {
-            if ($multi) echo static::formatSize($handler->GetBytes());
-            
-            $handler->DoOutput($output); flush();
+            $this->userfunc->DoOutput($output);
+            flush(); // flush output
         }
-        
-        return count($this->retfuncs) > 0;
+
+        return ($this->userfunc !== null);
     }
     
-    /** Tells the interface to print its final output */
-    public abstract function WriteOutput(Output $output);
+    /** Tells the interface to print its final output and exit */
+    public abstract function FinalOutput(Output $output) : void;
 }

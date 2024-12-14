@@ -1,9 +1,6 @@
-<?php namespace Andromeda\Apps\Files; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Apps\Files; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/Database/ObjectDatabase.php"); use Andromeda\Core\Database\ObjectDatabase;
-require_once(ROOT."/Core/Database/StandardObject.php"); use Andromeda\Core\Database\StandardObject;
-require_once(ROOT."/Core/Database/FieldTypes.php"); use Andromeda\Core\Database\FieldTypes;
-require_once(ROOT."/Core/Database/QueryBuilder.php"); use Andromeda\Core\Database\QueryBuilder;
+use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, QueryBuilder};
 
 require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
 
@@ -13,16 +10,16 @@ require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Acc
  * These are tracked per-like rather than as just counters
  * on items to prevent duplicates (and show who liked what)
  */
-class Like extends StandardObject
+class Like extends BaseObject // TODO was StandardObject
 {
-    public const IDLength = 16;
+    protected const IDLength = 16;
     
     public static function GetFieldTemplate() : array
     {
         return array_merge(parent::GetFieldTemplate(), array(
-            'owner' => new FieldTypes\ObjectRef(Account::class),
-            'item' => new FieldTypes\ObjectPoly(Item::Class, 'likes'),
-            'value' => null // true if this is a like, false if a dislike
+            'obj_owner' => new FieldTypes\ObjectRef(Account::class),
+            'obj_item' => new FieldTypes\ObjectPoly(Item::Class, 'likes'),
+            'value' => new FieldTypes\BoolType() // true if this is a like, false if a dislike
         ));
     }
 
@@ -32,17 +29,17 @@ class Like extends StandardObject
      * @param Account $owner the person doing the like
      * @param Item $item the item being liked
      * @param bool $value true if like, false if dislike, null to unset
-     * @return static|NULL like object if $value is not null
+     * @return ?static like object if $value is not null
      */
     public static function CreateOrUpdate(ObjectDatabase $database, Account $owner, Item $item, ?bool $value) : ?self
     {
-        $q = new QueryBuilder(); $where = $q->And($q->Equals('owner',$owner->ID()),$q->Equals('item',FieldTypes\ObjectPoly::GetObjectDBValue($item)));
+        $q = new QueryBuilder(); $where = $q->And($q->Equals('obj_owner',$owner->ID()),$q->Equals('obj_item',FieldTypes\ObjectPoly::GetObjectDBValue($item)));
         
         // load an existing like (can only like an item once)
         $likeobj = static::TryLoadUniqueByQuery($database, $q->Where($where));
         
         // create a new one if it doesn't exist
-        $likeobj ??= parent::BaseCreate($database)->SetObject('owner',$owner)->SetObject('item',$item);
+        $likeobj ??= static::BaseCreate($database)->SetObject('obj_owner',$owner)->SetObject('obj_item',$item);
                 
         // "un-count" the old like first
         $item->CountLike($likeobj->TryGetScalar('value') ?? 0, true);
@@ -58,7 +55,7 @@ class Like extends StandardObject
     
     /**
      * Returns a printable client object of this like
-     * @return array `{owner:id, item:id, value:bool, dates:{created:float}}`
+     * @return array<mixed> `{owner:id, item:id, value:bool, dates:{created:float}}`
      */
     public function GetClientObject() : array
     {

@@ -16,7 +16,23 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 
-CREATE TABLE public.a2obj_apps_accounts_accesslog (
+CREATE TABLE public.a2obj_apps_accounts_account (
+    id character(12) NOT NULL,
+    username character varying(127) NOT NULL,
+    fullname character varying(255) DEFAULT NULL::character varying,
+    date_passwordset double precision,
+    date_loggedon double precision,
+    date_active double precision,
+    master_key bytea DEFAULT NULL::bytea,
+    master_nonce bytea DEFAULT NULL::bytea,
+    master_salt bytea DEFAULT NULL::bytea,
+    password text,
+    authsource character(8) DEFAULT NULL::bpchar
+);
+
+
+
+CREATE TABLE public.a2obj_apps_accounts_actionlog (
     id character(20) NOT NULL,
     admin boolean,
     account character(12) DEFAULT NULL::bpchar,
@@ -26,124 +42,54 @@ CREATE TABLE public.a2obj_apps_accounts_accesslog (
 
 
 
-CREATE TABLE public.a2obj_apps_accounts_account (
-    id character(12) NOT NULL,
-    username character varying(127) NOT NULL,
-    fullname character varying(255) DEFAULT NULL::character varying,
-    dates__created double precision NOT NULL,
-    dates__passwordset double precision,
-    dates__loggedon double precision,
-    dates__active double precision,
-    dates__modified double precision,
-    session_timeout bigint,
-    client_timeout bigint,
-    max_password_age bigint,
-    features__admin boolean,
-    features__disabled smallint,
-    features__forcetf boolean,
-    features__allowcrypto boolean,
-    features__accountsearch smallint,
-    features__groupsearch smallint,
-    features__userdelete boolean,
-    counters_limits__sessions smallint,
-    counters_limits__contacts smallint,
-    counters_limits__recoverykeys smallint,
-    comment text,
-    master_key bytea DEFAULT NULL::bytea,
-    master_nonce bytea DEFAULT NULL::bytea,
-    master_salt bytea DEFAULT NULL::bytea,
-    password text,
-    authsource character varying(64) DEFAULT NULL::character varying,
-    groups smallint DEFAULT '0'::smallint NOT NULL,
-    sessions smallint DEFAULT '0'::smallint NOT NULL,
-    contacts smallint DEFAULT '0'::smallint NOT NULL,
-    clients smallint DEFAULT '0'::smallint NOT NULL,
-    twofactors smallint DEFAULT '0'::smallint NOT NULL,
-    recoverykeys smallint DEFAULT '0'::smallint NOT NULL
-);
-
-
-
-CREATE TABLE public.a2obj_apps_accounts_auth_ftp (
-    id character(12) NOT NULL,
-    hostname character varying(255) NOT NULL,
-    port smallint,
-    implssl boolean NOT NULL,
-    manager character(12) NOT NULL
-);
-
-
-
-CREATE TABLE public.a2obj_apps_accounts_auth_imap (
-    id character(12) NOT NULL,
-    protocol smallint NOT NULL,
-    hostname character varying(255) NOT NULL,
-    port smallint,
-    implssl boolean NOT NULL,
-    secauth boolean NOT NULL,
-    manager character(12) NOT NULL
-);
-
-
-
-CREATE TABLE public.a2obj_apps_accounts_auth_ldap (
-    id character(12) NOT NULL,
-    hostname character varying(255) NOT NULL,
-    secure boolean NOT NULL,
-    userprefix character varying(255) NOT NULL,
-    manager character(12) NOT NULL
-);
-
-
-
-CREATE TABLE public.a2obj_apps_accounts_auth_manager (
-    id character(12) NOT NULL,
+CREATE TABLE public.a2obj_apps_accounts_authsource_external (
+    id character(8) NOT NULL,
     enabled smallint NOT NULL,
-    authsource character varying(64) NOT NULL,
     description text,
+    date_created double precision,
     default_group character(12) DEFAULT NULL::bpchar
 );
 
 
 
-CREATE TABLE public.a2obj_apps_accounts_client (
-    id character(12) NOT NULL,
-    name character varying(255) DEFAULT NULL::character varying,
-    authkey text NOT NULL,
-    lastaddr character varying(255) NOT NULL,
-    useragent text NOT NULL,
-    dates__active double precision DEFAULT '0'::double precision,
-    dates__created double precision DEFAULT '0'::double precision NOT NULL,
-    dates__loggedon double precision DEFAULT '0'::double precision NOT NULL,
-    account character(12) NOT NULL,
-    session character(12) DEFAULT NULL::bpchar
+CREATE TABLE public.a2obj_apps_accounts_authsource_ftp (
+    id character(8) NOT NULL,
+    hostname character varying(255) NOT NULL,
+    port smallint,
+    implssl boolean NOT NULL
+);
+
+
+
+CREATE TABLE public.a2obj_apps_accounts_authsource_imap (
+    id character(8) NOT NULL,
+    protocol smallint NOT NULL,
+    hostname character varying(255) NOT NULL,
+    port smallint,
+    implssl boolean NOT NULL,
+    secauth boolean NOT NULL
+);
+
+
+
+CREATE TABLE public.a2obj_apps_accounts_authsource_ldap (
+    id character(8) NOT NULL,
+    hostname character varying(255) NOT NULL,
+    secure boolean NOT NULL,
+    userprefix character varying(255) NOT NULL
 );
 
 
 
 CREATE TABLE public.a2obj_apps_accounts_config (
-    id character(12) NOT NULL,
+    id character(1) NOT NULL,
     version character varying(255) NOT NULL,
-    features__createaccount smallint NOT NULL,
-    features__usernameiscontact boolean NOT NULL,
-    features__requirecontact smallint NOT NULL,
+    createaccount smallint NOT NULL,
+    usernameiscontact boolean NOT NULL,
+    requirecontact smallint NOT NULL,
     default_group character(12) DEFAULT NULL::bpchar,
-    default_auth character(12) DEFAULT NULL::bpchar,
-    dates__created double precision NOT NULL
-);
-
-
-
-CREATE TABLE public.a2obj_apps_accounts_contact (
-    id character(12) NOT NULL,
-    type smallint NOT NULL,
-    info character varying(127) NOT NULL,
-    valid boolean DEFAULT false NOT NULL,
-    usefrom boolean,
-    public boolean DEFAULT false NOT NULL,
-    authkey text,
-    dates__created double precision NOT NULL,
-    account character(12) NOT NULL
+    default_auth character(8) DEFAULT NULL::bpchar,
+    date_created double precision NOT NULL
 );
 
 
@@ -151,41 +97,74 @@ CREATE TABLE public.a2obj_apps_accounts_contact (
 CREATE TABLE public.a2obj_apps_accounts_group (
     id character(12) NOT NULL,
     name character varying(127) NOT NULL,
-    comment text,
-    priority smallint NOT NULL,
-    dates__created double precision NOT NULL,
-    dates__modified double precision,
-    features__admin boolean,
-    features__disabled boolean,
-    features__forcetf boolean,
-    features__allowcrypto boolean,
-    features__accountsearch smallint,
-    features__groupsearch smallint,
-    features__userdelete boolean,
-    counters_limits__sessions smallint,
-    counters_limits__contacts smallint,
-    counters_limits__recoverykeys smallint,
-    session_timeout bigint,
-    client_timeout bigint,
-    max_password_age bigint,
-    accounts bigint DEFAULT '0'::bigint NOT NULL
+    priority smallint NOT NULL
 );
 
 
 
 CREATE TABLE public.a2obj_apps_accounts_groupjoin (
     id character(12) NOT NULL,
-    dates__created double precision NOT NULL,
-    accounts character(12) NOT NULL,
-    groups character(12) NOT NULL
+    date_created double precision NOT NULL,
+    account character(12) NOT NULL,
+    "group" character(12) NOT NULL
 );
 
 
 
-CREATE TABLE public.a2obj_apps_accounts_recoverykey (
+CREATE TABLE public.a2obj_apps_accounts_policybase (
+    id character(12) NOT NULL,
+    comment text,
+    date_created double precision NOT NULL,
+    date_modified double precision,
+    admin boolean,
+    disabled boolean,
+    forcetf boolean,
+    allowcrypto boolean,
+    accountsearch smallint,
+    groupsearch smallint,
+    userdelete boolean,
+    limit_sessions smallint,
+    limit_contacts smallint,
+    limit_recoverykeys smallint,
+    session_timeout bigint,
+    client_timeout bigint,
+    max_password_age bigint
+);
+
+
+
+CREATE TABLE public.a2obj_apps_accounts_resource_client (
+    id character(12) NOT NULL,
+    name character varying(255) DEFAULT NULL::character varying,
+    authkey text NOT NULL,
+    lastaddr character varying(255) NOT NULL,
+    useragent text NOT NULL,
+    date_created double precision NOT NULL,
+    date_active double precision,
+    date_loggedon double precision,
+    account character(12) NOT NULL
+);
+
+
+
+CREATE TABLE public.a2obj_apps_accounts_resource_contact (
+    id character(12) NOT NULL,
+    type smallint NOT NULL,
+    address character varying(127) NOT NULL,
+    valid boolean DEFAULT false NOT NULL,
+    usefrom boolean,
+    public boolean DEFAULT false NOT NULL,
+    authkey text,
+    date_created double precision NOT NULL,
+    account character(12) NOT NULL
+);
+
+
+
+CREATE TABLE public.a2obj_apps_accounts_resource_recoverykey (
     id character(12) NOT NULL,
     authkey text NOT NULL,
-    dates__created double precision DEFAULT '0'::double precision NOT NULL,
+    date_created double precision NOT NULL,
     master_key bytea DEFAULT NULL::bytea,
     master_nonce bytea DEFAULT NULL::bytea,
     master_salt bytea DEFAULT NULL::bytea,
@@ -194,11 +173,20 @@ CREATE TABLE public.a2obj_apps_accounts_recoverykey (
 
 
 
-CREATE TABLE public.a2obj_apps_accounts_session (
+CREATE TABLE public.a2obj_apps_accounts_resource_registerallow (
+    id character(12) NOT NULL,
+    date_created double precision NOT NULL,
+    type smallint NOT NULL,
+    value character varying(127) NOT NULL
+);
+
+
+
+CREATE TABLE public.a2obj_apps_accounts_resource_session (
     id character(12) NOT NULL,
     authkey text NOT NULL,
-    dates__active double precision,
-    dates__created double precision DEFAULT '0'::double precision NOT NULL,
+    date_active double precision,
+    date_created double precision NOT NULL,
     master_key bytea DEFAULT NULL::bytea,
     master_nonce bytea DEFAULT NULL::bytea,
     master_salt bytea DEFAULT NULL::bytea,
@@ -208,211 +196,305 @@ CREATE TABLE public.a2obj_apps_accounts_session (
 
 
 
-CREATE TABLE public.a2obj_apps_accounts_twofactor (
+CREATE TABLE public.a2obj_apps_accounts_resource_twofactor (
     id character(12) NOT NULL,
     comment text,
     secret bytea NOT NULL,
     nonce bytea DEFAULT NULL::bytea,
     valid boolean DEFAULT false NOT NULL,
-    dates__created double precision NOT NULL,
-    dates__used double precision,
-    account character(12) NOT NULL,
-    usedtokens smallint DEFAULT '0'::smallint NOT NULL
+    date_created double precision NOT NULL,
+    date_used double precision,
+    account character(12) NOT NULL
 );
 
 
 
-CREATE TABLE public.a2obj_apps_accounts_usedtoken (
+CREATE TABLE public.a2obj_apps_accounts_resource_usedtoken (
     id character(12) NOT NULL,
     code character(6) NOT NULL,
-    dates__created double precision NOT NULL,
+    date_created double precision NOT NULL,
     twofactor character(12) NOT NULL
 );
 
 
 
-CREATE TABLE public.a2obj_apps_accounts_whitelist (
-    id character(12) NOT NULL,
-    dates__created double precision NOT NULL,
-    type smallint NOT NULL,
-    value character varying(127) NOT NULL
-);
-
-
-
-ALTER TABLE ONLY public.a2obj_apps_accounts_accesslog
-    ADD CONSTRAINT idx_212885_primary PRIMARY KEY (id);
-
-
-
 ALTER TABLE ONLY public.a2obj_apps_accounts_account
-    ADD CONSTRAINT idx_212891_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_20384_primary PRIMARY KEY (id);
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_accounts_auth_ftp
-    ADD CONSTRAINT idx_212908_primary PRIMARY KEY (id);
+ALTER TABLE ONLY public.a2obj_apps_accounts_actionlog
+    ADD CONSTRAINT idx_20394_primary PRIMARY KEY (id);
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_accounts_auth_imap
-    ADD CONSTRAINT idx_212911_primary PRIMARY KEY (id);
+ALTER TABLE ONLY public.a2obj_apps_accounts_authsource_external
+    ADD CONSTRAINT idx_20400_primary PRIMARY KEY (id);
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_accounts_auth_ldap
-    ADD CONSTRAINT idx_212914_primary PRIMARY KEY (id);
+ALTER TABLE ONLY public.a2obj_apps_accounts_authsource_ftp
+    ADD CONSTRAINT idx_20406_primary PRIMARY KEY (id);
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_accounts_auth_manager
-    ADD CONSTRAINT idx_212920_primary PRIMARY KEY (id);
+ALTER TABLE ONLY public.a2obj_apps_accounts_authsource_imap
+    ADD CONSTRAINT idx_20409_primary PRIMARY KEY (id);
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_accounts_client
-    ADD CONSTRAINT idx_212927_primary PRIMARY KEY (id);
+ALTER TABLE ONLY public.a2obj_apps_accounts_authsource_ldap
+    ADD CONSTRAINT idx_20412_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_accounts_config
-    ADD CONSTRAINT idx_212938_primary PRIMARY KEY (id);
-
-
-
-ALTER TABLE ONLY public.a2obj_apps_accounts_contact
-    ADD CONSTRAINT idx_212943_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_20417_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_accounts_group
-    ADD CONSTRAINT idx_212951_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_20422_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_accounts_groupjoin
-    ADD CONSTRAINT idx_212958_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_20425_primary PRIMARY KEY (id);
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_accounts_recoverykey
-    ADD CONSTRAINT idx_212961_primary PRIMARY KEY (id);
+ALTER TABLE ONLY public.a2obj_apps_accounts_policybase
+    ADD CONSTRAINT idx_20428_primary PRIMARY KEY (id);
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_accounts_session
-    ADD CONSTRAINT idx_212971_primary PRIMARY KEY (id);
+ALTER TABLE ONLY public.a2obj_apps_accounts_resource_client
+    ADD CONSTRAINT idx_20433_primary PRIMARY KEY (id);
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_accounts_twofactor
-    ADD CONSTRAINT idx_212981_primary PRIMARY KEY (id);
+ALTER TABLE ONLY public.a2obj_apps_accounts_resource_contact
+    ADD CONSTRAINT idx_20439_primary PRIMARY KEY (id);
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_accounts_usedtoken
-    ADD CONSTRAINT idx_212990_primary PRIMARY KEY (id);
+ALTER TABLE ONLY public.a2obj_apps_accounts_resource_recoverykey
+    ADD CONSTRAINT idx_20446_primary PRIMARY KEY (id);
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_accounts_whitelist
-    ADD CONSTRAINT idx_212993_primary PRIMARY KEY (id);
+ALTER TABLE ONLY public.a2obj_apps_accounts_resource_registerallow
+    ADD CONSTRAINT idx_20454_primary PRIMARY KEY (id);
 
 
 
-CREATE INDEX idx_212885_account ON public.a2obj_apps_accounts_accesslog USING btree (account);
+ALTER TABLE ONLY public.a2obj_apps_accounts_resource_session
+    ADD CONSTRAINT idx_20457_primary PRIMARY KEY (id);
 
 
 
-CREATE INDEX idx_212891_authsource ON public.a2obj_apps_accounts_account USING btree (authsource);
+ALTER TABLE ONLY public.a2obj_apps_accounts_resource_twofactor
+    ADD CONSTRAINT idx_20465_primary PRIMARY KEY (id);
 
 
 
-CREATE INDEX idx_212891_fullname ON public.a2obj_apps_accounts_account USING btree (fullname);
+ALTER TABLE ONLY public.a2obj_apps_accounts_resource_usedtoken
+    ADD CONSTRAINT idx_20472_primary PRIMARY KEY (id);
 
 
 
-CREATE UNIQUE INDEX idx_212891_username ON public.a2obj_apps_accounts_account USING btree (username);
+CREATE INDEX idx_20384_authsource ON public.a2obj_apps_accounts_account USING btree (authsource);
 
 
 
-CREATE INDEX idx_212920_authsource ON public.a2obj_apps_accounts_auth_manager USING btree (authsource);
+CREATE INDEX idx_20384_fullname ON public.a2obj_apps_accounts_account USING btree (fullname);
 
 
 
-CREATE INDEX idx_212927_account ON public.a2obj_apps_accounts_client USING btree (account);
+CREATE UNIQUE INDEX idx_20384_username ON public.a2obj_apps_accounts_account USING btree (username);
 
 
 
-CREATE INDEX idx_212927_dates__active_account ON public.a2obj_apps_accounts_client USING btree (dates__active, account);
+CREATE INDEX idx_20394_account ON public.a2obj_apps_accounts_actionlog USING btree (account);
 
 
 
-CREATE INDEX idx_212927_session ON public.a2obj_apps_accounts_client USING btree (session);
+CREATE INDEX idx_20400_default_group ON public.a2obj_apps_accounts_authsource_external USING btree (default_group);
 
 
 
-CREATE INDEX idx_212943_account ON public.a2obj_apps_accounts_contact USING btree (account);
+CREATE INDEX idx_20417_default_auth ON public.a2obj_apps_accounts_config USING btree (default_auth);
 
 
 
-CREATE INDEX idx_212943_info ON public.a2obj_apps_accounts_contact USING btree (info);
+CREATE INDEX idx_20417_default_group ON public.a2obj_apps_accounts_config USING btree (default_group);
 
 
 
-CREATE UNIQUE INDEX idx_212943_prefer ON public.a2obj_apps_accounts_contact USING btree (usefrom, account);
+CREATE UNIQUE INDEX idx_20422_name ON public.a2obj_apps_accounts_group USING btree (name);
 
 
 
-CREATE UNIQUE INDEX idx_212943_type_info ON public.a2obj_apps_accounts_contact USING btree (type, info);
+CREATE UNIQUE INDEX idx_20425_account_group ON public.a2obj_apps_accounts_groupjoin USING btree (account, "group");
 
 
 
-CREATE UNIQUE INDEX idx_212951_name ON public.a2obj_apps_accounts_group USING btree (name);
+CREATE INDEX idx_20425_accounts ON public.a2obj_apps_accounts_groupjoin USING btree (account);
 
 
 
-CREATE INDEX idx_212958_accounts ON public.a2obj_apps_accounts_groupjoin USING btree (accounts);
+CREATE INDEX idx_20425_groups ON public.a2obj_apps_accounts_groupjoin USING btree ("group");
 
 
 
-CREATE INDEX idx_212958_groups ON public.a2obj_apps_accounts_groupjoin USING btree (groups);
+CREATE INDEX idx_20433_account ON public.a2obj_apps_accounts_resource_client USING btree (account);
 
 
 
-CREATE UNIQUE INDEX idx_212958_pair ON public.a2obj_apps_accounts_groupjoin USING btree (accounts, groups);
+CREATE INDEX idx_20433_date_active_account ON public.a2obj_apps_accounts_resource_client USING btree (date_active, account);
 
 
 
-CREATE INDEX idx_212961_account ON public.a2obj_apps_accounts_recoverykey USING btree (account);
+CREATE INDEX idx_20439_account ON public.a2obj_apps_accounts_resource_contact USING btree (account);
 
 
 
-CREATE INDEX idx_212971_aid ON public.a2obj_apps_accounts_session USING btree (account);
+CREATE UNIQUE INDEX idx_20439_account_type_from ON public.a2obj_apps_accounts_resource_contact USING btree (usefrom, account, type);
 
 
 
-CREATE INDEX idx_212971_cid ON public.a2obj_apps_accounts_session USING btree (client);
+CREATE INDEX idx_20439_address ON public.a2obj_apps_accounts_resource_contact USING btree (address);
 
 
 
-CREATE INDEX idx_212971_dates__active_account ON public.a2obj_apps_accounts_session USING btree (dates__active, account);
+CREATE UNIQUE INDEX idx_20439_type_address ON public.a2obj_apps_accounts_resource_contact USING btree (type, address);
 
 
 
-CREATE INDEX idx_212981_account ON public.a2obj_apps_accounts_twofactor USING btree (account);
+CREATE INDEX idx_20446_account ON public.a2obj_apps_accounts_resource_recoverykey USING btree (account);
 
 
 
-CREATE INDEX idx_212990_dates__created ON public.a2obj_apps_accounts_usedtoken USING btree (dates__created);
+CREATE UNIQUE INDEX idx_20454_type ON public.a2obj_apps_accounts_resource_registerallow USING btree (type, value);
 
 
 
-CREATE INDEX idx_212990_twofactor ON public.a2obj_apps_accounts_usedtoken USING btree (twofactor);
+CREATE INDEX idx_20457_account ON public.a2obj_apps_accounts_resource_session USING btree (account);
 
 
 
-CREATE UNIQUE INDEX idx_212993_type ON public.a2obj_apps_accounts_whitelist USING btree (type, value);
+CREATE UNIQUE INDEX idx_20457_client ON public.a2obj_apps_accounts_resource_session USING btree (client);
+
+
+
+CREATE INDEX idx_20457_date_active_account ON public.a2obj_apps_accounts_resource_session USING btree (date_active, account);
+
+
+
+CREATE INDEX idx_20465_account ON public.a2obj_apps_accounts_resource_twofactor USING btree (account);
+
+
+
+CREATE INDEX idx_20472_date_created ON public.a2obj_apps_accounts_resource_usedtoken USING btree (date_created);
+
+
+
+CREATE INDEX idx_20472_twofactor ON public.a2obj_apps_accounts_resource_usedtoken USING btree (twofactor);
+
+
+
+ALTER TABLE ONLY public.a2obj_apps_accounts_account
+    ADD CONSTRAINT a2obj_apps_accounts_account_ibfk_1 FOREIGN KEY (id) REFERENCES public.a2obj_apps_accounts_policybase(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY public.a2obj_apps_accounts_account
+    ADD CONSTRAINT a2obj_apps_accounts_account_ibfk_2 FOREIGN KEY (authsource) REFERENCES public.a2obj_apps_accounts_authsource_external(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY public.a2obj_apps_accounts_actionlog
+    ADD CONSTRAINT a2obj_apps_accounts_actionlog_ibfk_1 FOREIGN KEY (id) REFERENCES public.a2obj_core_logging_actionlog(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY public.a2obj_apps_accounts_authsource_external
+    ADD CONSTRAINT a2obj_apps_accounts_authsource_external_ibfk_1 FOREIGN KEY (default_group) REFERENCES public.a2obj_apps_accounts_group(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY public.a2obj_apps_accounts_authsource_ftp
+    ADD CONSTRAINT a2obj_apps_accounts_authsource_ftp_ibfk_1 FOREIGN KEY (id) REFERENCES public.a2obj_apps_accounts_authsource_external(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY public.a2obj_apps_accounts_authsource_imap
+    ADD CONSTRAINT a2obj_apps_accounts_authsource_imap_ibfk_1 FOREIGN KEY (id) REFERENCES public.a2obj_apps_accounts_authsource_external(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY public.a2obj_apps_accounts_authsource_ldap
+    ADD CONSTRAINT a2obj_apps_accounts_authsource_ldap_ibfk_1 FOREIGN KEY (id) REFERENCES public.a2obj_apps_accounts_authsource_external(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY public.a2obj_apps_accounts_config
+    ADD CONSTRAINT a2obj_apps_accounts_config_ibfk_1 FOREIGN KEY (default_group) REFERENCES public.a2obj_apps_accounts_group(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY public.a2obj_apps_accounts_config
+    ADD CONSTRAINT a2obj_apps_accounts_config_ibfk_2 FOREIGN KEY (default_auth) REFERENCES public.a2obj_apps_accounts_authsource_external(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY public.a2obj_apps_accounts_group
+    ADD CONSTRAINT a2obj_apps_accounts_group_ibfk_1 FOREIGN KEY (id) REFERENCES public.a2obj_apps_accounts_policybase(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY public.a2obj_apps_accounts_groupjoin
+    ADD CONSTRAINT a2obj_apps_accounts_groupjoin_ibfk_1 FOREIGN KEY (account) REFERENCES public.a2obj_apps_accounts_account(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY public.a2obj_apps_accounts_groupjoin
+    ADD CONSTRAINT a2obj_apps_accounts_groupjoin_ibfk_2 FOREIGN KEY ("group") REFERENCES public.a2obj_apps_accounts_group(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY public.a2obj_apps_accounts_resource_client
+    ADD CONSTRAINT a2obj_apps_accounts_resource_client_ibfk_1 FOREIGN KEY (account) REFERENCES public.a2obj_apps_accounts_account(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY public.a2obj_apps_accounts_resource_contact
+    ADD CONSTRAINT a2obj_apps_accounts_resource_contact_ibfk_1 FOREIGN KEY (account) REFERENCES public.a2obj_apps_accounts_account(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY public.a2obj_apps_accounts_resource_recoverykey
+    ADD CONSTRAINT a2obj_apps_accounts_resource_recoverykey_ibfk_1 FOREIGN KEY (account) REFERENCES public.a2obj_apps_accounts_account(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY public.a2obj_apps_accounts_resource_session
+    ADD CONSTRAINT a2obj_apps_accounts_resource_session_ibfk_1 FOREIGN KEY (account) REFERENCES public.a2obj_apps_accounts_account(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY public.a2obj_apps_accounts_resource_session
+    ADD CONSTRAINT a2obj_apps_accounts_resource_session_ibfk_2 FOREIGN KEY (client) REFERENCES public.a2obj_apps_accounts_resource_client(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY public.a2obj_apps_accounts_resource_twofactor
+    ADD CONSTRAINT a2obj_apps_accounts_resource_twofactor_ibfk_1 FOREIGN KEY (account) REFERENCES public.a2obj_apps_accounts_account(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY public.a2obj_apps_accounts_resource_usedtoken
+    ADD CONSTRAINT a2obj_apps_accounts_resource_usedtoken_ibfk_1 FOREIGN KEY (twofactor) REFERENCES public.a2obj_apps_accounts_resource_twofactor(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 
 
 

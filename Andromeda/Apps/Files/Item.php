@@ -1,28 +1,14 @@
-<?php namespace Andromeda\Apps\Files; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Apps\Files; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/Main.php"); use Andromeda\Core\Main;
-
-require_once(ROOT."/Core/Database/StandardObject.php"); use Andromeda\Core\Database\StandardObject;
-require_once(ROOT."/Core/Database/ObjectDatabase.php"); use Andromeda\Core\Database\ObjectDatabase;
-require_once(ROOT."/Core/Database/FieldTypes.php"); use Andromeda\Core\Database\FieldTypes;
-require_once(ROOT."/Core/Database/QueryBuilder.php"); use Andromeda\Core\Database\QueryBuilder;
-require_once(ROOT."/Core/Exceptions/Exceptions.php"); use Andromeda\Core\Exceptions;
+use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, QueryBuilder};
 
 require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
 
+require_once(ROOT."/Apps/Files/Exceptions.php");
 require_once(ROOT."/Apps/Files/Filesystem/FSManager.php"); use Andromeda\Apps\Files\Filesystem\FSManager;
 require_once(ROOT."/Apps/Files/Filesystem/FSImpl.php"); use Andromeda\Apps\Files\Filesystem\FSImpl;
 require_once(ROOT."/Apps/Files/Limits/Filesystem.php");
 require_once(ROOT."/Apps/Files/Limits/Account.php");
-
-/** Exception indicating that files cannot be moved across filessytems */
-class CrossFilesystemException extends Exceptions\ClientErrorException { public $message = "FILESYSTEM_MISMATCH"; }
-
-/** Exception indicating that the item target name already exists */
-class DuplicateItemException extends Exceptions\ClientErrorException   { public $message = "ITEM_ALREADY_EXISTS"; }
-
-/** Exception indicating that the item was deleted when refreshed from storage */
-class DeletedByStorageException extends Exceptions\ClientNotFoundException { public $message = "ITEM_DELETED_BY_STORAGE"; }
 
 /**
  * An abstract class defining a user-created item in a filesystem.
@@ -31,27 +17,27 @@ class DeletedByStorageException extends Exceptions\ClientNotFoundException { pub
  * It is therefore somewhat like an object storage, except that every item
  * must have exactly one parent (other than the root folder).
  */
-abstract class Item extends StandardObject
+abstract class Item extends BaseObject // TODO was StandardObject
 {
-    public const IDLength = 16;
+    protected const IDLength = 16;
     
     public static function GetFieldTemplate() : array
     {
         return array_merge(parent::GetFieldTemplate(), array(
-            'name' => null,
-            'description' => null,
-            'dates__modified' => new FieldTypes\Scalar(null, true),
-            'dates__accessed' => new FieldTypes\Scalar(null, true),         
-            'counters__bandwidth' => new FieldTypes\Counter(true),  // total bandwidth used (recursive for folders)
-            'counters__pubdownloads' => new FieldTypes\Counter(),   // total public download count (recursive for folders)
-            'owner' => new FieldTypes\ObjectRef(Account::class),
-            'filesystem' => new FieldTypes\ObjectRef(FSManager::class),
-            'likes' => (new FieldTypes\ObjectRefs(Like::class, 'item', true))->autoDelete(), // links to like objects
-            'counters__likes' => new FieldTypes\Counter(),      // recursive total # of likes
-            'counters__dislikes' => new FieldTypes\Counter(),   // recursive total # of dislikes
-            'tags' => (new FieldTypes\ObjectRefs(Tag::class, 'item', true))->autoDelete(),
-            'comments' => (new FieldTypes\ObjectRefs(Comment::class, 'item', true))->autoDelete(),
-            'shares' => (new FieldTypes\ObjectRefs(Share::class, 'item', true))->autoDelete()
+            'name' => new FieldTypes\StringType(),
+            'description' => new FieldTypes\StringType(),
+            'date_modified' => new FieldTypes\Timestamp(null),
+            'date_accessed' => new FieldTypes\Timestamp(null, true),         
+            'count_bandwidth' => new FieldTypes\Counter(true),  // total bandwidth used (recursive for folders)
+            'count_pubdownloads' => new FieldTypes\Counter(),   // total public download count (recursive for folders)
+            'obj_owner' => new FieldTypes\ObjectRef(Account::class),
+            'obj_filesystem' => new FieldTypes\ObjectRef(FSManager::class),
+            'objs_likes' => (new FieldTypes\ObjectRefs(Like::class, 'item', true))->autoDelete(), // links to like objects
+            'count_likes' => new FieldTypes\Counter(),      // recursive total # of likes
+            'count_dislikes' => new FieldTypes\Counter(),   // recursive total # of dislikes
+            'objs_tags' => (new FieldTypes\ObjectRefs(Tag::class, 'item', true))->autoDelete(),
+            'objs_comments' => (new FieldTypes\ObjectRefs(Comment::class, 'item', true))->autoDelete(),
+            'objs_shares' => (new FieldTypes\ObjectRefs(Share::class, 'item', true))->autoDelete()
         ));
     }
     
@@ -112,7 +98,7 @@ abstract class Item extends StandardObject
      * @param bool $overwrite if true, delete the duplicate item
      * @param bool $reuse if true, return the duplicate item for reuse instead of deleting
      * @throws DuplicateItemException if a duplicate item exists and not $overwrite
-     * @return static|NULL existing item to be re-used
+     * @return ?static existing item to be re-used
      */
     protected function CheckName(string $name, bool $overwrite, bool $reuse) : ?self
     {
@@ -137,7 +123,7 @@ abstract class Item extends StandardObject
      * @param bool $reuse if true, return the duplicate item for reuse instead of deleting
      * @throws CrossFilesystemException if the parent is on a different filesystem
      * @throws DuplicateItemException if a duplicate item exists and not $overwrite
-     * @return static|NULL existing item to be re-used
+     * @return ?static existing item to be re-used
      */
     protected function CheckParent(Folder $parent, bool $overwrite, bool $reuse) : ?self
     {
@@ -460,12 +446,12 @@ abstract class Item extends StandardObject
      * @param ObjectDatabase $database database reference
      * @param Folder $parent the parent folder of the item
      * @param string $name the name of the item to load
-     * @return static|NULL loaded item or null if not found
+     * @return ?static loaded item or null if not found
      */
     public static function TryLoadByParentAndName(ObjectDatabase $database, Folder $parent, string $name) : ?self
     {
         $q = new QueryBuilder(); 
-        $where = $q->And($q->Equals('parent',$parent->ID()), $q->Equals('name',$name));        
+        $where = $q->And($q->Equals('obj_parent',$parent->ID()), $q->Equals('name',$name));        
         return static::TryLoadUniqueByQuery($database, $q->Where($where));
     }
     
@@ -477,7 +463,7 @@ abstract class Item extends StandardObject
      */
     public static function LoadByOwner(ObjectDatabase $database, Account $account) : array
     {
-        $q = new QueryBuilder(); $where = $q->Equals('owner',$account->ID());
+        $q = new QueryBuilder(); $where = $q->Equals('obj_owner',$account->ID());
         return static::LoadByQuery($database, $q->Where($where));
     }
     
@@ -495,7 +481,7 @@ abstract class Item extends StandardObject
      * Returns a printable client object of this item
      * @param bool $owner if true, show owner-level details
      * @param bool $details if true, show tag and share objects
-     * @return array|NULL `{id:id, name:?string, owner:?string, parent:?string, filesystem:string, \
+     * @return ?array `{id:id, name:?string, owner:?string, parent:?string, filesystem:string, \
          dates:{created:float, modified:?float}, counters:{pubdownloads:int, bandwidth:int, likes:int, dislikes:int, tags:int, comments:int}}` \
          if $owner, add: `{counters:{shares:int}, dates:{accessed:?float}}`, \
          if $details, add: `{tags:[id:Tag]}`, if $details && $owner, add `{shares:[id:Share]}`

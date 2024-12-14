@@ -1,111 +1,122 @@
-<?php namespace Andromeda\Core\Database; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Core\Database; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/Database/StandardObject.php");
-require_once(ROOT."/Core/Database/QueryBuilder.php");
+use Andromeda\Core\Utilities;
 
-/**
- * The base class for join objects managed by an ObjectJoin field type.
- * 
- * Includes utility functions for creating/loading/deleting join objects.
- * A class that extends this one to join two classes together in a many-to-many
- * needs (at a minimum) to have two fields, each as an ObjectRefs to a class.
+/** 
+ * An object used to join together N other object classes (many to many relationship)
+ * @template T of BaseObject
+ * @template U of BaseObject
  */
-abstract class JoinObject extends StandardObject
+abstract class JoinObject extends BaseObject
 {
-    /** Return the column name of the left side of the join */
-    protected abstract static function GetLeftField() : string;
-    
-    /** Return the object class referred to by the left side of the join */
-    protected abstract static function GetLeftClass() : string;
-    
-    /** Return the column name of the right side of the join */
-    protected abstract static function GetRightField() : string;
-    
-    /** Return the object class referred to by the right side of the join */
-    protected abstract static function GetRightClass() : string;
-    
-    public static function GetFieldTemplate() : array
+    /** @return array<class-string<static>, array<class-string<BaseObject>, array<string, BaseObject>>> */
+    private static function &GetCache(ObjectDatabase $database) : array
     {
-        $lfield = static::GetLeftField(); $rfield = static::GetRightField();
-        
-        return array_merge(parent::GetFieldTemplate(), array(
-            $lfield => new FieldTypes\ObjectRef(static::GetLeftClass(), $rfield),
-            $rfield => new FieldTypes\ObjectRef(static::GetRightClass(), $lfield)
-        ));
-    }
-    
-    /**
-     * Creates a new join object and notifies the joined object
-     * @param ObjectDatabase $database reference to the database
-     * @param FieldTypes\ObjectJoin $joinfield the field creating this join
-     * @param BaseObject $destobj the object to be joined to the field
-     */
-    public static function CreateJoin(ObjectDatabase $database, FieldTypes\ObjectJoin $joinfield, BaseObject $destobj) : void
-    {
-        $thisobj = $joinfield->GetParent();
-        
-        $destobj->AddObjectRef($joinfield->GetRefField(), $thisobj, true);
-        $thisobj->AddObjectRef($joinfield->GetMyField(), $destobj, true);
-        
-        parent::BaseCreate($database)->SetDate('created')
-            ->SetObject($joinfield->GetMyField(), $destobj, true)
-            ->SetObject($joinfield->GetRefField(), $thisobj, true)->Save();
-    }
-    
-    /**
-     * Returns a query for selecting a unique join object
-     * @param ObjectDatabase $database reference to the database
-     * @param FieldTypes\ObjectJoin $joinfield the field loading this join
-     * @param BaseObject $destobj the object joined to this field
-     */
-    protected static function GetWhereQuery(ObjectDatabase $database, FieldTypes\ObjectJoin $joinfield, BaseObject $destobj) : QueryBuilder
-    {
-        $q = new QueryBuilder(); $thisobj = $joinfield->GetParent();
-        
-        $w = $q->And($q->Equals($joinfield->getMyField(),$destobj->ID()),
-                     $q->Equals($joinfield->getRefField(),$thisobj->ID()));
-        
-        return $q->Where($w);
-    }
-    
-    /**
-     * Loads the join object that joins together two objects
-     * @param ObjectDatabase $database reference to the database
-     * @param FieldTypes\ObjectJoin $joinfield the field loading this join
-     * @param BaseObject $destobj the object joined to this field
-     */
-    public static function TryLoadJoin(ObjectDatabase $database, FieldTypes\ObjectJoin $joinfield, BaseObject $destobj) : ?self
-    {        
-        return static::TryLoadUniqueByQuery($database, static::GetWhereQuery($database, $joinfield, $destobj));
-    }
-    
-    /**
-     * Deletes the join object that joins together two objects
-     * @param ObjectDatabase $database reference to the database
-     * @param FieldTypes\ObjectJoin $joinfield the field loading this join
-     * @param BaseObject $destobj the object joined to this field
-     * @return bool true if an object was deleted
-     */
-    public static function TryDeleteJoin(ObjectDatabase $database, FieldTypes\ObjectJoin $joinfield, BaseObject $destobj) : bool
-    {
-        $rows = static::DeleteByQuery($database, static::GetWhereQuery($database, $joinfield, $destobj));
-        
-        if ($rows > 1) throw new DuplicateUniqueKeyException(); return $rows > 0;
+        return $database->GetCustomCache(self::class); // @phpstan-ignore-line cast generic to desired
     }
 
-    public function Delete() : void
+    /** @return FieldTypes\ObjectRefT<T> */
+    protected abstract function GetLeftField() : FieldTypes\ObjectRefT;
+    /** @return FieldTypes\ObjectRefT<U> */
+    protected abstract function GetRightField() : FieldTypes\ObjectRefT;
+
+    /**
+     * Loads the join object that joins together the other classes
+     * @param string $matchprop1 name of the column to match with
+     * @param T $matchobj1 the object to match with
+     * @param string $matchprop2 name of the column to match with
+     * @param U $matchobj2 the object to match with
+     * @return static
+     */
+    protected static function TryLoadJoinObject(ObjectDatabase $database, string $matchprop1, BaseObject $matchobj1, string $matchprop2, BaseObject $matchobj2) : ?self
     {
-        $lfield = static::GetLeftField(); $lobj = $this->GetObject($lfield);
-        $rfield = static::GetRightField(); $robj = $this->GetObject($rfield);
+        $q = new QueryBuilder();
+        $q->Where($q->Equals($matchprop1, $matchobj1->ID()));
+        $q->Where($q->Equals($matchprop2, $matchobj2->ID()));
+
+        return $database->TryLoadUniqueByQuery(static::class, $q);
+    }
+
+    /** 
+     * Loads all objects that are joined to the other classes
+     * @param string $matchprop name of the column to match with
+     * @param class-string<T>|class-string<U> $destclass class type to load
+     * @param string $matchprop name of the column to match with
+     * @param T|U $matchobj the object to match with
+     * @return ($matchobj is T ? array<string, U> : array<string, T>) array of joined objects
+     */
+    protected static function LoadFromJoin(ObjectDatabase $database, string $destprop, string $destclass, string $matchprop, BaseObject $matchobj) : array
+    {
+        $cache = &self::GetCache($database);
+        $matchclass = get_class($matchobj);
+
+        if (isset($cache[static::class][$matchclass]))
+            return $cache[static::class][$matchclass]; // @phpstan-ignore-line missing class-map feature
+
+        $q = new QueryBuilder();
+        $q->Where($q->Equals($matchprop, $matchobj->ID()));
+        $q->Join($database, static::class, $destprop, $destclass::GetBaseTableClass(), 'id');
+
+        $objs = $database->LoadObjectsByQuery($destclass, $q);
+        return $cache[static::class][$matchclass] = $objs;
+    }
+
+    /**
+     * Deletes all join objects matching the given criteria
+     * @param string $matchprop name of the column to match with
+     * @param T|U $matchobj the object to match with
+     */
+    protected static function DeleteJoinsFrom(ObjectDatabase $database, string $matchprop, BaseObject $matchobj) : int
+    {
+        $cache = &self::GetCache($database);
+
+        $q = new QueryBuilder();
+        $q->Where($q->Equals($matchprop, $matchobj->ID()));
+
+        $btable = $matchobj::GetBaseTableClass();
+        $cache[static::class][$btable] = array();
         
-        // doing $this->RemoveObjectRef would result in a recursion
-        // loop so instead just directly notify the joined objects
-        $lobj->RemoveObjectRef($rfield, $robj, true);
-        $robj->RemoveObjectRef($lfield, $lobj, true);
-        
-        unset($this->objects[$lfield]); 
-        unset($this->objects[$rfield]);
-        
-        parent::Delete();
+        return $database->DeleteObjectsByQuery(static::class, $q);
+    }
+
+    /** 
+     * Creates a new join object, saves it, adds to the cache if loaded
+     * @param T $obj1 left side of the join
+     * @param U $obj2 right side of the join
+     * @param ?callable(static): void $initfunc function to be run before saving
+     * @return static new join object
+     */
+    protected static function CreateJoin(ObjectDatabase $database, BaseObject $obj1, BaseObject $obj2, ?callable $initfunc = null) : self
+    {
+        $cache = &self::GetCache($database);
+
+        $obj = $database->CreateObject(static::class);
+
+        $class1 = get_class($obj1);
+        $class2 = get_class($obj2);
+
+        if (isset($cache[static::class][$class1]))
+            $cache[static::class][$class1][$obj2->ID()] = $obj2;
+        if (isset($cache[static::class][$class2]))
+            $cache[static::class][$class2][$obj1->ID()] = $obj1;
+
+        $obj->GetLeftField()->SetObject($obj1);
+        $obj->GetRightField()->SetObject($obj2);
+
+        if ($initfunc !== null) $initfunc($obj);
+
+        return $obj->Save();
+    }
+
+    public function NotifyPostDeleted() : void
+    {
+        $obj1 = $this->GetLeftField()->GetObject();
+        $obj2 = $this->GetRightField()->GetObject();
+
+        $cache = &self::GetCache($this->database);
+        unset($cache[static::class][get_class($obj1)][$obj2->ID()]);
+        unset($cache[static::class][get_class($obj2)][$obj1->ID()]);
+
+        parent::NotifyPostDeleted();
     }
 }

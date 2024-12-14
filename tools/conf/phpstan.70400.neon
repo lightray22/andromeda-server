@@ -1,0 +1,5 @@
+includes:
+    - phpstan.neon
+parameters:
+    phpVersion: 70400
+    tmpDir: /tmp/phpstan-tmp-70400

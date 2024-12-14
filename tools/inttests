@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -e
+
+if [ `which python3` ]; then
+   py=`which python3`
+elif [ `which python` ]; then
+   py=`which python`
+else
+   echo "could not find python!"; exit 1
+fi
+
+cd Andromeda
+$py Core/_tests/integration/main.py $@

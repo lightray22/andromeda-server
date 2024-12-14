@@ -1,6 +1,6 @@
-<?php namespace Andromeda\Apps\Files\Filesystem; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Apps\Files\Filesystem; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/IOFormat/InputFile.php"); use Andromeda\Core\IOFormat\InputPath;
+use Andromeda\Core\IOFormat\InputPath;
 
 require_once(ROOT."/Apps/Files/Filesystem/FSImpl.php");
 

@@ -1,66 +1,122 @@
 
-import inspect, re
+import colorama
+from random import Random
 
-def assertEquals(left, right):
-    assert (left == right), (left, right)
+def printColors(colors, *args):
+    print(colors, *args, colorama.Back.RESET + colorama.Fore.RESET)
 
-def assertIn(key, arr):
-    assert (key in arr), (key, arr)
+def printBlackOnGreen(*args):
+    printColors(colorama.Back.GREEN + colorama.Fore.BLACK, *args)
 
-def assertNotIn(key, arr):
-    assert (not key in arr), (key, arr)
+def printBlackOnYellow(*args):
+    printColors(colorama.Back.YELLOW + colorama.Fore.BLACK, *args)
 
-def assertCount(size, arr):
-    assert (len(arr) == size), (size, len(arr))
+def printBlackOnRed(*args):
+    printColors(colorama.Back.RED + colorama.Fore.BLACK, *args)
 
-def assertNotEmpty(arr):
-    assert(len(arr) > 0), len(arr)
+def printBlackOnWhite(*args):
+    printColors(colorama.Back.WHITE + colorama.Fore.BLACK, *args)
 
-def assertInstance(obj, want):
-    assert isinstance(obj, want), (want, type(obj))
+def printCyanOnBlack(*args):
+    printColors(colorama.Back.BLACK + colorama.Fore.CYAN, *args)
 
-def assertOk(result):
-    assertIn('ok', result)
-    assert(result['ok'] is True), result
-    assertIn('code', result)
-    assertEquals(result['code'], 200)
-    assertIn('appdata', result)
-    return result['appdata']
+def printGreenOnBlack(*args):
+    printColors(colorama.Back.BLACK + colorama.Fore.GREEN, *args)
 
-def assertError(result, code, message):
-    assertIn('ok', result)
-    assert(result['ok'] is False), result
-    assertIn('code', result)
-    assertEquals(result['code'], code)
-    assertIn('message', result)
-    assertEquals(result['message'], message)
-    return result['message']
+def printYellowOnBlack(*args):
+    printColors(colorama.Back.BLACK + colorama.Fore.YELLOW, *args)
 
-class BaseTest():
+def printRedOnBlack(*args):
+    printColors(colorama.Back.BLACK + colorama.Fore.RED, *args)
 
-    main = None
-    interface = None
+class TestUtils():
+    """ Utilities passed to each test module """
 
-    def __init__(self, interface):
-        self.interface = interface
-        self.main = interface.main
+    assertCounter:int = 0
+    random:Random = None
 
-    def runTests(self):
-        for attr in (getattr(self, name) for name in dir(self)): # run all test* methods
-            if inspect.ismethod(attr) and attr.__name__.startswith("test"):
-                if self.main.testMatch is None or re.search(self.main.testMatch, attr.__name__) is not None:
-                    if self.main.verbose: 
-                        print('RUNNING',attr.__name__+'()')
-                    rval = attr()
-                    if not self.main.verbose: 
-                        print('S' if rval is False else '.',end='')
-                    elif rval is False: 
-                        print('SKIPPED',attr.__name__+'()')
-        if not self.main.verbose: print()
+    def __init__(self, random:Random):
+        self.random = random
 
-class BaseAppTest(BaseTest):
+    def assertAny(self, cond):
+        """ Asserts the given condition if true """
+        self.assertCounter += 1
+        assert cond
 
-    config = None
-    def __init__(self, interface, config):
-        super().__init__(interface)
-        self.config = config
+    def assertAny2(self, cond, right):
+        """ Asserts the given condition is true and prints right if not """
+        self.assertCounter += 1
+        assert cond, right
+
+    def assertType(self, left, type):
+        """ Asserts that left has the given type """
+        self.assertCounter += 1
+        assert isinstance(left, type), (type(left), type)
+
+    def assertSame(self, left, right):
+        """ Asserts that left equals right and is the same type """
+        self.assertCounter += 1
+        assert (type(left) == type(right)), (left, right)
+        assert (left == right), (left, right)
+
+    def assertNotEquals(self, left, right):
+        """ Asserts that left/rigth have the same type but not equal """
+        self.assertCounter += 1
+        assert (type(left) == type(right)), (left, right)
+        assert (left != right), (left, right)
+
+    def assertGreaterOrEqual(self, left, right):
+        """ Asserts that left is greater than or equal to right (>=) """
+        self.assertCounter += 1
+        assert (type(left) == type(right)), (left, right)
+        assert (left >= right), (left, right)
+
+    def assertIn(self, key, arr):
+        """ Asserts that key is in the given container """
+        self.assertCounter += 1
+        assert (key in arr), (key, arr)
+
+    def assertNotIn(self, key, arr):
+        """ Asserts that key is not in the given container """
+        self.assertCounter += 1
+        assert (not key in arr), (key, arr)
+
+    def assertCount(self, arr, size):
+        """ Asserts the given container has the given size """
+        self.assertCounter += 1
+        assert (len(arr) == size), (size, len(arr), arr)
+
+    def assertEmpty(self, arr):
+        """ Asserts the given container is empty """
+        self.assertCounter += 1
+        assert (len(arr) == 0), arr
+
+    def assertNotEmpty(self, arr):
+        """ Asserts the given container is not empty """
+        self.assertCounter += 1
+        assert (len(arr) > 0)
+
+    def assertInstance(self, obj, want):
+        """ Asserts that obj is an instance of want """
+        self.assertCounter += 1
+        assert isinstance(obj, want), (want, type(obj))
+
+    def assertStartsWith(self, str, want):
+        """ Asserts that str starts with want """
+        self.assertCounter += 1
+        assert str.startswith(want), (want, str)
+
+    def assertOk(self, result:dict):
+        """ Asserts an API response is okay and returns the appdata """
+        self.assertCounter += 1
+        assert result['ok'] is True, result
+        assert result['code'] == 200, result
+        return result['appdata']
+
+    def assertError(self, result:dict, code:int, message:str):
+        """ Asserts that an API response is a particular error code/message """
+        self.assertCounter += 1
+        assert result['ok'] is False, result
+        assert result['code'] == code, (result, code, message)
+        assert result['message'].startswith(message), (result, code, message)
+        return result['message']

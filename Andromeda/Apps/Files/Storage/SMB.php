@@ -1,24 +1,13 @@
-<?php namespace Andromeda\Apps\Files\Storage; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Apps\Files\Storage; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/Database/ObjectDatabase.php"); use Andromeda\Core\Database\ObjectDatabase;
-require_once(ROOT."/Core/IOFormat/Input.php"); use Andromeda\Core\IOFormat\Input;
-require_once(ROOT."/Core/IOFormat/SafeParam.php"); use Andromeda\Core\IOFormat\SafeParam;
-require_once(ROOT."/Core/IOFormat/SafeParams.php"); use Andromeda\Core\IOFormat\SafeParams;
+use Andromeda\Core\Database\{FieldTypes, ObjectDatabase};
+use Andromeda\Core\IOFormat\Input;
 
 require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
 
 require_once(ROOT."/Apps/Files/Filesystem/FSManager.php"); use Andromeda\Apps\Files\Filesystem\FSManager;
 require_once(ROOT."/Apps/Files/Storage/Exceptions.php");
 require_once(ROOT."/Apps/Files/Storage/FWrapper.php");
-
-/** Exception indicating that the libsmbclient extension is missing */
-class SMBExtensionException extends ActivateException { public $message = "SMB_EXTENSION_MISSING"; }
-
-/** Exception indicating that the SMB state initialization failed */
-class SMBStateInitException extends ActivateException { public $message = "SMB_STATE_INIT_FAILED"; }
-
-/** Exception indicating that SMB failed to connect or read the base path */
-class SMBConnectException extends ActivateException { public $message = "SMB_CONNECT_FAILED"; }
 
 Account::RegisterCryptoHandler(function(ObjectDatabase $database, Account $account, bool $init){ 
     if (!$init) SMB::DecryptAccount($database, $account); });
@@ -38,42 +27,44 @@ class SMB extends SMBBase2
     public static function GetFieldTemplate() : array
     {
         return array_merge(parent::GetFieldTemplate(), array(
-            'workgroup' => null,
-            'hostname' => null
+            'workgroup' => new FieldTypes\StringType(),
+            'hostname' => new FieldTypes\StringType()
         ));
     }
     
     /**
      * Returns a printable client object of this SMB storage
-     * @return array `{workgroup:?string, hostname:string}`
+     * @return array<mixed> `{workgroup:?string, hostname:string}`
      * @see Storage::GetClientObject()
      */
     public function GetClientObject(bool $activate = false) : array
     {
-        return array_merge(parent::GetClientObject($activate), array(
+        return parent::GetClientObject($activate) + array(
             'workgroup' => $this->TryGetScalar('workgroup'),
             'hostname' => $this->GetScalar('hostname')
-        ));
+        );
     }
     
-    public static function GetCreateUsage() : string { return parent::GetCreateUsage()." --hostname alphanum [--workgroup alphanum]"; }
+    public static function GetCreateUsage() : string { return parent::GetCreateUsage()." --hostname alphanum [--workgroup ?alphanum]"; }
     
     public static function Create(ObjectDatabase $database, Input $input, FSManager $filesystem) : self
     {
+        $params = $input->GetParams();
+        
         return parent::Create($database, $input, $filesystem)
-            ->SetScalar('workgroup', $input->GetOptParam('workgroup', 
-                SafeParam::TYPE_ALPHANUM, SafeParams::PARAMLOG_ONLYFULL, null, SafeParam::MaxLength(255)))
-            ->SetScalar('hostname', $input->GetParam('hostname', SafeParam::TYPE_HOSTNAME));
+            ->SetScalar('workgroup', $params->GetOptParam('workgroup',null)->CheckLength(255)->GetNullAlphanum())
+            ->SetScalar('hostname', $params->GetParam('hostname')->GetHostname());
     }
     
     public static function GetEditUsage() : string { return parent::GetEditUsage()." [--hostname alphanum] [--workgroup ?alphanum]"; }
     
     public function Edit(Input $input) : self
     {
-        if ($input->HasParam('workgroup')) $this->SetScalar('workgroup', $input->GetNullParam('workgroup', 
-            SafeParam::TYPE_ALPHANUM, SafeParams::PARAMLOG_ONLYFULL, null, SafeParam::MaxLength(255)));
+        $params = $input->GetParams();
+    
+        if ($params->HasParam('workgroup')) $this->SetScalar('workgroup', $params->GetParam('workgroup')->CheckLength(255)->GetNullAlphanum());
         
-        if ($input->HasParam('hostname')) $this->SetScalar('hostname', $input->GetParam('hostname', SafeParam::TYPE_HOSTNAME));
+        if ($params->HasParam('hostname')) $this->SetScalar('hostname', $params->GetParam('hostname')->GetHostname());
         
         return parent::Edit($input);
     }
@@ -82,7 +73,7 @@ class SMB extends SMBBase2
     public function TryGetWorkgroup() : ?string { return $this->TryGetScalar('workgroup'); }
 
     /** Checks for the SMB client extension */
-    public function SubConstruct() : void
+    public function PostConstruct() : void
     {
         if (!function_exists('smbclient_version')) throw new SMBExtensionException();
     }

@@ -1,46 +1,49 @@
-<?php namespace Andromeda\Core\Database; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Core\Database; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/Exceptions/Exceptions.php"); use Andromeda\Core\Exceptions;
-require_once(ROOT."/Core/Database/StandardObject.php");
-
-/** Exception indicating that the singleton was duplicated */
-class DuplicateSingletonException extends Exceptions\ServerException { public $message = "DUPLICATE_DBSINGLETON"; }
-
-/** Extends StandardObject with interfaces for a singleton object */
-abstract class SingletonObject extends StandardObject
+/** A class with a constant ID so there can only exist one instance */
+abstract class SingletonObject extends BaseObject
 {
+    /** 
+     * array of instances by class and database ID 
+     * @var array<string, static>
+     */
     private static $instances = array();
+    
+    protected static function GenerateID() : string { return 'A'; }
+    
+    /** Returns a unique instance index for this class and the given database */
+    private static function GetIndex(ObjectDatabase $database) : string
+    {
+        return spl_object_hash($database).'_'.static::class;
+    }
 
     /**
      * Gets the instance of the given class, possibly loading it from the DB
      * @param ObjectDatabase $database reference to the database
-     * @throws DuplicateSingletonException if > 1 object is loaded
-     * @throws ObjectNotFoundException if no object is loaded
+     * @throws Exceptions\SingletonNotFoundException if no object is loaded
      * @return static
      */
     public static function GetInstance(ObjectDatabase $database) : self
     {
-        if (array_key_exists(static::class, self::$instances)) 
-            return self::$instances[static::class];
+        $key = self::GetIndex($database);
         
-        $objects = static::LoadAll($database);
-        if (count($objects) > 1) throw new DuplicateSingletonException();
-        else if (count($objects) == 0) throw new ObjectNotFoundException();
+        if (!array_key_exists($key, self::$instances))
+        {
+            $obj = (static::class)::TryLoadByID($database,'A');
+            if ($obj === null) throw new Exceptions\SingletonNotFoundException(static::class);
+            
+            self::$instances[$key] = $obj;
+        }
         
-        else return (self::$instances[static::class] = array_values($objects)[0]);
+        return self::$instances[$key];
     }
 
-    /**
-     * @throws DuplicateSingletonException if an object already exists in the DB
-     * @see StandardObject::BaseCreate()
-     * @return static
-     */
-    protected static function BaseCreate(ObjectDatabase $database) : self
+    public function __construct(ObjectDatabase $database, array $data, bool $created = false)
     {
-        if (count(static::LoadAll($database)) > 0) 
-            throw new DuplicateSingletonException();
+        parent::__construct($database, $data, $created);
+        if (!$created) return; // early return
         
-        return (self::$instances[static::class] = parent::BaseCreate($database));
+        $idx = self::GetIndex($this->database);
+        self::$instances[$idx] = $this;
     }
 }
-

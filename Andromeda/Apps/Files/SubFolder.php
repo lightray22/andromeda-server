@@ -1,6 +1,6 @@
-<?php namespace Andromeda\Apps\Files; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Apps\Files; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/Database/ObjectDatabase.php"); use Andromeda\Core\Database\ObjectDatabase;
+use Andromeda\Core\Database\ObjectDatabase;
 
 require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
 require_once(ROOT."/Apps/Files/Folder.php");
@@ -84,7 +84,7 @@ class SubFolder extends Folder
      */
     public static function NotifyCreate(ObjectDatabase $database, Folder $parent, ?Account $account, string $name) : self
     {
-        return parent::BaseCreate($database)
+        return static::BaseCreate($database)
             ->SetObject('filesystem',$parent->GetFilesystem())
             ->SetObject('parent',$parent)            
             ->SetObject('owner',$account)

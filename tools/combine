@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 (find Andromeda -iname '*.php' | xargs cat) > combined.txt
 (find Andromeda -iname '*.py' | xargs cat) >> combined.txt

@@ -1,6 +1,8 @@
-<?php
+<?php declare(strict_types=1);
 
 /** 
+ * This is the HTTP entry point for Andromeda/index.php
+ * 
  * The Andromeda directory can be installed anywhere, by
  * updating the include paths below.  It is recommended that
  * this file is used as the web entry point and that the Andromeda
@@ -17,10 +19,11 @@ $paths = array(
 
 foreach ($paths as $path)
 {
-    if (file_exists($path))
+    if (is_file($path))
     {
         require_once($path); die();
     }
 }
- 
-die("Could not find the Andromeda folder!");
+
+http_response_code(500); 
+die("Could not find the Andromeda server folder!");

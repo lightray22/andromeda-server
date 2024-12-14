@@ -1,22 +1,16 @@
-<?php namespace Andromeda\Apps\Files\Filesystem; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Apps\Files\Filesystem; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/Database/FieldTypes.php"); use Andromeda\Core\Database\FieldTypes;
-require_once(ROOT."/Core/Database/StandardObject.php"); use Andromeda\Core\Database\StandardObject;
-require_once(ROOT."/Core/Database/ObjectDatabase.php"); use Andromeda\Core\Database\ObjectDatabase;
-require_once(ROOT."/Core/Database/QueryBuilder.php"); use Andromeda\Core\Database\QueryBuilder;
-
-require_once(ROOT."/Core/Exceptions/Exceptions.php"); use Andromeda\Core\Exceptions;
-require_once(ROOT."/Core/IOFormat/Input.php"); use Andromeda\Core\IOFormat\Input;
-require_once(ROOT."/Core/IOFormat/SafeParam.php"); use Andromeda\Core\IOFormat\SafeParam;
-require_once(ROOT."/Core/IOFormat/SafeParams.php"); use Andromeda\Core\IOFormat\SafeParams;
-require_once(ROOT."/Core/Crypto.php"); use Andromeda\Core\CryptoSecret;
-require_once(ROOT."/Core/Utilities.php"); use Andromeda\Core\Utilities;
+use Andromeda\Core\{Crypto, Utilities};
+use Andromeda\Core\IOFormat\Input;
+use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, QueryBuilder};
 
 require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
 
+require_once(ROOT."/Apps/Files/Exceptions.php"); use Andromeda\Apps\Files\RandomWriteDisabledException;
 require_once(ROOT."/Apps/Files/Storage/Storage.php"); use Andromeda\Apps\Files\Storage\Storage;
 require_once(ROOT."/Apps/Files/Storage/Exceptions.php"); use Andromeda\Apps\Files\Storage\ActivateException;
 
+require_once(ROOT."/Apps/Files/Filesystem/Exceptions.php");
 require_once(ROOT."/Apps/Files/Filesystem/External.php");
 require_once(ROOT."/Apps/Files/Filesystem/Native.php");
 require_once(ROOT."/Apps/Files/Filesystem/NativeCrypt.php");
@@ -25,15 +19,6 @@ require_once(ROOT."/Apps/Files/Config.php"); use Andromeda\Apps\Files\Config;
 require_once(ROOT."/Apps/Files/RootFolder.php"); use Andromeda\Apps\Files\RootFolder;
 
 require_once(ROOT."/Apps/Files/Limits/Account.php"); use Andromeda\Apps\Files\Limits;
-
-/** Exception indicating that the stored filesystem type is not valid */
-class InvalidFSTypeException extends Exceptions\ServerException { public $message = "UNKNOWN_FILESYSTEM_TYPE"; }
-
-/** Exception indicating that the given filesystem name is invalid */
-class InvalidNameException extends Exceptions\ClientErrorException { public $message = "INVALID_FILESYSTEM_NAME"; }
-
-/** Exception indicating that the underlying storage connection failed */
-class InvalidStorageException extends Exceptions\ClientErrorException { public $message = "STORAGE_ACTIVATION_FAILED"; use Exceptions\Copyable; }
 
 /**
  * An object that manages and points to a filesystem manager
@@ -50,20 +35,22 @@ class InvalidStorageException extends Exceptions\ClientErrorException { public $
  * The implementation calls down into a storage, which defines at a lower
  * level how the functions are actually mapped into the underlying storage.
  */
-class FSManager extends StandardObject
+class FSManager extends BaseObject // TODO was StandardObject
 {
-    const TYPE_NATIVE = 0; const TYPE_NATIVE_CRYPT = 1; const TYPE_EXTERNAL = 2;
+    private const TYPE_NATIVE = 0; 
+    private const TYPE_NATIVE_CRYPT = 1; 
+    private const TYPE_EXTERNAL = 2;
     
     public static function GetFieldTemplate() : array
     {
         return array_merge(parent::GetFieldTemplate(), array(
-            'name' => null, // name of the FS, null if it's the default
-            'type' => null, // enum of the type of FS impl
-            'readonly' => null,
-            'storage' => new FieldTypes\ObjectPoly(Storage::class),
-            'owner' => new FieldTypes\ObjectRef(Account::class),
-            'crypto_masterkey' => null,
-            'crypto_chunksize' => null
+            'name' => new FieldTypes\StringType(), // name of the FS, null if it's the default
+            'type' => new FieldTypes\IntType(), // enum of the type of FS impl
+            'readonly' => new FieldTypes\BoolType(),
+            'obj_storage' => new FieldTypes\ObjectPoly(Storage::class),
+            'obj_owner' => new FieldTypes\ObjectRef(Account::class),
+            'crypto_masterkey' => new FieldTypes\StringType(),
+            'crypto_chunksize' => new FieldTypes\StringType()
         ));
     }
     
@@ -166,7 +153,7 @@ class FSManager extends StandardObject
     /** Returns a map of all storage classes as $name=>$class */
     private static function getStorageClasses() : array
     {
-        $classes = Utilities::getClassesMatching(Storage::class);
+        $classes = Utilities::getClassesMatching(Storage::class); // TODO this is dumb, just have array here...
         
         $retval = array(); foreach ($classes as $class)
             $retval[strtolower(Utilities::ShortClassName($class))] = $class;
@@ -176,7 +163,7 @@ class FSManager extends StandardObject
     
     /** Returns the common command usage of Create() */
     public static function GetCreateUsage() : string { return "--sttype ".implode('|',array_keys(self::getStorageClasses())).
-        " [--fstype native|crypt|external] [--name name] [--global bool] [--readonly bool] [--chunksize uint]"; }
+        " [--fstype native|crypt|external] [--name ?name] [--global bool] [--readonly bool] [--chunksize uint]"; }
     
     /** Returns the command usage of Create() specific to each storage type */
     public static function GetCreateUsages() : array 
@@ -196,42 +183,45 @@ class FSManager extends StandardObject
      */
     public static function Create(ObjectDatabase $database, Input $input, ?Account $owner) : self
     {
-        $name = $input->GetOptParam('name', SafeParam::TYPE_NAME, 
-            SafeParams::PARAMLOG_ONLYFULL, null, SafeParam::MaxLength(127));
+        $params = $input->GetParams();
         
-        $readonly = $input->GetOptParam('readonly', SafeParam::TYPE_BOOL) ?? false;
+        $name = $params->GetOptParam('name',null)->CheckLength(127)->GetNullName();
+        
+        $readonly = $params->GetOptParam('readonly',false)->GetBool();
         
         $classes = self::getStorageClasses();
         
-        $sttype = $input->GetParam('sttype', SafeParam::TYPE_ALPHANUM, 
-            SafeParams::PARAMLOG_ONLYFULL, array_keys($classes));
-        
-        $fstype = $input->GetOptParam('fstype', SafeParam::TYPE_ALPHANUM, 
-            SafeParams::PARAMLOG_ONLYFULL, array('native','crypt','external'));  
-        
-        switch ($fstype ?? 'native')
+        $sttype = $params->GetParam('sttype')->FromWhitelist(array_keys($classes));
+
+        switch ($params->GetOptParam('fstype','native')
+            ->FromWhitelist(array('native','crypt','external')))
         {
             case 'native': $fstype = self::TYPE_NATIVE; break;
             case 'crypt':  $fstype = self::TYPE_NATIVE_CRYPT; break;
             case 'external': $fstype = self::TYPE_EXTERNAL; break;
         }
         
-        $filesystem = parent::BaseCreate($database)
+        $filesystem = static::BaseCreate($database)
             ->SetOwner($owner)->SetName($name)
             ->SetType($fstype)->SetReadOnly($readonly);
         
         if ($filesystem->isEncrypted())
         {
-            if (Limits\AccountTotal::LoadByAccount($database, $owner, true)->GetAllowRandomWrite())
+            $chunksize = null; if ($params->HasParam('chunksize'))
             {
-                $chunksize = $input->GetOptParam('chunksize',SafeParam::TYPE_UINT,SafeParams::PARAMLOG_ONLYFULL, null,
-                    function($v){ return $v >= 4*1024 && $v <= 1*1024*1024; });
+                if (!Limits\AccountTotal::LoadByAccount($database, $owner, true)->GetAllowRandomWrite())
+                    throw new RandomWriteDisabledException();
+                
+                $checkSize = function(string $v){ $v = (int)$v; 
+                    return $v >= 4*1024 && $v <= 1*1024*1024; }; // check in range [4K,1M]
+                $chunksize = $params->GetParam('chunksize')->CheckFunction($checkSize)->GetUint();
+                    
             }
             
-            if (!($chunksize ?? false)) $chunksize = Config::GetInstance($database)->GetCryptoChunkSize();
+            $chunksize ??= Config::GetInstance($database)->GetCryptoChunkSize();
             
             $filesystem->SetScalar('crypto_chunksize', $chunksize);
-            $filesystem->SetScalar('crypto_masterkey', CryptoSecret::GenerateKey());
+            $filesystem->SetScalar('crypto_masterkey', Crypto::GenerateSecretKey());
         }
 
         try
@@ -259,8 +249,10 @@ class FSManager extends StandardObject
     /** Edits an existing filesystem with the given values, and tests it */
     public function Edit(Input $input) : self
     {
-        if ($input->HasParam('name')) $this->SetName($input->GetNullParam('name',SafeParam::TYPE_NAME));
-        if ($input->HasParam('readonly')) $this->SetReadOnly($input->GetParam('readonly',SafeParam::TYPE_BOOL));
+        $params = $input->GetParams();
+        
+        if ($params->HasParam('name')) $this->SetName($params->GetParam('name')->GetNullName());
+        if ($params->HasParam('readonly')) $this->SetReadOnly($params->GetParam('readonly')->GetBool());
         
         $this->EditStorage($input)->Test(); return $this;
     }
@@ -269,16 +261,16 @@ class FSManager extends StandardObject
      * Attempts to load the default filesystem (no name)
      * @param ObjectDatabase $database database reference
      * @param Account $account account to get the default for
-     * @return static|NULL loaded FS or null if not available
+     * @return ?static loaded FS or null if not available
      */
     public static function LoadDefaultByAccount(ObjectDatabase $database, Account $account) : ?self
     {
-        $q1 = new QueryBuilder(); $q1->Where($q1->And($q1->IsNull('name'), $q1->Equals('owner',$account->ID())));
+        $q1 = new QueryBuilder(); $q1->Where($q1->And($q1->IsNull('name'), $q1->Equals('obj_owner',$account->ID())));
         $found = static::TryLoadUniqueByQuery($database, $q1);
         
         if ($found === null)
         {
-            $q2 = new QueryBuilder(); $q2->Where($q2->And($q2->IsNull('name'), $q2->IsNull('owner')));
+            $q2 = new QueryBuilder(); $q2->Where($q2->And($q2->IsNull('name'), $q2->IsNull('obj_owner')));
             $found = static::TryLoadUniqueByQuery($database, $q2);
         }
         
@@ -288,9 +280,9 @@ class FSManager extends StandardObject
     /** Attempts to load a filesystem with the given owner and ID - if $null, the owner can be null */
     public static function TryLoadByAccountAndID(ObjectDatabase $database, Account $account, string $id, bool $null = false) : ?self
     {
-        $q = new QueryBuilder(); $ownerq = $q->Equals('owner',$account->ID());
+        $q = new QueryBuilder(); $ownerq = $q->Equals('obj_owner',$account->ID());
         
-        if ($null) $ownerq = $q->Or($ownerq, $q->IsNull('owner'));
+        if ($null) $ownerq = $q->Or($ownerq, $q->IsNull('obj_owner'));
         
         $w = $q->And($ownerq,$q->Equals('id',$id));
         
@@ -304,7 +296,7 @@ class FSManager extends StandardObject
         
         $q = new QueryBuilder(); 
         
-        $w1 = $q->Or($q->IsNull('owner'), $q->Equals('owner',$account ? $account->ID() : null));
+        $w1 = $q->Or($q->IsNull('obj_owner'), $q->Equals('obj_owner',$account ? $account->ID() : null));
 
         return self::TryLoadUniqueByQuery($database, $q->Where($q->And($w1, $q->Equals('name',$name))));
     }
@@ -317,7 +309,8 @@ class FSManager extends StandardObject
      */
     public static function LoadByAccount(ObjectDatabase $database, Account $account) : array
     {
-        $q = new QueryBuilder(); $w = $q->Or($q->Equals('owner',$account->ID()),$q->IsNull('owner'));
+        $q = new QueryBuilder(); $w = $q->Or($q->Equals('obj_owner',$account->ID()),$q->IsNull('obj_owner'));
+        
         return self::LoadByQuery($database, $q->Where($w));
     }
     
@@ -342,7 +335,7 @@ class FSManager extends StandardObject
      * Gets a printable client object of this filesystem
      * @param bool $priv if true, show details for the owner
      * @param bool $activ if true, show details that require activation
-     * @return array `{id:id, name:?string, owner:?id, external:bool, encrypted:bool, readonly:bool, sttype:enum}` \  
+     * @return array<mixed> `{id:id, name:?string, owner:?id, external:bool, encrypted:bool, readonly:bool, sttype:enum}` \  
         if priv, add `{storage:Storage}` - if isEncrypted, add `{chunksize:int}`
      * @see Storage::GetClientObject()
      */

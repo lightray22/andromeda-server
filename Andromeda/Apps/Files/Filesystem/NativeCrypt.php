@@ -1,12 +1,12 @@
-<?php namespace Andromeda\Apps\Files\Filesystem; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Apps\Files\Filesystem; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/IOFormat/InputFile.php"); use Andromeda\Core\IOFormat\InputPath;
+use Andromeda\Core\Crypto;
+use Andromeda\Core\IOFormat\InputPath;
 
 require_once(ROOT."/Apps/Files/Filesystem/Native.php");
 
 require_once(ROOT."/Apps/Files/File.php"); use Andromeda\Apps\Files\File;
 require_once(ROOT."/Apps/Files/FileUtils.php"); use Andromeda\Apps\Files\FileUtils;
-require_once(ROOT."/Core/Crypto.php"); use Andromeda\Core\CryptoSecret;
 
 require_once(ROOT."/Apps/Files/Storage/Exceptions.php"); 
 use Andromeda\Apps\Files\Storage\FileReadFailedException;
@@ -189,7 +189,7 @@ class NativeCrypt extends Native
             $this->WriteChunk($file, $chunk, $cdata);
         }
         
-        $overhead = CryptoSecret::NonceLength() + CryptoSecret::OutputOverhead();
+        $overhead = Crypto::SecretNonceLength() + Crypto::SecretOutputOverhead();
         $fsize = $overhead * ($this->GetNumChunks($length)) + $length;
         
         parent::Truncate($file, $fsize); return $this;
@@ -203,8 +203,8 @@ class NativeCrypt extends Native
      */
     protected function ReadChunk(File $file, int $index) : string
     {        
-        $noncesize = CryptoSecret::NonceLength();
-        $overhead = $noncesize + CryptoSecret::OutputOverhead();
+        $noncesize = Crypto::SecretNonceLength();
+        $overhead = $noncesize + Crypto::SecretOutputOverhead();
         
         $blocksize = $this->chunksize + $overhead;
         $datasize = $blocksize - $noncesize;
@@ -225,7 +225,7 @@ class NativeCrypt extends Native
         
         $auth = $this->GetAuthString($file, $index);
         
-        return CryptoSecret::Decrypt($data, $nonce, $this->masterkey, $auth);
+        return Crypto::DecryptSecret($data, $nonce, $this->masterkey, $auth);
     }
 
     /**
@@ -237,17 +237,17 @@ class NativeCrypt extends Native
      */
     protected function WriteChunk(File $file, int $index, string $data) : self
     {        
-        $noncesize = CryptoSecret::NonceLength();
+        $noncesize = Crypto::SecretNonceLength();
         
-        $blocksize = $noncesize + $this->chunksize + CryptoSecret::OutputOverhead();
+        $blocksize = $noncesize + $this->chunksize + Crypto::SecretOutputOverhead();
         
         $nonceoffset = $index * $blocksize;
         $dataoffset = $nonceoffset + $noncesize;
 
-        $nonce = CryptoSecret::GenerateNonce();
+        $nonce = Crypto::GenerateSecretNonce();
         $auth = $this->GetAuthString($file, $index);
         
-        $data = CryptoSecret::Encrypt($data, $nonce, $this->masterkey, $auth);
+        $data = Crypto::EncryptSecret($data, $nonce, $this->masterkey, $auth);
 
         parent::WriteBytes($file, $nonceoffset, $nonce);
         parent::WriteBytes($file, $dataoffset, $data);

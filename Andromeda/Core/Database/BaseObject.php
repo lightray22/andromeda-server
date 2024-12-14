@@ -1,871 +1,310 @@
-<?php namespace Andromeda\Core\Database; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Core\Database; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/Utilities.php"); use Andromeda\Core\Utilities;
-
-require_once(ROOT."/Core/Database/Database.php");
-require_once(ROOT."/Core/Database/FieldTypes.php");
-require_once(ROOT."/Core/Database/QueryBuilder.php");
-
-/** Exception indicating the specified field name is invalid */
-class KeyNotFoundException extends DatabaseException    { public $message = "DB_OBJECT_KEY_NOT_FOUND"; }
-
-/** Exception indicating that the requested counter name is not a counter */
-class FieldTypeException extends DatabaseException     { public $message = "DB_OBJECT_BAD_FIELD_TYPE"; }
-
-/** Exception indicating that the requested object is null */
-class ObjectNotFoundException extends DatabaseException { public $message = "OBJECT_NOT_FOUND"; }
-
-/** Exception indicating that the requested scalar is null */
-class NullValueException extends DatabaseException      { public $message = "VALUE_IS_NULL"; }
+use Andromeda\Core\{ApiPackage, Utilities};
 
 /**
- * The base class for representing objects stored in the database.  
- * 
- * Manages interaction with the database, provides functions for managing object data, 
- * and provides helper functions for the outside world. Most of the public functions are intended
- * to be ignored in favor of more domain-specific alternatives provided by classes that extend this one.
- * 
- * All objects have a unique ID that globally identifies them.
+ * The base class for objects that can be saved/loaded from the database.
+ * Objects can be a single table or be split into base/child class database tables.
+ * Splitting allows using foreign keys/object links to link to abstract types.
+ * Objects can be loaded via child classes, which will join base tables together top-down,
+ * or via base classes which will load every corresponding child class together.
+ * The final child type does not necessarily need to have its own table.
+ * @phpstan-consistent-constructor
  */
 abstract class BaseObject
 {
-    /** The length of the ID used to identify the object */
-    public const IDLength = 12;
-    
-    /** The object's primary reference to the database */
-    protected ObjectDatabase $database; 
+    /** 
+     * The length of the unique object ID
+     * @var positive-int
+     */
+    protected const IDLength = 12;
+
+    /**
+     * Returns the list of classes with database tables for loading this class, ordered base->derived
+     * Only classes with a table should implement this (add to result from parent)
+     * @return array<class-string<self>>
+     */
+    public static function GetTableClasses() : array { return array(); }
     
     /**
-     * Gets a template array of the object's properties (columns).  
-     * 
-     * This template will be copied into the object when it is constructed.
-     * If a field maps to null, a basic Scalar fieldtype will be used.
-     * @return array<string, ?FieldTypes\Scalar> array of FieldTypes indexed by field names
+     * Returns the base table for this class
+     * @throws Exceptions\NoBaseTableException if none
+     * @return class-string<self>
      */
-    public abstract static function GetFieldTemplate() : array;
-    
-    /**
-     * Returns the name of the class that should be used in the database for the table name (cast down at save)
-     * 
-     * Defaults to the actual class used.  Can be overriden e.g. if multiple classes need to use the same table.
-     */
-    public static function GetDBClass() : string { return static::class; }
-    
-    /**
-     * Returns the name of the class that should be used for a given DB row (cast up at load)
-     * 
-     * Defaults to the actual class used. Allows polymorphism on DB rows based on properties
-     * @return class-string<static>
-     */
-    public static function GetObjClass(array $row) : string { return static::class; }
-    
-    /**
-     * Counts objects in the DB matching the given query
-     * @param ObjectDatabase $database Reference to the database
-     * @param QueryBuilder $query The query to use for matching objects
-     * @return int count of matched objects
-     */
-    public static function CountByQuery(ObjectDatabase $database, QueryBuilder $query) : int
+    final public static function GetBaseTableClass() : string
     {
-        return $database->CountObjectsByQuery(static::class, $query);
+        $tables = static::GetTableClasses();
+        if (count($tables) !== 0) return $tables[0];
+        else throw new Exceptions\NoBaseTableException(static::class);
     }
+
+    /**
+     * Returns the array of subclasses that exist for this base class, so we can load via it
+     * Non-abstract base classes can include self if non-child rows exist
+     * Non-abstract classes (no children) should always return empty
+     * If using auto-typed rows, the mapping must be stable across versions
+     * Classes must have the @ return line in order to pass type checking!
+     * @return array<class-string<static>>
+     */
+    public static function GetChildMap(ObjectDatabase $database) : array { return array(); }
     
     /**
-     * Loads an array of objects from the DB matching the given query
-     * @param ObjectDatabase $database Reference to the database
-     * @param QueryBuilder $query The query to use for matching objects
-     * @return array<string, static> array of objects indexed by their IDs
+     * Returns this class's unique key map (must add parents!)
+     * This base function adds 'id' to the base table, so if overriding, add it!
+     * NOTE - there isn't a pre-determined map for non-unique keys, instead the DB will cache as Load/Delete by key is used!
+     * @return array<class-string<self>, list<string>>
      */
-    public static function LoadByQuery(ObjectDatabase $database, QueryBuilder $query) : array
+    public static function GetUniqueKeys() : array
     {
-        return $database->LoadObjectsByQuery(static::class, $query);
+        return array(self::GetBaseTableClass() => array('id'));
     }
     
+    /** Returns true iff GetWhereChild/GetRowClass can be used */
+    public static function HasTypedRows() : bool { return false; }
+    
     /**
-     * Deletes objects from the DB matching the given query
-     * 
-     * The objects are loaded when they are deleted and their Delete()s are run
-     * @param ObjectDatabase $database Reference to the database
-     * @param QueryBuilder $query The query to use for matching objects
-     * @return int number of objects deleted
+     * Given a child class, return a query clause selecting rows for it (and adds token data to the query)
+     * Only for base classes that are the final table for > 1 class (TypedChildren)
+     * Classes must have the @ return line in order to pass type checking!
+     * @param ObjectDatabase $database database reference
+     * @param QueryBuilder $q query to add WHERE clause to
+     * @param class-string<self> $class child class we want to filter by
+     * @return string the clause for row matching (e.g. 'type = 5')
      */
-    public static function DeleteByQuery(ObjectDatabase $database, QueryBuilder $query) : int
+    public static function GetWhereChild(ObjectDatabase $database, QueryBuilder $q, string $class) : string { 
+        throw new Exceptions\NotMultiTableException(self::class); }
+    
+    /**
+     * Given a database row, return the child class applicable
+     * Only for base classes that are the final table for > 1 class (TypedChildren)
+     * @param array<string,?scalar> $row row of data from the database
+     * @return class-string<static> child class of row
+     */
+    public static function GetRowClass(ObjectDatabase $database, array $row) : string { 
+        throw new Exceptions\NotMultiTableException(self::class); }
+
+    /**
+     * Returns a string suitable as a new object ID (primary key)
+     * Object IDs must be unique for all objects of a base class
+     */
+    protected static function GenerateID() : string
     {
-        return $database->DeleteObjectsByQuery(static::class, $query);
+        return Utilities::Random(static::IDLength);
     }
-    
+
     /**
-     * Loads a unique object matching the given query
-     * @param ObjectDatabase $database Reference to the database
-     * @param QueryBuilder $query the query to uniquely identify the object
-     * @return static|NULL
-     */
-    public static function TryLoadUniqueByQuery(ObjectDatabase $database, QueryBuilder $query) : ?self
-    {
-        $result = static::LoadByQuery($database, $query);
-        return count($result) ? array_values($result)[0] : null;
-    }
-    
-    /**
-     * Asserts that the given object is not null
-     * @template T of self
-     * @param ?T $obj the object to check for null
-     * @throws ObjectNotFoundException if the object is null
-     * @return T object if not null
-     */
-    public static function NotNull(?self $obj) : self 
-    { 
-        if ($obj === null) throw new ObjectNotFoundException(static::class); return $obj; 
-    }
-    
-    /**
-     * Loads a unique object by its ID
-     * @param ObjectDatabase $database Reference to the database
+     * Loads an object by its ID
+     * @param ObjectDatabase $database database ref
      * @param string $id the ID of the object
-     * @return static|null object or null if not found
+     * @return ?static object or null if not found
      */
-    public static function TryLoadByID(ObjectDatabase $database, string $id) : ?self
+    final public static function TryLoadByID(ObjectDatabase $database, string $id) : ?BaseObject
     {
-        return static::TryLoadUniqueByKey($database,'id',$id);
-    }
-    
-    /**
-     * Deletes a unique object by its ID
-     * @param ObjectDatabase $database Reference to the database
-     * @param string $id the ID of the object
-     */
-    public static function DeleteByID(ObjectDatabase $database, string $id) : void
-    {
-        if (!static::TryDeleteByUniqueKey($database,'id',$id))
-            throw new ObjectNotFoundException();
-    }
-    
-    /**
-     * Loads all objects of this type from the database
-     * @param ObjectDatabase $database Reference to the database
-     * @param int $limit the maximum number of objects to load
-     * @param int $offset the number of objects to skip loading 
-     * @return array<string, static> array of objects indexed by their IDs
-     */
-    public static function LoadAll(ObjectDatabase $database, ?int $limit = null, ?int $offset = null) : array 
-    {
-        return static::LoadByQuery($database, (new QueryBuilder())->Limit($limit)->Offset($offset));
-    }
-    
-    /**
-     * Deletes all objects of this type from the database
-     * @param ObjectDatabase $database Reference to the database
-     * @return int number of deleted objects
-     */
-    public static function DeleteAll(ObjectDatabase $database) : int
-    {
-        return static::DeleteByQuery($database, new QueryBuilder());
-    }
-    
-    /**
-     * Loads objects from the database with the given object ID as the value of the given field
-     * 
-     * Can be used as an alternative to LoadByObject() to avoid actually loading the object
-     * @template T of self
-     * @param ObjectDatabase $database Reference to the database
-     * @param string $field The name of the field to check
-     * @param string $id The ID of the object referenced
-     * @param class-string<T> $class optionally, the class to match if this column is polymorphic
-     * @return array<string, static> array of objects indexed by their IDs
-     */
-    public static function LoadByObjectID(ObjectDatabase $database, string $field, string $id, ?string $class = null) : array
-    {
-        $v = $class ? FieldTypes\ObjectPoly::GetIDTypeDBValue($id, $class) : $id;
-        $q = new QueryBuilder(); return static::LoadByQuery($database, $q->Where($q->Equals($field, $v)));
-    }
-    
-    /**
-     * Deletes objects from the database with the given object ID as the value of the given field
-     *
-     * Can be used as an alternative to DeleteByObject() to avoid actually loading the object
-     * @template T of self
-     * @param ObjectDatabase $database Reference to the database
-     * @param string $field The name of the field to check
-     * @param string $id The ID of the object referenced
-     * @param class-string<T> $class optionally, the class to match if this column is polymorphic
-     * @return int number of rows deleted
-     */
-    public static function DeleteByObjectID(ObjectDatabase $database, string $field, string $id, ?string $class = null) : int
-    {
-        $v = $class ? FieldTypes\ObjectPoly::GetIDTypeDBValue($id, $class) : $id;
-        $q = new QueryBuilder(); return static::DeleteByQuery($database, $q->Where($q->Equals($field, $v)));
-    }
-        
-    /**
-     * Loads a unique object matching the given field
-     * @param ObjectDatabase $database Reference to the database
-     * @param string $field the name of the field to check
-     * @param string $key the value of the field that uniquely identifies the object
-     * @return static|NULL
-     */
-    protected static function TryLoadUniqueByKey(ObjectDatabase $database, string $field, string $key) : ?self
-    {
-        return $database->TryLoadObjectByUniqueKey(static::class, $field, $key);
-    }
-    
-    /**
-     * Deletes a unique object matching the given field
-     * @param ObjectDatabase $database Reference to the database
-     * @param string $field the name of the field to check
-     * @param string $key the value of the field that uniquely identifies the object
-     * @return bool true if an object was deleted
-     */
-    protected static function TryDeleteByUniqueKey(ObjectDatabase $database, string $field, string $key) : bool
-    {
-        $q = new QueryBuilder(); $rows = static::DeleteByQuery($database, $q->Where($q->Equals($field, $key)));
-        
-        if ($rows > 1) throw new DuplicateUniqueKeyException(); return $rows > 0;
-    }
-    
-    /**
-     * Loads objects from the database with the given object referenced by the given field
-     * @param ObjectDatabase $database Reference to the database
-     * @param string $field The name of the field to check
-     * @param BaseObject $object the object referenced by the field
-     * @param bool $isPoly whether or not this field is polymorphic
-     * @return array<string, static> array of objects indexed by their IDs
-     */
-    public static function LoadByObject(ObjectDatabase $database, string $field, self $object, bool $isPoly = false) : array
-    {
-        $v = $isPoly ? FieldTypes\ObjectPoly::GetObjectDBValue($object) : $object->ID();
-        $q = new QueryBuilder(); return static::LoadByQuery($database, $q->Where($q->Equals($field, $v)));
-    }
-    
-    /**
-     * Deletes objects from the database with the given object referenced by the given field
-     * @param ObjectDatabase $database Reference to the database
-     * @param string $field The name of the field to check
-     * @param BaseObject $object the object referenced by the field
-     * @param bool $isPoly whether or not this field is polymorphic
-     * @return int number of deleted objects
-     */
-    public static function DeleteByObject(ObjectDatabase $database, string $field, self $object, bool $isPoly = false) : int
-    {
-        $v = $isPoly ? FieldTypes\ObjectPoly::GetObjectDBValue($object) : $object->ID();
-        $q = new QueryBuilder(); return static::DeleteByQuery($database, $q->Where($q->Equals($field, $v)));
-    }
-    
-    /**
-     * Loads a unique object from the database with the given object referenced by the given field
-     * @param ObjectDatabase $database Reference to the database
-     * @param string $field The name of the field to check
-     * @param BaseObject $object the object referenced by the field
-     * @param bool $isPoly whether or not this field is polymorphic
-     * @return static|null
-     */
-    public static function TryLoadUniqueByObject(ObjectDatabase $database, string $field, self $object, bool $isPoly = false) : ?self
-    {
-        $v = $isPoly ? FieldTypes\ObjectPoly::GetObjectDBValue($object) : $object->ID();
-        return static::TryLoadUniqueByKey($database, $field, $v);
-    }
-    
-    /**
-     * Deletes a unique object from the database with the given object referenced by the given field
-     * @param ObjectDatabase $database Reference to the database
-     * @param string $field The name of the field to check
-     * @param BaseObject $object the object referenced by the field
-     * @param bool $isPoly whether or not this field is polymorphic
-     * @return bool true if an object was deleted
-     */
-    public static function TryDeleteByUniqueObject(ObjectDatabase $database, string $field, self $object, bool $isPoly = false) : bool
-    {
-        $v = $isPoly ? FieldTypes\ObjectPoly::GetObjectDBValue($object) : $object->ID();
-        $rows = static::TryDeleteByUniqueKey($database, $field, $v);
-        
-        if ($rows > 1) throw new DuplicateUniqueKeyException(); return $rows > 0;
-    }
-    
-    /** Returns the unique ID of the object */
-    public function ID() : string { return $this->scalars['id']->GetValue(); }
-    
-    /** Returns the string "id:class" where id is the object ID and class is its short class name */
-    public function __toString() : string { return $this->ID().':'.Utilities::ShortClassName(static::class); }
-    
-    /** Returns the given object's as a string if not null, else null */
-    public static function toString(?self $obj) : ?string { return $obj ? (string)$obj : null; }
-    
-    /** @var array<string, FieldTypes\Scalar> array of scalar properties indexed by their field names */
-    protected array $scalars = array();
-    
-    /** @var array<string, FieldTypes\ObjectRef> array of properties, indexed by their field names, that reference another object */
-    protected array $objects = array();
-    
-    /** @var array<string, FieldTypes\ObjectRefs> array of properties, indexed by their field names, that reference a collection of objects */
-    protected array $objectrefs = array();
-
-    /**
-     * Gets a scalar field
-     * @param string $field the field name of the scalar
-     * @param bool $allowTemp whether to allow returning a value that was set as temporary
-     * @throws KeyNotFoundException if the field name is invalid
-     * @throws NullValueException if the field value is null
-     * @return mixed any non-null scalar value
-     */
-    protected function GetScalar(string $field, bool $allowTemp = true)
-    {
-        if (!array_key_exists($field, $this->scalars)) 
-            throw new KeyNotFoundException($field);
-        
-        $value = $this->scalars[$field]->GetValue($allowTemp);
-        if ($value !== null) return $value; else throw new NullValueException($field);
+        return $database->TryLoadUniqueByKey(static::class, 'id', $id, true);
     }
     
     /** 
-     * Same as GetScalar() but returns null instead of throwing exceptions 
-     * @see BaseObject::GetScalar()
+     * Returns all available external auth objects
+     * @param ?non-negative-int $limit limit number of objects
+     * @param ?non-negative-int $offset offset of limited result set
+     * @return array<string, static>
      */
-    protected function TryGetScalar(string $field, bool $allowTemp = true)
+    public static function LoadAll(ObjectDatabase $database, ?int $limit = null, ?int $offset = null) : array
     {
-        if (!array_key_exists($field, $this->scalars)) 
-            throw new KeyNotFoundException($field);
-        
-        return $this->scalars[$field]->GetValue($allowTemp);
+        $q = (new QueryBuilder())->Limit($limit)->Offset($offset);
+        return $database->LoadObjectsByQuery(static::class, $q); // empty query
     }
     
-    /**
-     * Returns the delta of the given scalar (non-zero if modified)
-     * @param string $field the field name of the scalar
-     * @throws KeyNotFoundException if the field name is invalid
-     * @return int # of times modified for scalars, delta for counters
-     */
-    protected function GetScalarDelta(string $field) : int
-    {
-        if (!array_key_exists($field, $this->scalars))
-            throw new KeyNotFoundException($field);
-        
-        return $this->scalars[$field]->GetDelta();
-    }
+    /** Primary reference to the database */
+    protected ObjectDatabase $database;
     
-    /**
-     * Gets a single object reference
-     * @param string $field the field name holding the reference
-     * @throws KeyNotFoundException if the field name is invalid
-     * @throws NullValueException if the field value is null
-     * @return self any object value
-     */
-    protected function GetObject(string $field) : self
-    {
-        if (!array_key_exists($field, $this->objects)) 
-            throw new KeyNotFoundException($field);
-        
-        $value = $this->objects[$field]->GetObject();
-        if ($value !== null) return $value; 
-        else throw new NullValueException($field);
-    }
+    /** The field with the object ID */
+    private FieldTypes\StringType $idfield;
+    
+    /** @var array<string, FieldTypes\BaseField> */
+    private array $fieldsByName = array();
     
     /** 
-     * Same as GetObject() but returns null instead of throwing exceptions 
-     * @see BaseObject::GetObject()
+     * Fields for each subclass, ordered derived->base 
+     * @var array<class-string<self>, array<FieldTypes\BaseField>>
      */
-    protected function TryGetObject(string $field) : ?self
-    {
-        if (!array_key_exists($field, $this->objects)) 
-            throw new KeyNotFoundException($field);
-        
-        return $this->objects[$field]->GetObject();
-    }
+    private array $fieldsByClass = array();
     
-    /**
-     * Checks if the object reference is not-null without actually loading it (faster)
-     * @param string $field the field name holding the reference
-     * @throws KeyNotFoundException if the field name is invalid
-     * @return bool true if the object reference is not null
-     */
-    protected function HasObject(string $field) : bool
-    {
-        if (!array_key_exists($field, $this->objects)) 
-            throw new KeyNotFoundException($field);
-        
-        return (bool)($this->objects[$field]->GetValue());
-    }
-    
-    /**
-     * Gets the ID of a referenced object without actually loading it (faster)
-     * @param string $field the field name holding the reference
-     * @throws KeyNotFoundException if the field name is invalid
-     * @throws NullValueException if the field value is null
-     * @return string the ID of the referenced object
-     */
-    protected function GetObjectID(string $field) : string
-    {
-        if (!array_key_exists($field, $this->objects)) 
-            throw new KeyNotFoundException($field);
-        
-        $value = $this->objects[$field]->GetValue();
-        if ($value !== null) return $value; 
-        else throw new NullValueException($field);
-    }
-    
-    /** 
-     * Same as GetObjectID() but returns null instead of throwing exceptions
-     * @see BaseObject::GetObjectID()
-     */
-    protected function TryGetObjectID(string $field) : ?string
-    {
-        if (!array_key_exists($field, $this->objects)) 
-            throw new KeyNotFoundException($field);
-        
-        return $this->objects[$field]->GetValue();
-    }
-    
-    /**
-     * Gets the class name of a referenced object without actually loading it (faster)
-     * @param string $field the field name holding the reference
-     * @throws KeyNotFoundException if the field name is invalid
-     * @return string the class name of the referenced object
-     */
-    protected function GetObjectType(string $field) : string
-    {
-        if (!array_key_exists($field, $this->objects)) 
-            throw new KeyNotFoundException($field);
-        
-        $value = $this->objects[$field]->GetRefClass();
-        if ($value !== null) return $value; 
-        else throw new NullValueException($field);
-    }
-    
-    /**
-     * Gets the class name of a referenced object without actually loading it (faster)
-     * @param string $field the field name holding the reference
-     * @throws KeyNotFoundException if the field name is invalid
-     * @return ?string the class name of the referenced object
-     */
-    protected function TryGetObjectType(string $field) : ?string
-    {
-        if (!array_key_exists($field, $this->objects)) 
-            throw new KeyNotFoundException($field);
-        
-        return $this->objects[$field]->GetRefClass();
-    }
-    
-    /**
-     * Deletes the object referenced in the field
-     * @param string $field the field name holding the reference
-     * @return $this
-     */
-    protected function DeleteObject(string $field) : self
-    {
-        if (!array_key_exists($field, $this->objects)) 
-            throw new KeyNotFoundException($field);
-        
-        $this->objects[$field]->DeleteObject(); return $this;
-    }
-    
-    /**
-     * Gets an array of objects that reference this object
-     * @param string $field the field name of the collection
-     * @param int $limit the maximum number of objects to load
-     * @param int $offset the number of objects to skip loading
-     * @throws KeyNotFoundException if the field name is invalid
-     * @return array<string, self> array of objects indexed by their IDs
-     */
-    protected function GetObjectRefs(string $field, ?int $limit = null, ?int $offset = null) : array
-    {
-        if (!array_key_exists($field, $this->objectrefs)) 
-            throw new KeyNotFoundException($field);
-        
-        return $this->objectrefs[$field]->GetObjects($limit, $offset);
-    }
-    
-    /**
-     * Gets the counter of objects referencing this object
-     * @param string $field the field name of the collection
-     * @throws KeyNotFoundException if the field name is invalid
-     * @return int the number of objects
-     */
-    protected function CountObjectRefs(string $field) : int
-    {
-        if (!array_key_exists($field, $this->objectrefs))
-            throw new KeyNotFoundException($field);
-        
-        return $this->objectrefs[$field]->GetValue() ?? 0;
-    }
-    
-    /**
-     * Loads the object that joins together two classes using a FieldTypes\ObjectJoin
-     * @param string $field the field name using the join reference
-     * @param BaseObject $obj the object that is joined together with this one
-     * @throws KeyNotFoundException if the field name is invalid
-     * @throws NullValueException if the given object is not joined to us
-     * @return StandardObject the join object that connects us to $obj
-     */
-    protected function GetJoinObject(string $field, self $obj) : StandardObject
-    {
-        if (!array_key_exists($field, $this->objectrefs)) 
-            throw new KeyNotFoundException($field);
-    
-        if (!$this->objectrefs[$field] instanceof FieldTypes\ObjectJoin)
-            throw new FieldTypeException($field);
-        
-        $value = $this->objectrefs[$field]->GetJoinObject($obj);
-        if ($value !== null) return $value; 
-        else throw new NullValueException($field);
-    }
-    
-    /** 
-     * Same as GetJoinObject() but returns null instead of throwing exceptions 
-     * @see BaseObject::GetJoinObject()
-     */
-    protected function TryGetJoinObject(string $field, self $obj) : ?StandardObject
-    {
-        if (!array_key_exists($field, $this->objectrefs)) 
-            throw new KeyNotFoundException($field);
-        
-        if (!$this->objectrefs[$field] instanceof FieldTypes\ObjectJoin)
-            throw new FieldTypeException($field);
-        
-        return $this->objectrefs[$field]->GetJoinObject($obj);
-    }
-    
-    /**
-     * Deletes all objects that reference this object
-     * @param string $field the field name of the collection
-     * @return $this
-     */
-    protected function DeleteObjects(string $field) : self
-    {
-        if (!array_key_exists($field, $this->objectrefs)) 
-            throw new KeyNotFoundException($field);
-        
-        $this->objectrefs[$field]->DeleteObjects(); return $this;
-    }
-    
-    /**
-     * Sets a scalar field to the given value
-     * @param string $field the name of the field
-     * @param mixed $value the value of the scalar to set
-     * @param bool $temp if true, the value is temporary and will not be saved
-     * @throws KeyNotFoundException if the property name is invalid
-     * @return $this
-     */
-    protected function SetScalar(string $field, $value, bool $temp = false) : self
-    {    
-        if (!$temp && $this->database->isReadOnly()) 
-            throw new DatabaseReadOnlyException();
-        
-        if (!array_key_exists($field, $this->scalars))
-        {
-            if ($value === null) return $this;
-            else throw new KeyNotFoundException($field);
-        }
-        
-        if ($this->scalars[$field]->SetValue($value, $temp)) 
-            $this->modified = true;
-        
-        return $this;
-    } 
+    /** true if the object is newly created and not yet saved */
+    private bool $isCreated = false;
 
-    /** 
-     * Increments a counter field by the given delta (thread safe)
-     * @param string $field the name of the counter field
-     * @param int $delta the value to increment by
-     * @throws KeyNotFoundException if the property name is invalid
-     * @throws FieldTypeException if the field is not a counter
-     * @return $this
-     */
-    protected function DeltaCounter(string $field, int $delta) : self
-    {
-        if ($this->database->isReadOnly()) 
-            throw new DatabaseReadOnlyException();
-        
-        if (!array_key_exists($field, $this->scalars)) 
-            throw new KeyNotFoundException($field);
-        
-        if (!$this->scalars[$field] instanceof FieldTypes\Counter)
-            throw new FieldTypeException($field);
-        
-        if ($this->scalars[$field]->Delta($delta))
-            $this->modified = true;
-        
-        return $this;
-    }
-
-    /**
-     * Sets a field to reference the given object
-     * 
-     * Will also call SetObject or AddObjectRef on the given object as appropriate for two-way references
-     * @param string $field the name of the reference field
-     * @param BaseObject $object the object for the field to reference
-     * @param bool $notification true if this is a notification from another object that cross-references this one (internal only!)
-     * @throws KeyNotFoundException if the property name is invalid
-     * @return bool true if this object was modified
-     */
-    protected function BoolSetObject(string $field, ?self $object, bool $notification = false) : bool
-    {
-        if ($this->database->isReadOnly()) 
-            throw new DatabaseReadOnlyException();
-
-        if (!array_key_exists($field, $this->objects)) 
-        {
-            if ($object === null) return false;
-            else throw new KeyNotFoundException($field);
-        }
-        
-        $fieldobj = $this->objects[$field];
-
-        if (!$notification)
-        {            
-            if (($reffield = $fieldobj->GetRefField()) !== null) 
-                $oldref = $fieldobj->GetObject();
-            
-            $modified = $fieldobj->SetObject($object);
-            
-            if ($modified && $reffield !== null)
-            {
-                $usemany = $fieldobj->GetRefIsMany();
-                
-                if ($oldref !== null)
-                {
-                    if ($usemany)
-                         $oldref->RemoveObjectRef($reffield, $this, true);
-                    else $oldref->SetObject($reffield, null, true);
-                    
-                    if ($fieldobj->isAutoDelete()) $oldref->Delete();
-                }
-                
-                if ($object !== null)
-                {
-                    if ($usemany)
-                         $object->AddObjectRef($reffield, $this, true);
-                    else $object->SetObject($reffield, $this, true);
-                }
-            }
-        } 
-        else $modified = $fieldobj->SetObject($object);
-
-        if ($modified) $this->modified = true; return $modified;
-    } 
-
-    /**
-     * Same as BoolSetObject() but returns $this
-     * @see BaseObject::BoolSetObject()
-     * @return $this
-     */
-    protected function SetObject(string $field, ?self $object, bool $notification = false) : self
-    {
-        $this->BoolSetObject($field, $object, $notification); return $this;
-    }
-
-    /**
-     * Adds the given object to a collection of referenced objects
-     * 
-     * Will also call SetObject on the given object to actually create the reference
-     * @param string $field the name of the field of the collection
-     * @param BaseObject $object the object to add to the collection
-     * @param bool $notification true if this is a notification from another object that cross-references this one (internal only!)
-     * @throws KeyNotFoundException if the property name is invalid
-     * @return bool true if this object was modified
-     */
-    protected function AddObjectRef(string $field, self $object, bool $notification = false) : bool
-    {
-        if ($this->database->isReadOnly()) 
-            throw new DatabaseReadOnlyException();        
-        
-        if (!array_key_exists($field, $this->objectrefs)) 
-            throw new KeyNotFoundException($field);
-        
-        $fieldobj = $this->objectrefs[$field];
-        
-        if ($fieldobj->GetIsRefsMany())
-        {
-            $modified = $fieldobj->AddObject($object);
-        }
-        else
-        {
-            $update = $notification || $object->BoolSetObject($fieldobj->GetRefField(), $this, true);
-            
-            $modified = $update ? $fieldobj->AddObject($object) : false;
-        }
-        
-        if ($modified) $this->modified = true; return $modified;
-    }
+    /** true if the object has been deleted */
+    private bool $isDeleted = false;
     
-    /**
-     * Removes the given object from a collection of referenced objects
-     * @param string $field the name of the field of the collection
-     * @param BaseObject $object the object to add to the collection
-     * @param bool $notification true if this is a notification from another object that cross-references this one (internal only!)
-     * @throws KeyNotFoundException if the property name is invalid
-     * @return bool true if this object was modified
-     */
-    protected function RemoveObjectRef(string $field, self $object, bool $notification = false) : bool
-    {
-        if ($this->database->isReadOnly()) 
-            throw new DatabaseReadOnlyException();
-        
-        if (!array_key_exists($field, $this->objectrefs)) 
-            throw new KeyNotFoundException($field);
-        
-        $fieldobj = $this->objectrefs[$field];
-            
-        if ($fieldobj->GetIsRefsMany())
-        {
-            $modified = $fieldobj->RemoveObject($object);
-        }
-        else
-        {
-            $update = $notification || $object->BoolSetObject($fieldobj->GetRefField(), null, true);
-            
-            $modified = $update ? $fieldobj->RemoveObject($object) : false;
-        }
-        
-        if (!$notification && $fieldobj->isAutoDelete()) $object->Delete();
-        
-        if ($modified) $this->modified = true; return $modified;
-    }
-    
-    /**
-     * Constructs the object by initializing its field template with values from the database
-     * @param ObjectDatabase $database Reference to the database
-     * @param array<string, string> $data array of columns from the DB in the form of name=>value
-     */
-    public function __construct(ObjectDatabase $database, array $data)
-    {
-        $this->database = $database;
-
-        $fields = static::GetFieldTemplate();
-        $fields['id'] = new FieldTypes\Scalar();
-        
-        foreach ($fields as $key=>$field)
-        {
-            $field ??= new FieldTypes\Scalar();
-            $field->Initialize($this->database, $this, $key);
-            $fields[$key] = $field; $this->AddField($key, $field);            
-        }
-        
-        foreach ($data as $column=>$value)
-        {
-            $fields[$column]->InitValue($value);
-        }        
-
-        $this->SubConstruct();
-    }
-    
-    /** Adds the given field object to the correct internal array */
-    private function AddField(string $key, FieldTypes\Scalar $field)
-    {
-        $key = $field->GetMyField();
-
-        if ($field instanceof FieldTypes\ObjectRefs)
-            $this->objectrefs[$key] = $field;
-        else if ($field instanceof FieldTypes\ObjectRef)
-            $this->objects[$key] = $field;
-        else 
-            $this->scalars[$key] = $field;
-    }
-    
-    /** Function to allow subclasses to do something after being constructed without overriding the constructor */
-    protected function SubConstruct() : void { }
-
-    /** 
-     * Collects fields that have changed and saves them to the database
-     * @param bool $onlyMandatory true if only required fields should be saved
-     * @throws RowInsertFailedException if the insert fails (duplicate?)
-     * @return $this
-     */
-    public function Save(bool $onlyMandatory = false) : self
-    {
-        if ($this->deleteLater) { $this->Delete(); return $this; }
-        
-        if (!$this->modified || $this->deleted 
-            || ($onlyMandatory && $this->created)) return $this;
-        
-        $values = array(); $counters = array();
-
-        foreach (array($this->scalars,$this->objects,$this->objectrefs) as &$arr) 
-            foreach ($arr as $key=>$field)
-        {
-            if (!$field->GetDelta() || ($onlyMandatory && !$field->isMandatorySave())) continue;
-
-            if (!$this->created && $field instanceof FieldTypes\Counter)
-            {
-                $counters[$key] = $field->GetDBValue();
-            }
-            else $values[$key] = $field->GetDBValue();
-            
-            $field->ResetDelta();
-        }
-        
-        if ($this->created)
-        {
-            $this->database->InsertObject($this, $values);
-        }
-        else $this->database->SaveObject($this, $values, $counters);
-        
-        $this->created = false; return $this;
-    } 
-    
-    /** whether or not this object has been modified */
-    private bool $modified = false;
-    
-    /** whether or not this object has been deleted */
-    private bool $deleted = false; 
-    
-    /** 
-     * whether or not this object has been, or should be considered, deleted
-     * 
-     * This function can be overriden with a custom validity-check, and is used as a filter when loading objects 
-     */
-    public function isDeleted() : bool { return $this->deleted; }
-    
-    /** whether or not this object has been deleted by DB */
-    private bool $dbDeleted = false;
-    
-    /** Deletes this object without sending to the DB */
-    public function NotifyDBDeleted() : void { $this->dbDeleted = true; $this->Delete(); }
-    
-    /** Deletes this object from the DB */
-    public function Delete() : void
-    {
-        foreach ($this->objects as $field=>$ref)
-        {            
-            if ($ref->GetValue()) $this->SetObject($field, null);
-        }
-        
-        foreach ($this->objectrefs as $field=>$refs)
-        {
-            if (!$refs->GetValue()) continue;
-            
-            foreach ($refs->GetObjects() as $object) 
-            {
-                $this->RemoveObjectRef($field, $object);
-            }
-        }
-        
-        if (!$this->deleted && !$this->dbDeleted) 
-            $this->database->DeleteObject($this); 
-        
-        $this->deleted = true;
-    }
-    
+    /** true if the object should be deleted when saved */
     private bool $deleteLater = false;
     
-    /** Schedules the object to be deleted when Save() is called */
-    protected function DeleteLater() : void { $this->deleteLater = true; }
-
-    /** True if this object has been created and not yet saved to DB */
-    private bool $created = false; 
+    /** Returns the object's associated database */
+    public function GetDatabase() : ObjectDatabase { return $this->database; }
     
-    /** True if this object has been created and not yet saved to DB (should not be overriden) */
-    public function isCreated() : bool { return $this->created; }
+    /** Returns the associated Api Package */
+    public function GetApiPackage() : ApiPackage { return $this->database->GetApiPackage(); }
+    
+    /**
+     * Construct an object from loaded database data
+     * @param ObjectDatabase $database database
+     * @param array<string, ?scalar> $data db columns
+     * @param bool $created true if this is a new object
+     */
+    public function __construct(ObjectDatabase $database, array $data, bool $created)
+    {
+        $this->isCreated = $created;
+        $this->database = $database;
+        
+        $this->CreateFields();
+
+        foreach ($data as $column=>$value)
+            $this->fieldsByName[$column]->InitDBValue($value);
+
+        if ($created)
+            $this->idfield->SetValue(static::GenerateID());
+        
+        $this->PostConstruct($created);
+    }
     
     /** 
-     * Creates a new object of this type in the database and returns it 
-     * @return static 
+     * Performs any subclass-specific initialization
+     * @param bool $created true if this is a new object
      */
-    protected static function BaseCreate(ObjectDatabase $database) : self
+    protected function PostConstruct(bool $created) : void { }
+
+    /**
+     * Instantiates the object's database fields - subclasses should override!
+     * Subclasses must create their field objects and send to RegisterFields()
+     * Child classes *must* register first, then call their parent's CreateFields
+     */
+    protected function CreateFields() : void
     {
-        $obj = $database->GenerateObject(static::class); 
+        $this->idfield = new FieldTypes\StringType('id');
         
-        $obj->modified = true; $obj->created = true;
+        foreach (static::GetTableClasses() as $table)
+        {
+            // make sure idfield shows up in every fieldsByClass
+            $this->RegisterFields(array($this->idfield), $table);
+        }
+    }
+    
+    /**
+     * Registers fields for the object so the DB can save/load objects
+     * @param array<FieldTypes\BaseField> $fields array of fields to register
+     * @param class-string<self> $table class table the fields belong to
+     */
+    final protected function RegisterFields(array $fields, string $table) : void
+    {
+        $this->fieldsByClass[$table] ??= array();
         
-        foreach ($obj->objectrefs as $refs) $refs->InitValue(0);
+        foreach ($fields as $field)
+        {
+            if (isset($this->database))
+                $field->SetParent($this);
+            
+            $this->fieldsByClass[$table][] = $field;
+            $this->fieldsByName[$field->GetName()] = $field;
+        }
+    }
+    
+    /**
+     * Helper for base classes without tables to register fields with the last child table
+     * @param array<FieldTypes\BaseField> $fields array of fields to register
+     * @throws Exceptions\NoChildTableException if $table is null and no previously registered table
+     */
+    final protected function RegisterChildFields(array $fields) : void
+    {
+        if (count($this->fieldsByClass) === 0)
+            throw new Exceptions\NoChildTableException(static::class);
         
-        assert($obj instanceof static); return $obj;
+        $table = array_key_last($this->fieldsByClass);
+        $this->RegisterFields($fields, $table);
+    }
+    
+    /** Returns this object's base-unique ID */
+    public function ID() : string { return $this->idfield->GetValue(); }
+
+    /** Returns the string "id:class" where id is the object ID and class is its short class name */
+    final public function __toString() : string 
+    { 
+        return $this->ID().':'.static::class;
+    }
+    
+    /** Returns the given object's as a string if not null, else null */
+    final public static function toString(?self $obj) : ?string 
+    {
+        return $obj !== null ? (string)$obj : null; 
+    }
+    
+    /** Returns true if this object is newly created and not yet saved */
+    final public function isCreated() : bool { return $this->isCreated; }
+    
+    /** Returns true if this object has been deleted */
+    final public function isDeleted() : bool { return $this->isDeleted; }
+    
+    /** Returns true if this object has a modified field */
+    final protected function isModified() : bool
+    {
+        foreach ($this->fieldsByName as $field)
+        {
+            if ($field->isModified()) return true;
+        }
+        return false;
+    }
+
+    /** Sets all fields as unmodified */
+    final public function SetUnmodified() : void
+    {
+        foreach ($this->fieldsByName as $field)
+            $field->SetUnmodified();
+    }
+
+    /** Deletes the object from the database */
+    public function Delete() : void
+    {
+        $this->database->DeleteObject($this);
+    }
+    
+    /** 
+     * Schedules the object to be deleted when Save() is called 
+     * @return $this
+     */
+    final protected function DeleteLater(bool $delete = true) : self 
+    { 
+        $this->deleteLater = $delete; return $this;
+    }
+    
+    /** 
+     * Notifies this object that the DB is about to delete it - internal call only
+     * Child classes can extend this if they need extra on-delete logic
+     */
+    public function NotifyPreDeleted() : void { }
+    
+    /** 
+     * Notifies this object that the DB has deleted it - internal call only
+     * Child classes can extend this if they need extra on-delete logic - MUST call parent
+     */
+    public function NotifyPostDeleted() : void
+    {
+        $this->isDeleted = true;
+    }
+    
+    /**
+     * Inserts this object to the DB if created, updates this object if modified
+     * @param bool $onlyAlways true if we only want to save alwaysSave fields (see Field saveOnRollback)
+     * @throws Exceptions\SaveAfterDeleteException if the object is deleted
+     * @return $this
+     */
+    public function Save(bool $onlyAlways = false) : self
+    {
+        if ($this->isDeleted)
+            throw new Exceptions\SaveAfterDeleteException();
+        else if ($this->deleteLater)
+            $this->database->DeleteObject($this);
+        else $this->database->SaveObject($this, $this->fieldsByClass, $onlyAlways);
+
+        $this->isCreated = false;
+        return $this;
     }
 }

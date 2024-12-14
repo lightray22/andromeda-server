@@ -1,11 +1,7 @@
-<?php namespace Andromeda\Apps\Files; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Apps\Files; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/Main.php"); use Andromeda\Core\Main;
-
-require_once(ROOT."/Core/Database/ObjectDatabase.php"); use Andromeda\Core\Database\ObjectDatabase;
-require_once(ROOT."/Core/Database/FieldTypes.php"); use Andromeda\Core\Database\FieldTypes;
-require_once(ROOT."/Core/Database/QueryBuilder.php"); use Andromeda\Core\Database\QueryBuilder;
-require_once(ROOT."/Core/IOFormat/InputFile.php"); use Andromeda\Core\IOFormat\InputPath;
+use Andromeda\Core\Database\{FieldTypes, ObjectDatabase, QueryBuilder};
+use Andromeda\Core\IOFormat\InputPath;
 
 require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
 
@@ -23,8 +19,8 @@ class File extends Item
     public static function GetFieldTemplate() : array
     {
         return array_merge(parent::GetFieldTemplate(), array(
-            'size' => null,   
-            'parent' => new FieldTypes\ObjectRef(Folder::class, 'files')
+            'size' => new FieldTypes\IntType(),   
+            'obj_parent' => new FieldTypes\ObjectRef(Folder::class, 'files')
         ));
     }
     
@@ -181,7 +177,7 @@ class File extends Item
     /** @return static */
     public static function NotifyCreate(ObjectDatabase $database, Folder $parent, ?Account $account, string $name) : self
     {        
-        return parent::BaseCreate($database)
+        return static::BaseCreate($database)
             ->SetObject('filesystem',$parent->GetFilesystem())
             ->SetObject('parent',$parent)
             ->SetObject('owner', $account)
@@ -318,9 +314,9 @@ class File extends Item
     {
         $q = new QueryBuilder();
         
-        $q->Join($database, Folder::class, 'id', static::class, 'parent')->Where($q->And(
-            $q->Equals($database->GetClassTableName(File::class).'.owner', $account->ID()),
-            $q->NotEquals($database->GetClassTableName(Folder::class).'.owner', $account->ID())));
+        $q->Join($database, Folder::class, 'id', static::class, 'obj_parent')->Where($q->And(
+            $q->Equals($database->GetClassTableName(File::class).'.obj_owner', $account->ID()),
+            $q->NotEquals($database->GetClassTableName(Folder::class).'.obj_owner', $account->ID())));
 
         return array_filter(static::LoadByQuery($database, $q), function(File $file){ return !$file->isWorldAccess(); });
     }
@@ -339,7 +335,7 @@ class File extends Item
     /**
      * Returns a printable client object of the file
      * @see Item::SubGetClientObject()
-     * @return array|NULL null if deleted, else `{size:int}`
+     * @return ?array null if deleted, else `{size:int}`
      */
     public function TryGetClientObject(bool $owner = false, bool $details = false) : ?array
     {

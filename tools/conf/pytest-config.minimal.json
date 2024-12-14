@@ -1,0 +1,13 @@
+{
+    "interfaces":
+    {
+        "cli": "."
+    },
+    "databases":
+    {
+        "sqlite": 
+        {
+            "dbpath":"../integration.s3db"
+        }
+    }
+}

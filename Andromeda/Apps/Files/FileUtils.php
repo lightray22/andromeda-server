@@ -1,9 +1,7 @@
-<?php namespace Andromeda\Apps\Files; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Apps\Files; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Apps/Files/Config.php");
-
-require_once(ROOT."/Core/Exceptions/ErrorManager.php"); use Andromeda\Core\Exceptions\ErrorManager;
-require_once(ROOT."/Core/Database/ObjectDatabase.php"); use Andromeda\Core\Database\ObjectDatabase;
+use Andromeda\Core\Errors\ErrorManager;
+use Andromeda\Core\Database\ObjectDatabase;
 
 require_once(ROOT."/Apps/Files/Storage/Exceptions.php"); use Andromeda\Apps\Files\Storage\{FileReadFailedException, FileWriteFailedException};
 
@@ -36,7 +34,7 @@ class FileUtils
         
         if ($strict && strlen($data) !== $bytes)
         {
-            ErrorManager::GetInstance()->LogDebug(array(
+            ErrorManager::GetInstance()->LogDebugInfo(array(
                 'read'=>strlen($data), 'wanted'=>$bytes));
             
             throw new FileReadFailedException();
@@ -67,7 +65,7 @@ class FileUtils
         
         if ($written !== strlen($data))
         {
-            ErrorManager::GetInstance()->LogDebug(array(
+            ErrorManager::GetInstance()->LogDebugInfo(array(
                 'wrote'=>$written, 'wanted'=>strlen($data)));
             
             throw new FileWriteFailedException();

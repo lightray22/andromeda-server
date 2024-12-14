@@ -1,29 +1,12 @@
-<?php namespace Andromeda\Apps\Files\Storage; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Apps\Files\Storage; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/Database/ObjectDatabase.php"); use Andromeda\Core\Database\ObjectDatabase;
-require_once(ROOT."/Core/IOFormat/Input.php"); use Andromeda\Core\IOFormat\Input;
-require_once(ROOT."/Core/IOFormat/SafeParam.php"); use Andromeda\Core\IOFormat\SafeParam;
-require_once(ROOT."/Core/Exceptions/Exceptions.php"); use Andromeda\Core\Exceptions;
+use Andromeda\Core\Database\{FieldTypes, ObjectDatabase};
+use Andromeda\Core\IOFormat\Input;
 
 require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
 require_once(ROOT."/Apps/Files/Filesystem/FSManager.php"); use Andromeda\Apps\Files\Filesystem\FSManager;
 require_once(ROOT."/Apps/Files/Storage/Exceptions.php");
 require_once(ROOT."/Apps/Files/Storage/FWrapper.php");
-
-/** Exception indicating that the FTP extension is not installed */
-class FTPExtensionException extends ActivateException    { public $message = "FTP_EXTENSION_MISSING"; }
-
-/** Exception indicating that the FTP server connection failed */
-class FTPConnectionFailure extends ActivateException     { public $message = "FTP_CONNECTION_FAILURE"; }
-
-/** Exception indicating that authentication on the FTP server failed */
-class FTPAuthenticationFailure extends ActivateException { public $message = "FTP_AUTHENTICATION_FAILURE"; }
-
-/** Exception indicating that a random write was requested (FTP does not support it) */
-class FTPAppendOnlyException extends Exceptions\ClientErrorException { public $message = "FTP_WRITE_APPEND_ONLY"; }
-
-/** Exception indicating that FTP does not support file copy */
-class FTPCopyFileException extends Exceptions\ClientErrorException { public $message = "FTP_NO_COPY_SUPPORT"; }
 
 Account::RegisterCryptoHandler(function(ObjectDatabase $database, Account $account, bool $init){ 
     if (!$init) FTP::DecryptAccount($database, $account); });
@@ -44,49 +27,53 @@ class FTP extends FTPBase2
     public static function GetFieldTemplate() : array
     {
         return array_merge(parent::GetFieldTemplate(), array(
-            'hostname' => null,
-            'port' => null,
-            'implssl' => null, // if true, use implicit SSL, else explicit/none
+            'hostname' => new FieldTypes\StringType(),
+            'port' => new FieldTypes\IntType(),
+            'implssl' => new FieldTypes\BoolType(), // if true, use implicit SSL, else explicit/none
         ));
     }
     
     /**
      * Returns a printable client object of this FTP storage
-     * @return array `{hostname:string, port:?int, implssl:bool}`
+     * @return array<mixed> `{hostname:string, port:?int, implssl:bool}`
      * @see Storage::GetClientObject()
      */
     public function GetClientObject(bool $activate = false) : array
     {
-        return array_merge(parent::GetClientObject($activate), array(
+        return parent::GetClientObject($activate) + array(
             'hostname' => $this->GetScalar('hostname'),
             'port' => $this->TryGetScalar('port'),
             'implssl' => $this->GetScalar('implssl'),
-        ));
+        );
     }
     
-    public static function GetCreateUsage() : string { return parent::GetCreateUsage()." --hostname alphanum [--port uint16] [--implssl bool]"; }
+    public static function GetCreateUsage() : string { return parent::GetCreateUsage()." --hostname alphanum [--port ?uint16] [--implssl bool]"; }
     
     public static function Create(ObjectDatabase $database, Input $input, FSManager $filesystem) : self
     {
-        return parent::Create($database, $input, $filesystem)
-            ->SetScalar('hostname', $input->GetParam('hostname', SafeParam::TYPE_HOSTNAME))
-            ->SetScalar('port', $input->GetOptParam('port', SafeParam::TYPE_UINT16))
-            ->SetScalar('implssl', $input->GetOptParam('implssl', SafeParam::TYPE_BOOL) ?? false);
+        $params = $input->GetParams();
+        
+        return parent::Create($database, $params, $filesystem)
+            ->SetScalar('hostname', $params->GetParam('hostname')->GetHostname())
+            ->SetScalar('port', $params->GetOptParam('port',null)->GetNullUint16())
+            ->SetScalar('implssl', $params->GetOptParam('implssl',false)->GetBool());
     }
     
     public static function GetEditUsage() : string { return parent::GetEditUsage()." [--hostname alphanum] [--port ?uint16] [--implssl bool]"; }
     
     public function Edit(Input $input) : self
     {
-        if ($input->HasParam('hostname')) $this->SetScalar('hostname',$input->GetParam('hostname', SafeParam::TYPE_HOSTNAME));
-        if ($input->HasParam('implssl')) $this->SetScalar('implssl',$input->GetParam('implssl', SafeParam::TYPE_BOOL));
-        if ($input->HasParam('port')) $this->SetScalar('port',$input->GetNullParam('port', SafeParam::TYPE_UINT16));
+        $params = $input->GetParams();
         
-        return parent::Edit($input);
+        if ($params->HasParam('hostname')) $this->SetScalar('hostname',$params->GetParam('hostname')->GetHostname());
+        if ($params->HasParam('port')) $this->SetScalar('port',$params->GetParam('port')->GetNullUint16());
+        if ($params->HasParam('implssl')) $this->SetScalar('implssl',$params->GetParam('implssl')->GetBool());
+        
+        return parent::Edit($params);
     }
     
     /** Check for the FTP extension */
-    public function SubConstruct() : void
+    public function PostConstruct() : void
     {
         if (!function_exists('ftp_connect')) throw new FTPExtensionException();
     }
@@ -158,8 +145,9 @@ class FTP extends FTPBase2
     protected function SubReadFolder(string $path) : array
     {        
         $list = ftp_nlist($this->ftp, $this->GetPath($path));
+        // TODO PHP Note that this parameter isn't escaped so there may be some issues with filenames containing spaces and other characters. 
         if ($list === false) throw new FolderReadFailedException();
-        return array_map(function($item){ return basename($item); }, $list);
+        return array_map(function($item){ return basename($item); }, $list); // TODO why is basename needed? check on . and .. behavior
     }    
     
     protected function SubCreateFolder(string $path) : self

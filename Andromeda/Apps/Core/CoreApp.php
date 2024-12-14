@@ -1,431 +1,332 @@
-<?php namespace Andromeda\Apps\Core; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Apps\Core; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/Main.php"); use Andromeda\Core\{Main, FailedAppLoadException};
-require_once(ROOT."/Core/BaseApp.php"); use Andromeda\Core\{BaseApp, InstalledApp};
-require_once(ROOT."/Core/Config.php"); use Andromeda\Core\{Config, InvalidAppException, MissingMetadataException};
-require_once(ROOT."/Core/Utilities.php"); use Andromeda\Core\Utilities;
-require_once(ROOT."/Core/Emailer.php"); use Andromeda\Core\{EmailRecipient, Emailer};
-require_once(ROOT."/Core/Exceptions/Exceptions.php"); use Andromeda\Core\Exceptions;
-require_once(ROOT."/Core/Exceptions/ErrorLog.php"); use Andromeda\Core\Exceptions\ErrorLog;
-require_once(ROOT."/Core/Database/Database.php"); use Andromeda\Core\Database\{Database, DatabaseException};
-require_once(ROOT."/Core/IOFormat/Input.php"); use Andromeda\Core\IOFormat\Input;
-require_once(ROOT."/Core/IOFormat/Output.php"); use Andromeda\Core\IOFormat\Output;
-require_once(ROOT."/Core/IOFormat/SafeParam.php"); use Andromeda\Core\IOFormat\SafeParam;
-require_once(ROOT."/Core/IOFormat/SafeParams.php"); use Andromeda\Core\IOFormat\SafeParams;
-require_once(ROOT."/Core/IOFormat/IOInterface.php"); use Andromeda\Core\IOFormat\{IOInterface, OutputHandler};
-require_once(ROOT."/Core/Logging/RequestLog.php"); use Andromeda\Core\Logging\RequestLog;
-require_once(ROOT."/Core/Logging/ActionLog.php"); use Andromeda\Core\Logging\ActionLog;
-require_once(ROOT."/Core/Logging/BaseAppLog.php"); use Andromeda\Core\Logging\BaseAppLog;
+use Andromeda\Core\{ApiPackage, BaseApp, Config, Emailer, EmailRecipient, Utilities};
+use Andromeda\Core\Database\PDODatabase;
+use Andromeda\Core\Errors\ErrorLog;
+use Andromeda\Core\Exceptions as CoreExceptions;
+use Andromeda\Core\IOFormat\{Input, Output, SafeParams, OutputHandler, IOInterface};
+use Andromeda\Core\Logging\ActionLog as BaseActionLog;
 
-use Andromeda\Core\{UnknownActionException, MailSendException};
-
-/** Exception indicating that the specified mailer object does not exist */
-class UnknownMailerException extends Exceptions\ClientNotFoundException { public $message = "UNKNOWN_MAILER"; }
-
-/** Client error indicating that the mailer config failed */
-class MailSendFailException extends Exceptions\ClientErrorException { public $message = "MAIL_SEND_FAILURE"; use Exceptions\Copyable; }
-
-/** Client error indicating that the database config failed */
-class DatabaseFailException extends Exceptions\ClientErrorException { public $message = "INVALID_DATABASE"; }
-
-/** Exception indicating that admin-level access is required */
-class AdminRequiredException extends Exceptions\ClientDeniedException { public $message = "ADMIN_REQUIRED"; }
+use Andromeda\Apps\Accounts\Authenticator;
 
 /**
  * Server management/info app included with the framework.
  * 
- * Handles DB config, install, and getting/setting config/logs.
+ * Handles getting/setting config/logs, app enable/disable.
+ * Depends on the accountsApp being present but this could be refactored away easily.
+ * If the accountsApp is disabled, only privileged interfaces are considered admin
+ * 
+ * @phpstan-import-type ActionLogJ from BaseActionLog
+ * @phpstan-import-type ConfigJ from Config
+ * @phpstan-import-type EmailerJ from Emailer
+ * @phpstan-import-type ErrorLogJ from ErrorLog
+ * @phpstan-import-type PDODatabaseInfoJ from PDODatabase
+ * @phpstan-import-type PDODatabaseConfigJ from PDODatabase
  */
-class CoreApp extends InstalledApp
+class CoreApp extends BaseApp
 {
-    public static function getName() : string { return 'core'; }
+    private Config $config;
     
-    protected static function getLogClass() : string { return AccessLog::class; }
+    public function getName() : string { return 'core'; }
     
-    protected static function getConfigClass() : string { return Config::class; }
-    
-    protected function GetConfig() : Config { return $this->config; }
-    
-    public static function getVersion() : string { return andromeda_version; }
-    
-    protected static function getTemplateFolder() : string { return ROOT.'/Core'; }
-    
-    protected static function getUpgradeScripts() : array
-    {
-        return require_once(ROOT.'/Core/_upgrade/scripts.php');
-    }
-    
-    protected static function getInstallUsage() : array
-    {
-        $istr = 'install'; $ustr = 'upgrade';
-        
-        foreach (Utilities::getClassesMatching(InstalledApp::class) as $class)
-        {
-            if ($if = $class::getInstallFlags()) $istr .= " $if";
-            if ($uf = $class::getUpgradeFlags()) $ustr .= " $uf";
-        }
+    public function getVersion() : string { return andromeda_version; }
 
-        return array($istr,$ustr);
-    }
-    
-    public static function getUsage() : array
+    /** @return class-string<ActionLog> */
+    public function getLogClass() : string { return ActionLog::class; }
+
+    public function getUsage() : array
     {
-        $retval = array_merge(parent::getUsage(),array(
+        return array(
             'usage [--appname alphanum]',
-            'dbconf '.Database::GetInstallUsage(),
-            ...array_map(function($u){ return "(dbconf) $u"; }, Database::GetInstallUsages()),
-            'listapps',
             'phpinfo',
             'serverinfo',
-            'testmail [--mailid id] [--dest email]',
+            'scanapps',
             'enableapp --appname alphanum',
             'disableapp --appname alphanum',
             'getconfig',
             'getdbconfig',
             'setconfig '.Config::GetSetConfigUsage(),
+            'testmail [--mailid id] [--dest email] [--testkey int]',
             'getmailers',
             'createmailer [--test email] '.Emailer::GetCreateUsage(),
             ...array_map(function($u){ return "(createmailer) $u"; },Emailer::GetCreateUsages()),
             'deletemailer --mailid id',
-            'geterrors '.ErrorLog::GetPropUsage().' '.ErrorLog::GetLoadUsage(),
-            'counterrors '.ErrorLog::GetPropUsage().' '.ErrorLog::GetCountUsage(),
-            'getrequests '.RequestLog::GetPropUsage().' '.RequestLog::GetLoadUsage().' [--expand bool] [--applogs bool]',
-            'countrequests '.RequestLog::GetPropUsage().' '.RequestLog::GetCountUsage(),
-            'getallactions '.ActionLog::GetPropUsage().' '.ActionLog::GetLoadUsage().' [--expand bool] [--applogs bool]',
-            'countallactions '.ActionLog::GetPropUsage().' '.ActionLog::GetCountUsage()
-        ));
-        
-        $logGet = array(); $logCount = array(); $logApps = array();
-        foreach (Main::GetInstance()->GetApps() as $appname=>$app)
-        {
-            if (($class = $app::getLogClass()) !== null)
-            {
-                $logApps[] = $appname;
-                $logGet[] = "(getactions) --appname $appname ".$class::GetPropUsage();
-                $logCount[] = "(countactions) --appname $appname ".$class::GetPropUsage();
-            }
-        }
-        
-        $retval[] = 'getactions --appname '.implode('|',$logApps).' '.BaseAppLog::GetBasePropUsage().' '.BaseAppLog::GetLoadUsage().' [--expand bool]'; array_push($retval, ...$logGet);
-        $retval[] = 'countactions --appname '.implode('|',$logApps).' '.BaseAppLog::GetBasePropUsage().' '.BaseAppLog::GetCountUsage().' [--expand bool]'; array_push($retval, ...$logCount);
-        
-        return $retval;
+            'geterrors '.ErrorLog::GetPropUsage($this->database).' '.ErrorLog::GetLoadUsage(),
+            'counterrors '.ErrorLog::GetPropUsage($this->database).' '.ErrorLog::GetCountUsage(),
+            'getactions '.BaseActionLog::GetPropUsage($this->database).' '.BaseActionLog::GetLoadUsage().' [--expand bool]',
+            ...array_map(function($u){ return "(getactions) $u"; },BaseActionLog::GetAppPropUsages($this->database)),
+            'countactions '.BaseActionLog::GetPropUsage($this->database).' '.BaseActionLog::GetCountUsage(),
+            ...array_map(function($u){ return "(countactions) $u"; },BaseActionLog::GetAppPropUsages($this->database)),
+        );
     }
-
+    
+    public function __construct(ApiPackage $api)
+    {
+        parent::__construct($api);
+        
+        $this->config = Config::GetInstance($this->database);
+    }
+    
     /**
      * {@inheritDoc}
-     * @throws UnknownActionException if the given action is not valid
+     * @throws CoreExceptions\UnknownActionException if the given action is not valid
      * @see BaseApp::Run()
      */
     public function Run(Input $input)
     {
-        $action = $input->GetAction();
-        
-        if ($action !== 'dbconf' && $action !== 'usage' 
-            && ($retval = parent::Run($input)) !== false) return $retval;
-        
-        $useAuth = array_key_exists('accounts', Main::GetInstance()->GetApps());
-        
-        /* if the Accounts app is installed, use it for 
-         * authentication, else check interface privilege */
-        if ($useAuth)
+        // if the accounts app is installed, use it for authentication
+        if (array_key_exists('accounts', $this->API->GetAppRunner()->GetApps()))
         {
-            require_once(ROOT."/Apps/Accounts/Authenticator.php");
-            require_once(ROOT."/Apps/Core/FullAccessLog.php");
-            
-            $authenticator = \Andromeda\Apps\Accounts\Authenticator::TryAuthenticate(
+            $authenticator = Authenticator::TryAuthenticate(
                 $this->database, $input, $this->API->GetInterface());
             
             $isAdmin = $authenticator !== null && $authenticator->isAdmin();
         }
-        else // not using the accounts app
+        else // not using the accounts app, check interface privilege
         {
-            require_once(ROOT."/Apps/Core/AccessLog.php");
-            
-            $authenticator = null; $isAdmin = $this->API->GetInterface()->isPrivileged();
+            $authenticator = null; 
+            $isAdmin = $this->API->GetInterface()->isPrivileged();
         }
         
-        $accesslog = null; if (isset($this->database))
-            $accesslog = AccessLog::Create($this->database, $authenticator, $isAdmin); 
-        
-        $input->SetLogger($accesslog);
-                
-        switch ($action)
+        $actionlog = null; if ($this->wantActionLog())
         {
-            case 'usage':    return $this->GetUsages($input);
-            case 'dbconf':   return $this->ConfigDB($input, $isAdmin);
-            case 'listapps': return $this->ListApps($input, $isAdmin);
+            $actionlog = ActionLog::Create($this->database, $this->API->GetInterface(), $input);
+            $actionlog->SetAuth($authenticator)->SetAdmin($isAdmin);
+            $this->setActionLog($actionlog);
+        }
+        
+        $params = $input->GetParams();
+
+        switch ($input->GetAction())
+        {
+            case 'usage':    return $this->GetUsages($params);
             
-            case 'phpinfo':    $this->PHPInfo($input, $isAdmin); return;
-            case 'serverinfo': return $this->ServerInfo($input, $isAdmin);
+            case 'phpinfo':    $this->PHPInfo($isAdmin); return null;
+            case 'serverinfo': return $this->ServerInfo($isAdmin);
             
-            case 'testmail':   $this->TestMail($input, $isAdmin, $authenticator, $accesslog); return;
+            case 'scanapps':    return $this->ScanApps($isAdmin);
+            case 'enableapp':   return $this->EnableApp($params, $isAdmin);
+            case 'disableapp':  return $this->DisableApp($params, $isAdmin);
             
-            case 'enableapp':  return $this->EnableApp($input, $isAdmin, $accesslog);
-            case 'disableapp': return $this->DisableApp($input, $isAdmin, $accesslog);
+            case 'getconfig':   return $this->GetConfig($isAdmin);
+            case 'getdbconfig': return $this->GetDBConfig($isAdmin);
+            case 'setconfig':   return $this->SetConfig($params, $isAdmin);
             
-            case 'getconfig':   return $this->RunGetConfig($input, $isAdmin);
-            case 'getdbconfig': return $this->GetDBConfig($input, $isAdmin);
-            case 'setconfig':   return $this->RunSetConfig($input, $isAdmin, $accesslog);
+            case 'testmail':   $this->TestMail($params, $isAdmin, $authenticator, $actionlog); return null;
+            case 'getmailers':   return $this->GetMailers($isAdmin); 
+            case 'createmailer': return $this->CreateMailer($params, $isAdmin, $authenticator, $actionlog);
+            case 'deletemailer': $this->DeleteMailer($params, $isAdmin, $actionlog); return null;
             
-            case 'getmailers':   return $this->GetMailers($input, $isAdmin); 
-            case 'createmailer': return $this->CreateMailer($input, $isAdmin, $authenticator, $accesslog);
-            case 'deletemailer': $this->DeleteMailer($input, $isAdmin, $accesslog); return;
+            case 'geterrors':     return $this->GetErrors($params, $isAdmin);
+            case 'counterrors':   return $this->CountErrors($params, $isAdmin);
             
-            case 'geterrors':     return $this->GetErrors($input, $isAdmin);
-            case 'counterrors':   return $this->CountErrors($input, $isAdmin);
+            case 'getactions':    return $this->GetActions($params, $isAdmin);
+            case 'countactions':  return $this->CountActions($params, $isAdmin);
             
-            case 'getrequests':   return $this->GetRequests($input, $isAdmin);
-            case 'countrequests': return $this->CountRequests($input, $isAdmin);
-            
-            case 'getallactions':   return $this->GetAllActions($input, $isAdmin);
-            case 'countallactions': return $this->CountAllActions($input, $isAdmin);
-            
-            case 'getactions':    return $this->GetActions($input, $isAdmin);
-            case 'countactions':  return $this->CountActions($input, $isAdmin);            
-            
-            default: throw new UnknownActionException();
+            default: throw new CoreExceptions\UnknownActionException($input->GetAction());
         }
     }
         
     /**
      * Collects usage strings from every installed app and returns them
-     * @return string[] array of possible commands
+     * @return string|list<string> array of possible commands
      */
-    protected function GetUsages(Input $input) : array
-    {            
-        $want = $input->GetOptParam('appname',SafeParam::TYPE_ALPHANUM);
+    protected function GetUsages(SafeParams $params)
+    {
+        $want = $params->HasParam('appname') ? $params->GetParam('appname')->GetAlphanum() : null;
         
-        $output = array(); foreach ($this->API->GetApps() as $name=>$app)
+        $apps = $this->API->GetAppRunner()->GetApps();
+
+        $output = array(); foreach ($apps as $name=>$app)
         {
             if ($want !== null && $want !== $name) continue;
             
-            array_push($output, ...array_map(function($line)use($name){ 
-                return "$name $line"; }, $app::getUsage())); 
+            $output = array_merge($output, array_map(function(string $line)use($name){
+                return "$name $line"; }, $app->getUsage())); 
         }
+
+        if ($this->API->GetInterface()->GetOutputMode() === IOInterface::OUTPUT_PLAIN)
+            $output = implode("\r\n", $output);
+
         return $output;
     }
-    
-    /**
-     * Creates a database config with the given input
-     * @throws DatabaseFailException if the config is invalid
-     */
-    protected function ConfigDB(Input $input, bool $isAdmin) : ?string
-    {
-        if (isset($this->database) && !$isAdmin) throw new AdminRequiredException();
-        
-        if (!$this->allowInstall()) throw new UnknownActionException();
-        
-        $this->API->GetInterface()->DisallowBatch();
-        
-        try { return Database::Install($input); }
-        catch (DatabaseException $e) { throw new DatabaseFailException($e); }
-    }
 
     /**
-     * {@inheritDoc}
-     * @see \Andromeda\Core\InstalledApp::Install()
-     * @return array map of enabled apps to their install retval
+     * Prints the phpinfo() page (and sets outmode to NONE)
+     * @throws Exceptions\AdminRequiredException if not admin-level access
      */
-    protected function Install(Input $input) : array
-    {
-        $retval = array('core'=>parent::Install($input));
-        
-        // enable all existing apps
-        foreach (Config::ListApps() as $app)
-        {
-            $retval[$app] = null;
-            $this->GetConfig()->EnableApp($app);
-        }
-
-        // install all enabled apps
-        if (!($input->GetOptParam('noapps',SafeParam::TYPE_BOOL) ?? false)) 
-            foreach ($this->API->GetApps() as $name=>$app)
-        {
-            if ($app instanceof InstalledApp && $app !== $this) 
-                $retval[$name] = $app->Install($input);
-        }
-        
-        return $retval;
-    }
-
-    /**
-     * {@inheritDoc}
-     * @see \Andromeda\Core\InstalledApp::Upgrade()
-     * @return array map of upgraded apps to their upgrade retval
-     */
-    protected function Upgrade(Input $input) : array
-    {
-        $retval = array('core'=>parent::Upgrade($input));
-        
-        // upgrade all installed apps also
-        if (!($input->GetOptParam('noapps',SafeParam::TYPE_BOOL) ?? false))
-            foreach ($this->API->GetApps() as $name=>$app)
-        {
-            if ($app instanceof InstalledApp && $app !== $this)
-                $retval[$name] = $app->Upgrade($input);
-        }
-        
-        return $retval;
-    }
-    
-    /** @see Config::ListApps() */
-    public function ListApps(Input $input, bool $isAdmin) : array
-    {
-        if (!$isAdmin) throw new AdminRequiredException(); return Config::ListApps();
-    }
-    
-    /**
-     * Prints the phpinfo() page
-     * @throws AdminRequiredException if not admin-level access
-     */
-    protected function PHPInfo(Input $input, bool $isAdmin) : void
+    protected function PHPInfo(bool $isAdmin) : void
     {
         $this->API->GetInterface()->SetOutputMode(IOInterface::OUTPUT_PLAIN);
         
-        if (!$isAdmin) throw new AdminRequiredException();
+        if (!$isAdmin) throw new Exceptions\AdminRequiredException();
 
         $retval = Utilities::CaptureOutput(function(){ phpinfo(); });
         
-        $this->API->GetInterface()->RegisterOutputHandler(new OutputHandler(
+        $this->API->GetInterface()->SetOutputHandler(new OutputHandler(
             function()use($retval){ return strlen($retval); }, 
             function(Output $output)use($retval){ echo $retval; }));
     }
     
     /**
      * Gets miscellaneous server identity information
-     * @throws AdminRequiredException if not admin-level access
-     * @return array `{uname:string, server:[various], db:Database::getInfo()}`
-     * @see Database::getInfo()
+     * @throws Exceptions\AdminRequiredException if not admin-level access
+     * @return array{uname:string, php_version:string, zend_version:string, 
+     *   server:array<string,scalar>, load:?list<int>, db:PDODatabaseInfoJ}
      */
-    protected function ServerInfo(Input $input, bool $isAdmin) : array
+    protected function ServerInfo(bool $isAdmin) : array
     {
-        if (!$isAdmin) throw new AdminRequiredException();
+        if (!$isAdmin) throw new Exceptions\AdminRequiredException();
         
+        /** @var array<string,scalar> */
         $server = array_filter($_SERVER, function($key){ 
-            return strpos($key, 'andromeda_') !== 0;; }, ARRAY_FILTER_USE_KEY);
-        
+            return mb_strpos((string)$key, 'andromeda_') !== 0; }, ARRAY_FILTER_USE_KEY);
         unset($server['argv']); unset($server['argc']);
-        
+
+        /** @var list<int>|false */
+        $loadb = function_exists('sys_getloadavg') ? sys_getloadavg() : false;
+
         return array(
-            'uname' => php_uname(),
             'server' => $server,
-            'db' => $this->database->getInfo()
+            'uname' => php_uname(),
+            'load' => is_array($loadb) ? $loadb : null,
+            'php_version' => phpversion(),
+            'zend_version' => zend_version(),
+            'db' => $this->database->GetInternal()->getInfo()
         );
     }
     
     /**
      * Sends a test email via a given mailer
-     * @throws AdminRequiredException if not an admin via the accounts app
-     * @throws UnknownMailerException if the given mailer is invalid
-     * @throws MailSendFailException if sending the email fails
+     * @throws Exceptions\AdminRequiredException if not an admin via the accounts app
+     * @throws Exceptions\UnknownMailerException if the given mailer is invalid
+     * @throws Exceptions\MailSendFailException if sending the email fails
      */
-    protected function TestMail(Input $input, bool $isAdmin, $authenticator, ?AccessLog $accesslog) : void
+    protected function TestMail(SafeParams $params, bool $isAdmin, ?Authenticator $authenticator, ?BaseActionLog $actionlog) : void
     {
-        if (!$isAdmin) throw new AdminRequiredException();
-        
-        if (!$authenticator)
-            $dest = $input->GetParam('dest',SafeParam::TYPE_EMAIL);
-        else $dest = $input->GetOptParam('dest',SafeParam::TYPE_EMAIL);
-    
-        if ($dest) $dests = array(new EmailRecipient($dest));
+        if (!$isAdmin) throw new Exceptions\AdminRequiredException();
+
+        if ($authenticator === null || $params->HasParam('dest'))
+        {
+            $dest = $params->GetParam('dest')->GetEmail();
+            $dests = array(new EmailRecipient($dest));
+        }
         else $dests = $authenticator->GetAccount()->GetContactEmails();
         
         $subject = "Andromeda Email Test";
         $body = "This is a test email from Andromeda";
+
+        if ($params->HasParam('testkey'))
+            $subject .= " ".$params->GetParam('testkey')->GetInt();
         
-        if (($mailer = $input->GetOptParam('mailid', SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_NEVER)) !== null)
+        if ($params->HasParam('mailid'))
         {
+            $mailer = $params->GetParam('mailid')->GetRandstr();
             $mailer = Emailer::TryLoadByID($this->database, $mailer);
-            if ($mailer === null) throw new UnknownMailerException();
-            else $mailer->Activate();
+            
+            if ($mailer === null) 
+                throw new Exceptions\UnknownMailerException();
         }
-        else $mailer = $this->GetConfig()->GetMailer();
+        else $mailer = Emailer::LoadAny($this->database);
         
-        if ($accesslog) $accesslog->LogDetails('mailer',$mailer->ID());
+        if ($actionlog !== null) $actionlog->LogDetails('mailer',$mailer->ID());
         
         try { $mailer->SendMail($subject, $body, false, $dests, false); }
-        catch (MailSendException $e) { throw MailSendFailException::Copy($e); }
+        catch (CoreExceptions\MailSendException $e) { 
+            throw new Exceptions\MailSendFailException($e); }
+    }
+    
+    /** 
+     * Scans for available apps to enable/disable
+     * @see Config::ScanApps() 
+     * @return list<string>
+     */
+    protected function ScanApps(bool $isAdmin) : array
+    {
+        if (!$isAdmin) throw new Exceptions\AdminRequiredException();
+        
+        return Config::ScanApps();
     }
     
     /**
      * Registers (enables) an app
-     * @throws AdminRequiredException if not an admin
-     * @return string[] array of enabled apps
+     * @throws Exceptions\AdminRequiredException if not an admin
+     * @throws Exceptions\InvalidAppException if the app is not valid
+     * @return list<string> array of enabled apps
      */
-    protected function EnableApp(Input $input, bool $isAdmin, ?AccessLog $accesslog) : array
+    protected function EnableApp(SafeParams $params, bool $isAdmin) : array
     {
-        if (!$isAdmin) throw new AdminRequiredException();
-        
-        $app = $input->GetParam('appname',SafeParam::TYPE_ALPHANUM, SafeParams::PARAMLOG_ALWAYS);
-        
-        try { $this->GetConfig()->EnableApp($app); }
-        catch (FailedAppLoadException | MissingMetadataException $e){ 
-            throw new InvalidAppException(); }
+        if (!$isAdmin) throw new Exceptions\AdminRequiredException();
 
-        return $this->GetConfig()->GetApps();
+        $app = $params->GetParam('appname',SafeParams::PARAMLOG_ALWAYS)->GetAlphanum();
+        
+        try { $this->config->EnableApp($app); }
+        catch (CoreExceptions\FailedAppLoadException $e) { 
+            throw new Exceptions\InvalidAppException($app); }
+
+        return $this->config->GetApps();
     }
     
     /**
      * Unregisters (disables) an app
-     * @throws AdminRequiredException if not an admin
-     * @return string[] array of enabled apps
+     * @throws Exceptions\AdminRequiredException if not an admin
+     * @throws Exceptions\InvalidAppException if the app is not valid
+     * @return list<string> array of enabled apps
      */
-    protected function DisableApp(Input $input, bool $isAdmin, ?AccessLog $accesslog) : array
+    protected function DisableApp(SafeParams $params, bool $isAdmin) : array
     {
-        if (!$isAdmin) throw new AdminRequiredException();
+        if (!$isAdmin) throw new Exceptions\AdminRequiredException();
         
-        $app = $input->GetParam('appname',SafeParam::TYPE_ALPHANUM, SafeParams::PARAMLOG_ALWAYS);
+        $app = $params->GetParam('appname',SafeParams::PARAMLOG_ALWAYS)->GetAlphanum();
+
+        if ($app === static::getName()) // cannot disable core!
+            throw new Exceptions\InvalidAppException($app);
         
-        $this->GetConfig()->DisableApp($app);
+        $this->config->DisableApp($app);
         
-        return $this->GetConfig()->GetApps();
+        return $this->config->GetApps();
     }
     
     /**
      * Loads server config
-     * @return array Config
-     * @see Config::GetClientObject() 
+     * @return ConfigJ
      */
-    protected function RunGetConfig(Input $input, bool $isAdmin) : array
+    protected function GetConfig(bool $isAdmin) : array
     {
-        return $this->GetConfig()->GetClientObject($isAdmin);
+        return $this->config->GetClientObject($isAdmin);
     }
     
     /**
      * Loads server DB config
-     * @return array Database
-     * @see Database::GetClientObject()
+     * @return PDODatabaseConfigJ
      */
-    protected function GetDBConfig(Input $input, bool $isAdmin) : array
+    protected function GetDBConfig(bool $isAdmin) : array
     {
-        if (!$isAdmin) throw new AdminRequiredException();
+        if (!$isAdmin) throw new Exceptions\AdminRequiredException();
         
-        return $this->database->GetClientObject();
+        return $this->database->GetInternal()->GetConfig();
     }
 
     /**
      * Sets server config
-     * @throws AdminRequiredException if not an admin
-     * @return array Config
-     * @see Config::GetClientObject()
+     * @throws Exceptions\AdminRequiredException if not an admin
+     * @return ConfigJ
      */
-    protected function RunSetConfig(Input $input, bool $isAdmin, ?AccessLog $accesslog) : array
+    protected function SetConfig(SafeParams $params, bool $isAdmin) : array
     {
-        if (!$isAdmin) throw new AdminRequiredException();
+        if (!$isAdmin) throw new Exceptions\AdminRequiredException();
         
-        return $this->GetConfig()->SetConfig($input)->GetClientObject(true);
+        return $this->config->SetConfig($params)->GetClientObject(true);
     }
     
     /**
      * Returns a list of the configured mailers
-     * @throws AdminRequiredException if not an admin
-     * @return array [id:Emailer]
-     * @see Emailer::GetClientObject()
+     * @throws Exceptions\AdminRequiredException if not an admin
+     * @return array<string, EmailerJ> indexed by ID
      */
-    protected function GetMailers(Input $input, bool $isAdmin) : array
+    protected function GetMailers(bool $isAdmin) : array
     {
-        if (!$isAdmin) throw new AdminRequiredException();
+        if (!$isAdmin) throw new Exceptions\AdminRequiredException();
         
         return array_map(function($m){ return $m->GetClientObject(); }, 
             Emailer::LoadAll($this->database));
@@ -433,192 +334,99 @@ class CoreApp extends InstalledApp
     
     /**
      * Creates a new emailer config
-     * @throws AdminRequiredException if not an admin
-     * @return array Emailer
-     * @see Emailer::GetClientObject()
+     * @throws Exceptions\AdminRequiredException if not an admin
+     * @return EmailerJ
      */
-    protected function CreateMailer(Input $input, bool $isAdmin, $authenticator, ?AccessLog $accesslog) : array
+    protected function CreateMailer(SafeParams $params, bool $isAdmin, ?Authenticator $authenticator, ?BaseActionLog $actionlog) : array
     {
-        if (!$isAdmin) throw new AdminRequiredException();
+        if (!$isAdmin) throw new Exceptions\AdminRequiredException();
         
-        $emailer = Emailer::Create($this->database, $input);
+        $emailer = Emailer::Create($this->database, $params)->Save();
         
-        if (($dest = $input->GetOptParam('test',SafeParam::TYPE_EMAIL)) !== null)
+        if ($params->HasParam('test'))
         {
-            $input->AddParam('mailid',$emailer->ID())->AddParam('dest',$dest);
+            $dest = $params->GetParam('test')->GetEmail();
             
-            $this->TestMail($input, $isAdmin, $authenticator, $accesslog);
+            $params->AddParam('mailid',$emailer->ID())->AddParam('dest',$dest);
+            
+            $this->TestMail($params, $isAdmin, $authenticator, $actionlog);
         }
 
-        if ($accesslog) $accesslog->LogDetails('mailer',$emailer->ID()); 
+        if ($actionlog !== null) $actionlog->LogDetails('mailer',$emailer->ID()); 
         
         return $emailer->GetClientObject();
     }
     
     /**
      * Deletes a configured emailer
-     * @throws AdminRequiredException if not an admin 
-     * @throws UnknownMailerException if given an invalid emailer
+     * @throws Exceptions\AdminRequiredException if not an admin 
+     * @throws Exceptions\UnknownMailerException if given an invalid emailer
      */
-    protected function DeleteMailer(Input $input, bool $isAdmin, ?AccessLog $accesslog) : void
+    protected function DeleteMailer(SafeParams $params, bool $isAdmin, ?BaseActionLog $actionlog) : void
     {
-        if (!$isAdmin) throw new AdminRequiredException();
+        if (!$isAdmin) throw new Exceptions\AdminRequiredException();
         
-        $mailid = $input->GetParam('mailid',SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_ALWAYS);
+        $mailid = $params->GetParam('mailid',SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
         
         $mailer = Emailer::TryLoadByID($this->database, $mailid);
-        if ($mailer === null) throw new UnknownMailerException();
+        if ($mailer === null) throw new Exceptions\UnknownMailerException();
         
-        if ($accesslog && AccessLog::isFullDetails()) 
-            $accesslog->LogDetails('mailer', $mailer->GetClientObject());
+        if ($actionlog !== null) 
+            $actionlog->LogDetails('mailer', $mailer->GetClientObject(), true); // @phpstan-ignore-line no recursive ScalarArray
         
         $mailer->Delete();
     }
     
     /**
-     * Returns the server error log, possibly filtered
-     * @throws AdminRequiredException if not an admin 
+     * Returns all error logs matching the given input, default 100 max and sort by time DESC
+     * @throws Exceptions\AdminRequiredException if not an admin 
+     * @return array<string, ErrorLogJ> indexed by ID
      */
-    protected function GetErrors(Input $input, bool $isAdmin) : array
+    protected function GetErrors(SafeParams $params, bool $isAdmin) : array
     {
-        if (!$isAdmin) throw new AdminRequiredException();
+        if (!$isAdmin) throw new Exceptions\AdminRequiredException();
         
         return array_map(function(ErrorLog $e){ return $e->GetClientObject(); },
-            ErrorLog::LoadByInput($this->database, $input));
+            ErrorLog::LoadByParams($this->database, $params));
     }
     
     /**
-     * Counts server error log entries, possibly filtered
-     * @throws AdminRequiredException if not an admin
+     * Counts all error logs matching the given input
+     * @throws Exceptions\AdminRequiredException if not an admin
      * @return int error log entry count
      */
-    protected function CountErrors(Input $input, bool $isAdmin) : int
+    protected function CountErrors(SafeParams $params, bool $isAdmin) : int
     {
-        if (!$isAdmin) throw new AdminRequiredException();
+        if (!$isAdmin) throw new Exceptions\AdminRequiredException();
         
-        return ErrorLog::CountByInput($this->database, $input);
+        return ErrorLog::CountByParams($this->database, $params);
     }
     
     /**
-     * Returns all request logs matching the given input
-     * @throws AdminRequiredException if not admin
-     * @return array RequestLog
-     * @see RequestLog::GetFullClientObject()
+     * Returns all action logs matching the given input, default 100 max and sort by time DESC
+     * @throws Exceptions\AdminRequiredException if not admin
+     * @return array<string, ActionLogJ> indexed by ID
      */
-    protected function GetRequests(Input $input, bool $isAdmin) : array
+    protected function GetActions(SafeParams $params, bool $isAdmin) : array
     {
-        if (!$isAdmin) throw new AdminRequiredException();
+        if (!$isAdmin) throw new Exceptions\AdminRequiredException();
         
-        $expand = $input->GetOptParam('expand',SafeParam::TYPE_BOOL) ?? false;
-        $applogs = $input->GetOptParam('applogs',SafeParam::TYPE_BOOL) ?? false;
+        $expand = $params->GetOptParam('expand',false)->GetBool();
         
-        $logs = RequestLog::LoadByInput($this->database, $input);
-        
-        $retval = array(); foreach ($logs as $log)
-        {
-            $retval[] = $log->GetFullClientObject($expand,$applogs);
-        }
-        
-        return $retval;
-    }
-    
-    /**
-     * Counts all request logs matching the given input
-     * @throws AdminRequiredException if not admin
-     * @return int log entry count
-     */
-    protected function CountRequests(Input $input, bool $isAdmin) : int
-    {
-        if (!$isAdmin) throw new AdminRequiredException();
-        
-        return RequestLog::CountByInput($this->database, $input);
-    }
-    
-    /**
-     * Returns all action logs matching the given input
-     * @throws AdminRequiredException if not admin
-     * @return array ActionLog
-     * @see ActionLog::GetFullClientObject()
-     */
-    protected function GetAllActions(Input $input, bool $isAdmin) : array
-    {
-        if (!$isAdmin) throw new AdminRequiredException();
-        
-        $expand = $input->GetOptParam('expand',SafeParam::TYPE_BOOL) ?? false;
-        $applogs = $input->GetOptParam('applogs',SafeParam::TYPE_BOOL) ?? false;
-        
-        $logs = ActionLog::LoadByInput($this->database, $input);
-        
-        $retval = array(); foreach ($logs as $log)
-        {
-            $retval[] = $log->GetFullClientObject($expand,$applogs);
-        }
-        
-        return $retval;
+        return array_map(function(BaseActionLog $e)use($expand){ return $e->GetClientObject($expand); },
+            BaseActionLog::LoadByParams($this->database, $params));
     }
     
     /**
      * Counts all action logs matching the given input
-     * @throws AdminRequiredException if not admin
-     * @return int log entry count
+     * @throws Exceptions\AdminRequiredException if not admin
+     * @return int action log entry count
      */
-    protected function CountAllActions(Input $input, bool $isAdmin) : int
+    protected function CountActions(SafeParams $params, bool $isAdmin) : int
     {
-        if (!$isAdmin) throw new AdminRequiredException();
+        if (!$isAdmin) throw new Exceptions\AdminRequiredException();
         
-        return ActionLog::CountByInput($this->database, $input);
-    }
-    
-    /**
-     * Returns all app action logs matching the given input
-     * @throws AdminRequiredException if not admin
-     * @throws InvalidAppException if the given app is invalid
-     * @return array BaseAppLog
-     * @see BaseAppLog::GetFullClientObject()
-     */
-    protected function GetActions(Input $input, bool $isAdmin) : array
-    {
-        if (!$isAdmin) throw new AdminRequiredException();
-        
-        $appname = $input->GetParam("appname",SafeParam::TYPE_ALPHANUM);
-        
-        $apps = $this->API->GetApps(); 
-        
-        if (!array_key_exists($appname, $apps) ||
-            ($class = $apps[$appname]::getLogClass()) === null)
-            throw new InvalidAppException();        
-        
-        $expand = $input->GetOptParam('expand',SafeParam::TYPE_BOOL) ?? false;
-        
-        $logs = $class::LoadByInput($this->database, $input);
-        
-        $retval = array(); foreach ($logs as $log)
-        {
-            $retval[] = $log->GetFullClientObject($expand);
-        }
-        
-        return $retval;
-    }
-    
-    /**
-     * Counts all app action logs matching the given input
-     * @throws AdminRequiredException if not admin
-     * @throws InvalidAppException if the given app is invalid
-     * @return int log entry count
-     */
-    protected function CountActions(Input $input, bool $isAdmin) : int
-    {
-        if (!$isAdmin) throw new AdminRequiredException();
-        
-        $appname = $input->GetParam("appname",SafeParam::TYPE_ALPHANUM);
-        
-        $apps = $this->API->GetApps();
-        
-        if (!array_key_exists($appname, $apps) ||
-            ($class = $apps[$appname]::getLogClass()) === null)
-            throw new InvalidAppException();   
-        
-        return $class::CountByInput($this->database, $input);
+        return BaseActionLog::CountByParams($this->database, $params);
     }
 }
 

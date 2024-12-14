@@ -9,6 +9,9 @@
     "config": {
         "platform": {
             "php": "7.4.0"
+        },
+        "allow-plugins": {
+            "phpstan/extension-installer": false
         }
     },
     "require" : {
@@ -18,7 +21,6 @@
         "ext-pdo": "*",
         "ext-sodium": "*",
         "phpmailer/phpmailer": "^6.0",
-        "clue/arguments": "^2.0",
         "phpgangsta/googleauthenticator": "dev-master",
         "phpseclib/phpseclib" : "^3.0.6",
         "aws/aws-sdk-php": "^3.0"
@@ -38,7 +40,8 @@
         "phpmetrics/phpmetrics": "^2.0",
         "phpunit/phpunit": "^9.5",
         "code-lts/doctum": "^5.4",
-        "phpstan/phpstan": "^1.8",
-        "phpstan/phpstan-strict-rules": "^1.4"
+        "phpstan/phpstan": "^1.9",
+        "phpstan/phpstan-strict-rules": "^1.4",
+        "lipemat/phpstan-wordpress": "^3.4"
     }
 }

@@ -1,24 +1,34 @@
-<?php namespace Andromeda\Core\IOFormat; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Core\IOFormat; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/Exceptions/Exceptions.php"); use Andromeda\Core\Exceptions;
-
-class InvalidParseException extends Exceptions\ServerException { public $message = "PARSE_OUTPUT_INVALID"; }
+use Andromeda\Core\Utilities;
+use Andromeda\Core\Errors\BaseExceptions\ClientException;
 
 /** 
  * Represents the output to be shown to the user 
  * 
  * Output consists of a success/failure flag, an HTTP response code, and a response body.
  * The response body can be anything that is JSON encodable.
+ * @phpstan-import-type ScalarArray from Utilities
+ * @phpstan-import-type ScalarOrArray from Utilities
  */
 class Output
 {
+    public const CODE_SUCCESS               = 200;
+    public const CODE_CLIENT_ERROR          = 400;
+    public const CODE_CLIENT_DENIED         = 403;
+    public const CODE_CLIENT_NOTFOUND       = 404;
+    public const CODE_SERVER_ERROR          = 500;
+    public const CODE_SERVER_UNIMPLEMENTED  = 501;
+    public const CODE_SERVER_UNAVAILABLE    = 503;
+    
     private bool $ok; 
     private int $code;
-    
     private string $message;
+    /** @var ScalarOrArray */
     private $appdata; 
-    
-    private ?array $metrics = null; 
+    /** @var ?ScalarArray */
+    private ?array $metrics = null;
+    /** @var ?ScalarArray */
     private ?array $debug = null;
     
     /** Returns whether or not the request succeeded */
@@ -30,24 +40,50 @@ class Output
     /** Returns the error message string (only if not isOK) */
     public function GetMessage() : string { return $this->message; }
     
-    /** Returns the response body to be returned (only if isOK) */
+    /** 
+     * Returns the response body to be returned (only if isOK) 
+     * @return ScalarOrArray
+     */
     public function GetAppdata() { return $this->appdata; }
     
-    /** Sets performance metrics to be returned */
-    public function SetMetrics(?array $metrics) : self { $this->metrics = $metrics; return $this; }
+    /** 
+     * Sets performance metrics to be returned
+     * @param ?ScalarArray $metrics 
+     * @return $this
+     */
+    public function SetMetrics(?array $metrics) : self { 
+        $this->metrics = $metrics; return $this; }
+    
+    /** 
+     * @return ScalarOrArray
+     * @throws Exceptions\InvalidOutpropException if $outprop is invalid
+     */
+    private function NarrowAppdata(?string $outprop = null)
+    {
+        $appdata = $this->appdata;
+        if ($outprop !== null && is_array($appdata))
+            foreach (explode('.',$outprop) as $key)
+            {
+                if (is_array($appdata) && array_key_exists($key,$appdata))
+                    $appdata = $appdata[$key];
+                else throw new Exceptions\InvalidOutpropException($key);
+            }
+        return $appdata; // @phpstan-ignore-line no recursive types
+    }
     
     /** 
      * Returns the Output object as a client array 
-     * @return array if success: `{ok:true, code:int, appdata:mixed}` \
-         if failure: `{ok:false, code:int, message:string}`
+     * @param ?string $outprop if not null, narrow $appdata to the desired property (format a.b.c.)
+     * @return array{ok:true,code:int,appdata:ScalarOrArray}|array{ok:false,code:int,message:string}
+     * @throws Exceptions\InvalidOutpropException if $outprop is invalid
      */
-    public function GetAsArray() : array 
+    public function GetAsArray(?string $outprop = null) : array 
     {
-        $array = array('ok'=>$this->ok, 'code'=>$this->code);
-        
-        if ($this->ok) 
-             $array['appdata'] = $this->appdata;
-        else $array['message'] = $this->message;
+        if ($this->ok)
+            $array = array('ok'=>true, 'code'=>$this->code,
+                'appdata'=>$this->NarrowAppdata($outprop));
+        else $array = array('ok'=>false, 'code'=>$this->code,
+                'message'=>$this->message);
         
         if ($this->metrics !== null) $array['metrics'] = $this->metrics;
         if ($this->debug !== null) $array['debug'] = $this->debug;
@@ -55,91 +91,114 @@ class Output
         return $array; 
     }
     
-    /** Returns the appdata as a single string (or null if not possible) */
-    public function GetAsString() : ?string
+    /** 
+     * Returns the output as a single human-readable string (narrowed to appdata/message, unless metrics/debug)
+     * @param ?string $outprop if not null, narrow $appdata to the desired property (format a.b.c)
+     * @throws Exceptions\InvalidOutpropException if $outprop is invalid
+     */
+    public function GetAsString(?string $outprop = null) : string
     {
-        if ($this->debug !== null || $this->metrics !== null) return null;
-        
-        if ($this->ok)
-        {
-            if ($this->appdata === null)
-                $retval = 'SUCCESS';
-            else if ($this->appdata === true)
-                $retval = 'TRUE';
-            else if ($this->appdata === false)
-                $retval = 'FALSE';
-            else $retval = $this->appdata;
-            
-            return print_r($retval, true);
-        }
-        else return print_r($this->message, true);
+        if ($this->debug !== null || $this->metrics !== null)
+            return print_r($this->GetAsArray($outprop),true);
+
+        if (!$this->ok) return "ERROR: ".$this->message;
+
+        $appdata = $this->NarrowAppdata($outprop);
+
+        if ($appdata === null)
+            return 'SUCCESS';
+        else if ($appdata === true)
+            return 'TRUE';
+        else if ($appdata === false)
+            return 'FALSE';
+        else if (is_scalar($appdata))
+            return (string)$appdata;
+        else return print_r($appdata,true);
     }
     
-    private function __construct(bool $ok = true, int $code = 200)
+    private function __construct(bool $ok = true, int $code = self::CODE_SUCCESS)
     {
-        $this->ok = $ok; $this->code = $code;
+        $this->ok = $ok; 
+        $this->code = $code;
     }
     
-    /** Constructs an Output object representing a success response */
-    public static function Success(array $appdata) : Output
+    /** 
+     * Constructs an Output object representing a success response 
+     * @param ScalarOrArray $appdata
+     */
+    public static function Success($appdata) : Output
     {
-        // if we only ran a single input, make the output array be that result
-        if (count($appdata) === 1 && array_key_exists(0,$appdata)) $appdata = $appdata[0];
-        
-        $output = new Output(); $output->appdata = $appdata; return $output;
+        $output = new Output();
+        $output->appdata = $appdata; 
+        return $output;
     }
     
-    /** Constructs an Output object representing a client error, showing the exception and possibly extra debug */
-    public static function ClientException(Exceptions\ClientException $e, ?array $debug = null) : Output
+    /** 
+     * Constructs an Output object representing a client error, showing the exception and possibly extra debug 
+     * @param ?ScalarArray $debug
+     */
+    public static function ClientException(ClientException $e, ?array $debug = null) : Output
     {
         $output = new Output(false, $e->getCode());
-        
         $output->message = $e->getMessage();
         
-        if ($debug !== null) $output->debug = $debug;
+        if ($debug !== null) 
+            $output->debug = $debug;
         
         return $output;
     }
     
-    /** Constructs an Output object representing a non-client error, possibly with debug */
-    public static function Exception(?array $debug = null) : Output
+    /** 
+     * Constructs an Output object representing a non-client error, possibly with debug 
+     * @param ?ScalarArray $debug
+     */
+    public static function ServerException(?array $debug = null) : Output
     {
-        $output = new Output(false, 500);
-        
+        // hide the code/message by default
+        $output = new Output(false, self::CODE_SERVER_ERROR);
         $output->message = 'SERVER_ERROR';
         
-        if ($debug !== null) $output->debug = $debug;
+        if ($debug !== null) 
+            $output->debug = $debug;
         
         return $output;
     }
 
     /**
      * Parses a response from a remote Andromeda API request into an Output object
-     * @param array $data the response data from the remote request
-     * @throws InvalidParseException if the response is malformed
+     * @param ScalarArray $data the response data from the remote request
+     * @throws Exceptions\InvalidParseException if the response is malformed
      * @return Output the output object constructed from the response
      */
     public static function ParseArray(array $data) : Output
     {
-        if (!array_key_exists('ok',$data) || !array_key_exists('code',$data)) throw new InvalidParseException();
+        if (!array_key_exists('ok',$data) || !array_key_exists('code',$data)) 
+            throw new Exceptions\InvalidParseException();
         
-        if (!is_bool($data['ok']) || !is_int($data['code'])) throw new InvalidParseException();
+        if (!is_bool($data['ok']) || !is_int($data['code'])) 
+            throw new Exceptions\InvalidParseException();
 
-        $ok = (bool)$data['ok']; $code = (int)$data['code'];
+        $ok = $data['ok']; $code = $data['code'];
 
         if ($ok === true)
         {
-            if (!array_key_exists('appdata',$data)) throw new InvalidParseException();
+            if (!array_key_exists('appdata',$data)) 
+                throw new Exceptions\InvalidParseException();
 
-            $output = new Output($ok, $code); $output->appdata = $data['appdata']; return $output;
+            $output = new Output($ok, $code); 
+            $output->appdata = $data['appdata']; // @phpstan-ignore-line no recursive ScalarArray type
+            return $output;
         }
         else
         {
-            if (!array_key_exists('message',$data)) throw new InvalidParseException();
+            if (!array_key_exists('message',$data)) 
+                throw new Exceptions\InvalidParseException();
             
-            if (!is_string($data['message'])) throw new InvalidParseException();
+            if (!is_string($data['message'])) 
+                throw new Exceptions\InvalidParseException();
             
-            throw Exceptions\CustomClientException::Create($code, (string)$data['message']);
+            throw new ClientException(
+                $data['message'], $code);
         }
     }   
 }

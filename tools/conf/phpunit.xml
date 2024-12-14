@@ -1,0 +1,8 @@
+<phpunit
+    beStrictAboutOutputDuringTests="true"
+    convertDeprecationsToExceptions="true"
+    failOnWarning="true"
+    failOnIncomplete="true"
+    failOnSkipped="true"
+    failOnRisky="true"
+/>

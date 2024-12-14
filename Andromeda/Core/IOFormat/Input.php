@@ -1,25 +1,6 @@
-<?php namespace Andromeda\Core\IOFormat; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Core\IOFormat; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/IOFormat/SafeParam.php");
-require_once(ROOT."/Core/IOFormat/SafeParams.php");
-require_once(ROOT."/Core/IOFormat/InputFile.php");
-
-require_once(ROOT."/Core/Logging/BaseAppLog.php"); use Andromeda\Core\Logging\BaseAppLog;
-
-class InputFileMissingException extends SafeParamException {
-    public function __construct(string $key) { $this->message = "INPUT_FILE_MISSING: $key"; } }
-
-/** A username and password combination */
-class InputAuth 
-{
-    private string $username; private string $password;
-    
-    public function __construct(string $username, string $password) { 
-        $this->username = $username; $this->password = $password; }
-        
-    public function GetUsername() : string { return $this->username; }
-    public function GetPassword() : string { return $this->password; }
-}
+use Andromeda\Core\Logging\ActionLog;
 
 /** 
  * An abstracted Input object gathered from an interface
@@ -44,60 +25,42 @@ class Input
     /** @see Input::GetAuth() */
     private ?InputAuth $auth;   
     
-    /** The basic authentication to be used */
-    public function GetAuth() : ?InputAuth { return $this->auth; }
+    /** The basic authentication to be used, always logged */
+    public function GetAuth() : ?InputAuth 
+    {
+        if ($this->auth !== null && $this->logger !== null)
+            $this->logger->SetAuthUser($this->auth->GetUsername());
+
+        return $this->auth; 
+    }
     
-    public const LoggerKey = 'input';
-    
-    /** Sets the optional param logger to the given BaseAppLog */
-    public function SetLogger(?BaseAppLog $logger) : self 
+    private ?ActionLog $logger = null;
+
+    /** Sets the optional param logger to the given ActionLog */
+    public function SetLogger(?ActionLog $logger) : self 
     { 
-        if ($logger !== null && ($level = $logger::GetDetailsLevel()))
+        $this->logger = $logger;
+        if ($logger !== null)
         {
-            $logref = &$logger->GetDetailsRef(); 
-            
-            $logref[self::LoggerKey] ??= array();
-            
-            $this->GetParams()->SetLogRef(
-                $logref[self::LoggerKey], $level);
+            $loglevel = $logger->GetDetailsLevel();
+            $plogref = &$logger->GetParamsLogRef();
+            $this->params->SetLogRef($plogref, $loglevel);
         }        
         return $this; 
     }
     
-    /** @see Input::GetParams() */
     private SafeParams $params;
     
     /** The inner collection of parameters to be used */
     public function GetParams() : SafeParams { return $this->params; }
-    
-    /** @see SafeParams::HasParam() */
-    public function HasParam(string $key) : bool {
-        return $this->params->HasParam($key); }
-        
-    /** @see SafeParams::AddParam() */
-    public function AddParam(string $key, $value) : self { 
-        $this->params->AddParam($key, $value); return $this; }
-    
-    /** @see SafeParams::GetParam() */
-    public function GetParam(string $key, int $type, int $minlog = SafeParams::PARAMLOG_ONLYFULL, ?array $values = null, ?callable $valfunc = null) {
-        return $this->params->GetParam($key, $type, $minlog, $values, $valfunc); }
-    
-    /** @see SafeParams::GetOptParam() */
-    public function GetOptParam(string $key, int $type, int $minlog = SafeParams::PARAMLOG_ONLYFULL, ?array $values = null, ?callable $valfunc = null) {
-        return $this->params->GetOptParam($key, $type, $minlog, $values, $valfunc); }
 
-    /** @see SafeParams::GetNullParam() */
-    public function GetNullParam(string $key, int $type, int $minlog = SafeParams::PARAMLOG_ONLYFULL, ?array $values = null, ?callable $valfunc = null) {
-        return $this->params->GetNullParam($key, $type, $minlog, $values, $valfunc); }
-    
-    /** @see SafeParams::GetOptNullParam() */
-    public function GetOptNullParam(string $key, int $type, int $minlog = SafeParams::PARAMLOG_ONLYFULL, ?array $values = null, ?callable $valfunc = null) {
-        return $this->params->GetOptNullParam($key, $type, $minlog, $values, $valfunc); }
-    
-    /** @see Input::GetFiles() */
+    /** @var array<string, InputFile> */
     private array $files;
     
-    /** Returns the array of input files */
+    /** 
+     * Returns the array of input files
+     * @return array<string, InputFile>
+     */
     public function GetFiles() : array { return $this->files; }
 
     /**
@@ -106,50 +69,78 @@ class Input
      * @return bool true if the param exists as an input file
      */
     public function HasFile(string $key) : bool {
-        return array_key_exists($key, $this->files); }
+        
+        return array_key_exists($key, $this->files); 
+    }
         
     /**
-     * Adds the given InputStream to the file array
+     * Adds the given InputFile to the file array
      * @param string $key param name for file
-     * @param InputStream $file input file stream
+     * @param InputFile $file input file stream
      * @return $this
      */
-    public function AddFile(string $key, InputStream $file) : self {
-        $this->files[$key] = $file; return $this; }
+    public function AddFile(string $key, InputFile $file) : self 
+    {
+        $this->files[$key] = $file; return $this; 
+    }
+    
+    /** Logs the given InputFile and returns it */
+    protected function LogFile(string $key, InputFile $file, int $minlog) : InputFile
+    {
+        if ($this->logger !== null && $minlog > 0)
+        {
+            if ($this->logger->GetDetailsLevel() >= $minlog)
+            {
+                $logref = &$this->logger->GetFilesLogRef();
+                $logref[$key] = ($file instanceof InputPath)
+                    ? $file->GetClientObject() : null;
+            }
+        }
+        return $file;
+    }
     
     /**
-     * Gets the file mapped to the parameter name
+     * Gets the file mapped to the parameter name (and immediately logs)
      * @param string $key the parameter key name
-     * @throws SafeParamKeyMissingException if the key does not exist
-     * @return InputStream the uploaded file
+     * @throws Exceptions\InputFileMissingException if the key does not exist
+     * @return InputFile the uploaded file
      */
-    public function GetFile(string $key) : InputStream
+    public function GetFile(string $key, int $minlog = SafeParams::PARAMLOG_ONLYFULL) : InputFile
     {
         if (!$this->HasFile($key)) 
-            throw new InputFileMissingException($key);
-        else return $this->files[$key];
+            throw new Exceptions\InputFileMissingException($key);
+    
+        return $this->LogFile($key, $this->files[$key], $minlog);
     }
     
     /**
      * Same as GetFile() but returns null rather than throwing an exception
      * @see Input::GetFile()
      */
-    public function TryGetFile(string $key) : ?InputStream
+    public function TryGetFile(string $key, int $minlog = SafeParams::PARAMLOG_ONLYFULL) : ?InputFile
     {
         if (!$this->HasFile($key)) return null;
-        else return $this->files[$key];
+        
+        return $this->LogFile($key, $this->files[$key], $minlog);
     }
     
-    /** Constructs an input object using the data gathered from the interface, and sanitizes the app/action strings */
+    /** 
+     * Constructs an input object using the data gathered from the interface
+     * @param string $app app name to run (will be sanitized)
+     * @param string $action app action name (will be sanitized)
+     * @param ?SafeParams $params user input params
+     * @param ?array<string, InputFile> $files optional input files
+     * @param ?InputAuth $auth optional input authentication
+     * @throws Exceptions\SafeParamInvalidException if app/action are not valid
+     */
     public function __construct(string $app, string $action, ?SafeParams $params = null, 
                                 ?array $files = null, ?InputAuth $auth = null)
     {
-        $this->params = $params ?? new SafeParams(); 
-        $this->files = $files ?? array(); 
-        
-        $this->auth = $auth;
+        $this->app = strtolower((new SafeParam('app', $app))->GetAlphanum());
+        $this->action = strtolower((new SafeParam('act', $action))->GetAlphanum());
 
-        $this->app = (new SafeParam("app", strtolower($app)))->GetValue(SafeParam::TYPE_ALPHANUM);
-        $this->action = (new SafeParam("action", strtolower($action)))->GetValue(SafeParam::TYPE_ALPHANUM);
+        $this->params = $params ?? new SafeParams(); 
+        $this->files = $files ?? array();
+        $this->auth = $auth;
     }
 }

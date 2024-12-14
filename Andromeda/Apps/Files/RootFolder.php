@@ -1,16 +1,13 @@
-<?php namespace Andromeda\Apps\Files; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Apps\Files; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/Database/ObjectDatabase.php"); use Andromeda\Core\Database\ObjectDatabase;
-require_once(ROOT."/Core/Database/QueryBuilder.php"); use Andromeda\Core\Database\QueryBuilder;
-require_once(ROOT."/Core/Exceptions/Exceptions.php"); use Andromeda\Core\Exceptions;
+use Andromeda\Core\Database\{ObjectDatabase, QueryBuilder};
 
 require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
+
+require_once(ROOT."/Apps/Files/Exceptions.php");
 require_once(ROOT."/Apps/Files/Folder.php");
 
 use Andromeda\Apps\Files\Filesystem\FSManager;
-
-/** Exception indicating that the operation is not valid on a root folder */
-class InvalidRootOpException extends Exceptions\ClientErrorException { public $message = "ROOT_FOLDER_OP_INVALID"; }
 
 /** A root folder has no parent or name */
 class RootFolder extends Folder
@@ -48,14 +45,14 @@ class RootFolder extends Folder
      * @param ObjectDatabase $database database reference
      * @param Account $account the owner of the root folder
      * @param FSManager $filesystem the filesystem of the root, or null to get the default
-     * @return static|NULL loaded folder or null if a default FS does not exist and none is given
+     * @return ?static loaded folder or null if a default FS does not exist and none is given
      */
     public static function GetRootByAccountAndFS(ObjectDatabase $database, Account $account, ?FSManager $filesystem = null) : ?self
     {
         $filesystem ??= FSManager::LoadDefaultByAccount($database, $account); if (!$filesystem) return null;
         
-        $q = new QueryBuilder(); $where = $q->And($q->Equals('filesystem',$filesystem->ID()), $q->IsNull('parent'),
-            $q->Or($q->IsNull('owner'),$q->Equals('owner',$account->ID())));
+        $q = new QueryBuilder(); $where = $q->And($q->Equals('obj_filesystem',$filesystem->ID()), $q->IsNull('obj_parent'),
+            $q->Or($q->IsNull('obj_owner'),$q->Equals('obj_owner',$account->ID())));
         
         $loaded = static::TryLoadUniqueByQuery($database, $q->Where($where));
         if ($loaded) return $loaded;
@@ -63,7 +60,7 @@ class RootFolder extends Folder
         {
             $owner = $filesystem->isExternal() ? $filesystem->GetOwner() : $account;
             
-            return parent::BaseCreate($database)
+            return static::BaseCreate($database)
                 ->SetObject('filesystem',$filesystem)
                 ->SetObject('owner',$owner)->Refresh();
         }
@@ -77,7 +74,7 @@ class RootFolder extends Folder
      */
     public static function LoadRootsByFSManager(ObjectDatabase $database, FSManager $filesystem) : array
     {
-        $q = new QueryBuilder(); $where = $q->And($q->Equals('filesystem',$filesystem->ID()), $q->IsNull('parent'));
+        $q = new QueryBuilder(); $where = $q->And($q->Equals('obj_filesystem',$filesystem->ID()), $q->IsNull('obj_parent'));
         
         return static::LoadByQuery($database, $q->Where($where));
     }
@@ -90,7 +87,7 @@ class RootFolder extends Folder
      */
     public static function LoadRootsByAccount(ObjectDatabase $database, Account $account) : array
     {
-        $q = new QueryBuilder(); $where = $q->And($q->Equals('owner',$account->ID()), $q->IsNull('parent'));
+        $q = new QueryBuilder(); $where = $q->And($q->Equals('obj_owner',$account->ID()), $q->IsNull('obj_parent'));
         
         return static::LoadByQuery($database, $q->Where($where));
     }

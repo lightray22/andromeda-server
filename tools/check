@@ -1,2 +1,0 @@
-#!/bin/sh
-tools/analyze && tools/unittests && tools/pytests

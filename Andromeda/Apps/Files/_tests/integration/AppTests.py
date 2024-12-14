@@ -1,4 +1,5 @@
 
+from BaseTest import BaseAppTest
 from TestUtils import *
 
 class AppTests(BaseAppTest):
@@ -10,7 +11,9 @@ class AppTests(BaseAppTest):
         return { }
 
     def install(self):
-        assertIn('accounts', self.main.appMap)
+        # TODO this is different now, we install THEN enable
+        # TODO check that the server's dependnecy checking with accounts works
+        assertOk(self.interface.run(app='core',action='enableapp',params={'appname':'files'}))
         assertError(self.interface.run(app='files',action='getconfig'),503,'APP_INSTALL_REQUIRED: files')
         assertOk(self.interface.run('files','install'))
 

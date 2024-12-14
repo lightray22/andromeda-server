@@ -3,26 +3,31 @@
 .settings
 .phpdoc
 .vs
+.vscode
+.DS_Store
+*.code-workspace
 
 vendor/
 
 data/
 docs/
-wiki/
 metrics/
 
 combined.php
-test.s3db
+*.s3db
 
-Andromeda/DBConfig.php
-Andromeda/user-defs.php
-
-tools/pytest-config.json
+Andromeda/DBConfig*.php*
+Andromeda/*.s3db
 
 __pycache__
 
 tools/mysql2sqlite
-tools/phpDocumentor.phar
-tools/doctum.phar
-tools/phpunit-9.phar
-tools/.phpunit*
+
+pytest-config.json
+pytest-config.*.json
+-pytest-config.example.json
+-pytest-config.minimal.json
+
+.phpunit.result.cache
+phpstan-tmp-*
+inttest_data/

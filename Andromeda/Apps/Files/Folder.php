@@ -1,20 +1,12 @@
-<?php namespace Andromeda\Apps\Files; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Apps\Files; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/Main.php"); use Andromeda\Core\Main;
-require_once(ROOT."/Core/Utilities.php"); use Andromeda\Core\Utilities;
-
-require_once(ROOT."/Core/Database/BaseObject.php"); use Andromeda\Core\Database\BaseObject;
-require_once(ROOT."/Core/Database/FieldTypes.php"); use Andromeda\Core\Database\FieldTypes;
-require_once(ROOT."/Core/Database/QueryBuilder.php"); use Andromeda\Core\Database\QueryBuilder;
-require_once(ROOT."/Core/Database/ObjectDatabase.php"); use Andromeda\Core\Database\ObjectDatabase;
-require_once(ROOT."/Core/Exceptions/Exceptions.php"); use Andromeda\Core\Exceptions;
+ use Andromeda\Core\Utilities;
+ use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, QueryBuilder};
 
 require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
 
+require_once(ROOT."/Apps/Files/Exceptions.php");
 require_once(ROOT."/Apps/Files/Item.php");
-
-/** Exception indicating that the folder destination is invalid */
-class InvalidDestinationException extends Exceptions\ClientErrorException { public $message = "INVALID_FOLDER_DESTINATION"; }
 
 /** 
  * Defines a user-stored folder which groups other items 
@@ -31,20 +23,20 @@ abstract class Folder extends Item
     /** @return class-string<self> */
     public static function GetObjClass(array $row) : string 
     {
-        return $row['parent'] === null ? RootFolder::class : SubFolder::class;
+        return $row['obj_parent'] === null ? RootFolder::class : SubFolder::class;
     }
     
     public static function GetFieldTemplate() : array
     {
         return array_merge(parent::GetFieldTemplate(), array(
-            'counters__pubvisits' => new FieldTypes\Counter(), // number of public visits to this folder
-            'counters__size' => new FieldTypes\Counter(),      // total size of the folder and all contents
-            'parent'    => new FieldTypes\ObjectRef(Folder::class, 'folders'),
-            'files'     => new FieldTypes\ObjectRefs(File::class, 'parent'),
-            'folders'   => new FieldTypes\ObjectRefs(Folder::class, 'parent'),
-            'counters__subfiles' => new FieldTypes\Counter(),   // total number of subfiles (recursive)
-            'counters__subfolders' => new FieldTypes\Counter(), // total number of subfolders (recursive)
-            'counters__subshares' => new FieldTypes\Counter()   // total number of shares (recursive)
+            'count_pubvisits' => new FieldTypes\Counter(), // number of public visits to this folder
+            'count_size' => new FieldTypes\Counter(),      // total size of the folder and all contents
+            'obj_parent'    => new FieldTypes\ObjectRef(Folder::class, 'folders'),
+            'objs_files'     => new FieldTypes\ObjectRefs(File::class, 'parent'),
+            'objs_folders'   => new FieldTypes\ObjectRefs(Folder::class, 'parent'),
+            'count_subfiles' => new FieldTypes\Counter(),   // total number of subfiles (recursive)
+            'count_subfolders' => new FieldTypes\Counter(), // total number of subfolders (recursive)
+            'count_subshares' => new FieldTypes\Counter()   // total number of shares (recursive)
         ));
     }
 
@@ -102,7 +94,7 @@ abstract class Folder extends Item
     {
         $this->SetOwner($account);
         
-        foreach (array_merge($this->GetFiles(), $this->GetFolders()) as $item) $item->SetOwner($account);
+        //foreach (array_merge($this->GetFiles(), $this->GetFolders()) as $item) $item->SetOwner($account); // TODO no array merge
        
         return $this;
     }
@@ -225,10 +217,10 @@ abstract class Folder extends Item
     {
         $q = new QueryBuilder();
         
-        $q->SelfJoinWhere($database, Folder::class, 'parent', 'id', '_parent');
+        $q->SelfJoinWhere($database, Folder::class, 'obj_parent', 'id');
         
-        $w = $q->And($q->GetWhere(), $q->NotEquals('_parent.owner', $account->ID()),
-            $q->Equals($database->GetClassTableName(Folder::class).'.owner', $account->ID()));
+        $w = $q->And($q->GetWhere(), $q->NotEquals('_parent.obj_owner', $account->ID()),
+            $q->Equals($database->GetClassTableName(Folder::class).'.obj_owner', $account->ID()));
 
         return array_filter(static::LoadByQuery($database, $q->Where($w)), 
             function(Folder $folder){ return !$folder->isWorldAccess(); });
@@ -282,7 +274,7 @@ abstract class Folder extends Item
      * @param bool $recursive if true, show recursive contents
      * @param int $limit max number of items to show
      * @param int $offset offset of items to show
-     * @return array|NULL null if deleted, else `{files:[id:File], folders:[id:Folder], \
+     * @return ?array null if deleted, else `{files:[id:File], folders:[id:Folder], \
          counters:{size:int, pubvisits:int, subfiles:int, subfolders:int}}` \
          if $owner, add: `{counters:{subshares:int}}`
      * @see Item::SubGetClientObject()

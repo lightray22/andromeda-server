@@ -1,8 +1,7 @@
-<?php namespace Andromeda\Apps\Files\Filesystem; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Apps\Files\Filesystem; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/Database/ObjectDatabase.php"); use Andromeda\Core\Database\ObjectDatabase;
-require_once(ROOT."/Core/IOFormat/InputFile.php"); use Andromeda\Core\IOFormat\InputPath;
-require_once(ROOT."/Core/Exceptions/Exceptions.php");
+use Andromeda\Core\Database\ObjectDatabase;
+use Andromeda\Core\IOFormat\InputPath;
 
 require_once(ROOT."/Apps/Files/Filesystem/FSManager.php");
 require_once(ROOT."/Apps/Files/Storage/Storage.php"); use Andromeda\Apps\Files\Storage\Storage;
@@ -32,7 +31,7 @@ abstract class FSImpl
      * Returns the preferred byte alignment of the filesystem.
      * 
      * Reads and writes should align to these boundaries for performance
-     * @return int|NULL FS chunk size
+     * @return ?int FS chunk size
      */
     public function GetChunkSize() : ?int { return null; }
     

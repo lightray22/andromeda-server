@@ -1,12 +1,8 @@
-<?php namespace Andromeda\Apps\Files\Limits; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Apps\Files\Limits; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/Utilities.php"); use Andromeda\Core\Utilities;
-require_once(ROOT."/Core/Database/StandardObject.php"); use Andromeda\Core\Database\StandardObject;
-require_once(ROOT."/Core/Database/ObjectDatabase.php"); use Andromeda\Core\Database\ObjectDatabase;
-require_once(ROOT."/Core/Database/FieldTypes.php"); use Andromeda\Core\Database\FieldTypes;
-require_once(ROOT."/Core/Database/QueryBuilder.php"); use Andromeda\Core\Database\QueryBuilder;
-require_once(ROOT."/Core/IOFormat/Input.php"); use Andromeda\Core\IOFormat\Input;
-require_once(ROOT."/Core/IOFormat/SafeParam.php"); use Andromeda\Core\IOFormat\SafeParam;
+use Andromeda\Core\Utilities;
+use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, QueryBuilder};
+use Andromeda\Core\IOFormat\SafeParams;
 
 require_once(ROOT."/Apps/Files/Limits/Base.php");
 require_once(ROOT."/Apps/Files/Limits/TimedStats.php");
@@ -25,7 +21,7 @@ require_once(ROOT."/Apps/Files/Limits/TimedStats.php");
  */
 abstract class Timed extends Base
 {
-    /** array<limited object ID, self[]> */
+    /** array<limited object ID, array<self>> */
     protected static $cache = array();
     
     public static function GetDBClass() : string { return self::class; }
@@ -33,11 +29,11 @@ abstract class Timed extends Base
     public static function GetFieldTemplate() : array
     {
         return array_merge(parent::GetFieldTemplate(), array(
-            'stats' => (new FieldTypes\ObjectRefs(TimedStats::class, 'limitobj', true))->autoDelete(),
-            'timeperiod' => null, // in seconds
-            'max_stats_age' => null,
-            'counters_limits__pubdownloads' => null,
-            'counters_limits__bandwidth' => null
+            'objs_stats' => (new FieldTypes\ObjectRefs(TimedStats::class, 'limitobj', true))->autoDelete(),
+            'timeperiod' => new FieldTypes\IntType(), // in seconds
+            'max_stats_age' => new FieldTypes\IntType(),
+            'limit_pubdownloads' => new FieldTypes\Limit(),
+            'limit_bandwidth' => new FieldTypes\Limit()
         ));
     }
     
@@ -72,7 +68,7 @@ abstract class Timed extends Base
      * @param StandardObject $obj the limited object
      * @return array<string, static> limits indexed by ID
      */
-    public static function LoadAllForClient(ObjectDatabase $database, StandardObject $obj) : array
+    public static function LoadAllForClient(ObjectDatabase $database, BaseObject $obj) : array
     {
         if (!array_key_exists($obj->ID(), static::$cache))
         {
@@ -92,9 +88,9 @@ abstract class Timed extends Base
      * @param ObjectDatabase $database database reference
      * @param StandardObject $obj the limited object
      * @param int $period the time period
-     * @return static|NULL limit object or null if none
+     * @return ?static limit object or null if none
      */
-    public static function LoadByClientAndPeriod(ObjectDatabase $database, StandardObject $obj, int $period) : ?self
+    public static function LoadByClientAndPeriod(ObjectDatabase $database, BaseObject $obj, int $period) : ?self
     {
         foreach (static::LoadAllForClient($database, $obj) as $lim)
         {
@@ -104,7 +100,7 @@ abstract class Timed extends Base
     }
     
     /** Deletes all limit objects corresponding to the given limited object */
-    public static function DeleteByClient(ObjectDatabase $database, StandardObject $obj) : void
+    public static function DeleteByClient(ObjectDatabase $database, BaseObject $obj) : void
     {
         if (array_key_exists($obj->ID(), static::$cache)) static::$cache[$obj->ID()] = array();
         
@@ -112,9 +108,9 @@ abstract class Timed extends Base
     }
     
     /** Deletes all limit objects corresponding to the given limited object and time period */
-    public static function DeleteByClientAndPeriod(ObjectDatabase $database, StandardObject $obj, int $period) : void
+    public static function DeleteByClientAndPeriod(ObjectDatabase $database, BaseObject $obj, int $period) : void
     {
-        $q = new QueryBuilder(); $w = $q->And($q->Equals('object',FieldTypes\ObjectPoly::GetObjectDBValue($obj)),$q->Equals('timeperiod',$period));
+        $q = new QueryBuilder(); $w = $q->And($q->Equals('obj_object',FieldTypes\ObjectPoly::GetObjectDBValue($obj)),$q->Equals('timeperiod',$period));
         
         static::DeleteByQuery($database, $q->Where($w));
     }
@@ -126,9 +122,9 @@ abstract class Timed extends Base
      * @param int $timeperiod time period for limit
      * @return static new limit object
      */
-    protected static function CreateTimed(ObjectDatabase $database, StandardObject $obj, int $timeperiod) : self
+    protected static function CreateTimed(ObjectDatabase $database, BaseObject $obj, int $timeperiod) : self
     {
-        $newobj = parent::BaseCreate($database)->SetObject('object',$obj)->SetScalar('timeperiod',$timeperiod);
+        $newobj = static::BaseCreate($database)->SetObject('object',$obj)->SetScalar('timeperiod',$timeperiod);
         
         static::$cache[$obj->ID()] ??= array();
         static::$cache[$obj->ID()][] = $newobj;
@@ -140,7 +136,7 @@ abstract class Timed extends Base
     protected function GetCurrentStats() : TimedStats { return TimedStats::LoadCurrentByLimit($this->database, $this); }
     
     // pull counters from the current stats object
-    protected function GetCounter(string $name) : int     { return $this->GetCurrentStats()->GetCounter($name); }
+    protected function GetCounter(string $name) : int { return $this->GetCurrentStats()->GetCounter($name); }
     
     protected function DeltaCounter(string $name, int $delta = 1, bool $ignoreLimit = false) : self
     {
@@ -151,23 +147,28 @@ abstract class Timed extends Base
     public abstract static function GetTimedUsage() : string;
     
     /** Sets config for a timed limit */
-    protected abstract function SetTimedLimits(Input $input) : void;
+    protected abstract function SetTimedLimits(SafeParams $params) : void;
     
     public static function GetConfigUsage() : string { return static::GetBaseUsage()." ".static::GetTimedUsage(); }
     
     public static function BaseConfigUsage() : string { return "--timeperiod uint32 [--max_pubdownloads ?uint32] [--max_bandwidth ?uint]"; }
     
     /** @return static */
-    protected static function BaseConfigLimits(ObjectDatabase $database, StandardObject $obj, Input $input) : self
+    protected static function BaseConfigLimits(ObjectDatabase $database, BaseObject $obj, SafeParams $params) : self
     {
-        $period = $input->GetParam('timeperiod',SafeParam::TYPE_UINT32);
+        $period = $params->GetParam('timeperiod')->GetUint32();
         
-        $lim = static::LoadByClientAndPeriod($database, $obj, $period) ?? static::CreateTimed($database, $obj, $period);
+        $lim = static::LoadByClientAndPeriod($database, $obj, $period) 
+            ?? static::CreateTimed($database, $obj, $period);
         
-        $lim->SetBaseLimits($input); $lim->SetTimedLimits($input);
+        $lim->SetBaseLimits($params); 
+        $lim->SetTimedLimits($params);
 
-        if ($input->HasParam('max_pubdownloads')) $lim->SetCounterLimit('pubdownloads', $input->GetNullParam('max_pubdownloads', SafeParam::TYPE_UINT32));
-        if ($input->HasParam('max_bandwidth')) $lim->SetCounterLimit('bandwidth', $input->GetNullParam('max_bandwidth', SafeParam::TYPE_UINT));
+        if ($params->HasParam('max_pubdownloads')) 
+            $lim->SetCounterLimit('pubdownloads', $params->GetParam('max_pubdownloads')->GetNullUint32());
+        
+        if ($params->HasParam('max_bandwidth')) 
+            $lim->SetCounterLimit('bandwidth', $params->GetParam('max_bandwidth')->GetNullUint());
         
         if ($lim->isCreated()) $lim->Initialize();
         else TimedStats::PruneStatsByLimit($database, $lim);
@@ -178,7 +179,7 @@ abstract class Timed extends Base
     /**
      * Returns a printable client object of this timed limit
      * @param bool $full if false, don't show anything
-     * @return array `{timeperiod:int, max_stats_age:?int, dates:{created:float}, 
+     * @return array<mixed> `{timeperiod:int, max_stats_age:?int, dates:{created:float}, 
             limits: {pubdownloads:?int, bandwidth:?int}`
      * @see Base::GetClientObject()
      */
@@ -188,16 +189,18 @@ abstract class Timed extends Base
         
         if (!$full) return $retval;
         
-        return array_merge($retval, array(
+        $retval += array(
             'timeperiod' => $this->GetTimePeriod(),
             'max_stats_age' => $this->GetMaxStatsAge(),
             'dates' => array(
                 'created' => $this->GetDateCreated()
             ),
-            'features' => array(), // need track_items/track_dlstats
+            'config' => array(), // need track_items/track_dlstats
             'limits' => Utilities::array_map_keys(function($p){ return $this->TryGetCounterLimit($p); },
                 array('pubdownloads','bandwidth')
             )
-        ));
+        );
+        
+        return $retval;
     }
 }

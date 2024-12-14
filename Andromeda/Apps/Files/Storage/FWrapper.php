@@ -1,19 +1,10 @@
-<?php namespace Andromeda\Apps\Files\Storage; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Apps\Files\Storage; if (!defined('Andromeda')) die();
 
 require_once(ROOT."/Apps/Files/FileUtils.php"); use Andromeda\Apps\Files\FileUtils;
 
 require_once(ROOT."/Apps/Files/Storage/Exceptions.php");
 require_once(ROOT."/Apps/Files/Storage/Storage.php");
 require_once(ROOT."/Apps/Files/Storage/Traits.php");
-
-/** Exception indicating that the file handle failed to open */
-class FileOpenFailedException extends StorageException { public $message = "FILE_OPEN_FAILED"; }
-
-/** Exception indicating that the file handle failed to seek */
-class FileSeekFailedException extends StorageException { public $message = "FILE_SEEK_FAILED"; }
-
-/** Exception indicating that the file handle failed to close */
-class FileCloseFailedException extends StorageException { public $message = "FILE_CLOSE_FAILED"; }
 
 class FileContext
 {

@@ -1,5 +1,12 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -e
 
-cd Andromeda; find . -iname phpunit | while read -r dir; do
-    ../vendor/bin/phpunit $dir
+cd Andromeda;
+
+find . -iname phpunit | while read -r dir; do
+   match=`echo "$dir" | grep -i "$APPS"`
+   if [ "$APPS" == "" ] || [ "$match" != "" ]; then
+      echo running $dir
+      ../vendor/bin/phpunit $dir -c ../tools/conf/phpunit.xml "$@"; echo
+   fi
 done

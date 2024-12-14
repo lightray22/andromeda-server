@@ -1,55 +1,38 @@
-<?php namespace Andromeda\Core\IOFormat; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Core\IOFormat; if (!defined('Andromeda')) die();
 
-/** An input file stream */
-class InputStream
+/** Basic file input */
+abstract class InputFile
 {
-    protected $handle;
-    protected ?string $name;
-    
-    public function __construct($handle, ?string $name = null) {
-        $this->handle = $handle; $this->name = $name; }
-   
-    /** Returns the file's stream resource */
-    public function GetHandle() { return $this->handle; }
-    
-    /** Returns the name of the file to be used */
-    public function GetName() : ?string { return $this->name; }
-    
-    /** Returns the entire stream contents */
-    public function GetData() : string 
-    { 
-        $handle = $this->GetHandle();
-        
-        $retval = stream_get_contents($handle);
-        
-        fclose($handle); return $retval;
-    }
-}
-
-/** A file given as a path to an actual file */
-class InputPath extends InputStream
-{
-    private string $path;
-    private bool $istemp;
+    /** @var ?resource */
+    protected $handle = null;
+    protected string $name;
     
     /**
-     * @param string $path path to the input file
-     * @param ?string $name optional new name of the file
-     * @param bool $istemp if true, is a tmp file we can move
+     * Returns the file's stream resource
+     * @return resource
      */
-    public function __construct(string $path, ?string $name = null, bool $istemp = false) {
-        $this->path = $path; $this->name = $name ?? basename($path); $this->istemp = $istemp; }
+    public abstract function GetHandle();
+    
+    /**
+     * Returns the entire stream contents (ONCE!)
+     * Can only be read ONCE! stream is closed after this
+     * @throws Exceptions\FileReadFailedException if it fails
+     */
+    public function GetData() : string
+    {
+        $handle = $this->GetHandle();
+
+        $retval = stream_get_contents($handle);
         
-    // TODO GetName() needs to be not null here
-    
-    /** Returns the path to the input file */
-    public function GetPath() : string { return $this->path; }
-    
-    /** Returns true if the file is a temp file that can be moved */
-    public function isTemp() : bool { return $this->istemp; }
-    
-    /** Returns the size of the file to be used */
-    public function GetSize() : int { return filesize($this->path); }
-    
-    public function GetHandle() { return $this->handle ??= fopen($this->path,'rb'); }
+        if ($retval === false)
+            throw new Exceptions\FileReadFailedException("stream");
+        
+        fclose($handle); 
+        $this->handle = null;
+        
+        return $retval;
+    }
+
+    /** Returns the name of the file to be used */
+    public function GetName() : string { return $this->name; }
 }

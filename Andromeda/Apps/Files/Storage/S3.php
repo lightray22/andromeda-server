@@ -1,39 +1,22 @@
-<?php namespace Andromeda\Apps\Files\Storage; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Apps\Files\Storage; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/Main.php"); use Andromeda\Core\Main;
-require_once(ROOT."/Core/Config.php"); use Andromeda\Core\Config;
-
-require_once(ROOT."/Core/IOFormat/Input.php"); use Andromeda\Core\IOFormat\Input;
-require_once(ROOT."/Core/IOFormat/SafeParam.php"); use Andromeda\Core\IOFormat\SafeParam;
-require_once(ROOT."/Core/IOFormat/SafeParams.php"); use Andromeda\Core\IOFormat\SafeParams;
-require_once(ROOT."/Core/Database/ObjectDatabase.php"); use Andromeda\Core\Database\ObjectDatabase;
-require_once(ROOT."/Core/Exceptions/Exceptions.php"); use Andromeda\Core\Exceptions;
-require_once(ROOT."/Core/Exceptions/ErrorManager.php"); use Andromeda\Core\Exceptions\ErrorManager;
+use Andromeda\Core\Config;
+use Andromeda\Core\Database\{FieldTypes, ObjectDatabase};
+use Andromeda\Core\Errors\ErrorManager;
+use Andromeda\Core\IOFormat\{Input, SafeParams};
 
 require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
-require_once(ROOT."/Apps/Accounts/FieldCrypt.php"); use Andromeda\Apps\Accounts\OptFieldCrypt;
+require_once(ROOT."/Apps/Accounts/Crypto/FieldCrypt.php"); use Andromeda\Apps\Accounts\Crypto\OptFieldCrypt;
 
 require_once(ROOT."/Apps/Files/Filesystem/FSManager.php"); use Andromeda\Apps\Files\Filesystem\FSManager;
 require_once(ROOT."/Apps/Files/Storage/Exceptions.php");
 require_once(ROOT."/Apps/Files/Storage/FWrapper.php");
 require_once(ROOT."/Apps/Files/Storage/Traits.php");
 
-/** Exception indicating that the S3 SDK is missing */
-class S3AwsSdkException extends ActivateException { public $message = "S3_AWS_SDK_MISSING"; }
-
-/** Exception indicating that S3 failed to connect or read the base path */
-class S3ConnectException extends ActivateException { public $message = "S3_CONNECT_FAILED"; }
-
-/** Exception that wraps S3 SDK exceptions */
-class S3ErrorException extends StorageException { public $message = "S3_SDK_EXCEPTION"; use Exceptions\Copyable; }
-
-/** Exception indicating that objects cannot be modified */
-class S3ModifyException extends Exceptions\ClientErrorException { public $message = "S3_OBJECTS_IMMUTABLE"; }
-
 Account::RegisterCryptoHandler(function(ObjectDatabase $database, Account $account, bool $init){ 
     if (!$init) S3::DecryptAccount($database, $account); });
 
-abstract class S3Base extends FWrapper { use NoFolders; }
+abstract class S3Base extends FWrapper { use NoFolders; } // TODO does not need to be a trait?
 
 /**
  * Allows using an S3-compatible server for backend storage
@@ -49,20 +32,20 @@ class S3 extends S3Base
     public static function GetFieldTemplate() : array
     {
         return array_merge(parent::GetFieldTemplate(), self::GetFieldCryptFieldTemplate(), array(
-            'endpoint' => null,
-            'path_style' => null,
-            'port' => null,
-            'usetls' => null,
-            'region' => null,
-            'bucket' => null,
-            'accesskey' => null,
-            'secretkey' => null
+            'endpoint' => new FieldTypes\StringType(),
+            'path_style' => new FieldTypes\BoolType(),
+            'port' => new FieldTypes\IntType(),
+            'usetls' => new FieldTypes\BoolType(),
+            'region' => new FieldTypes\StringType(),
+            'bucket' => new FieldTypes\StringType(),
+            'accesskey' => new FieldTypes\StringType(),
+            'secretkey' => new FieldTypes\StringType()
         ));
     }
     
     /**
      * Returns a printable client object of this S3 storage
-     * @return array `{endpoint:string, path_style:?bool, port:?int, usetls:bool, \
+     * @return array<mixed> `{endpoint:string, path_style:?bool, port:?int, usetls:bool, \
            region:string, bucket:string, accesskey:string/bool, secretkey:bool}`
      * @see Storage::GetClientObject()
      */
@@ -70,7 +53,7 @@ class S3 extends S3Base
     {
         $accesskey = $this->isCryptoAvailable() ? $this->TryGetAccessKey() : (bool)($this->TryGetScalar('accesskey'));
         
-        return array_merge(parent::GetClientObject($activate), $this->GetFieldCryptClientObject(), array(
+        return parent::GetClientObject($activate) + $this->GetFieldCryptClientObject() + array(
             'endpoint' => $this->GetScalar('endpoint'),
             'path_style' => $this->TryGetScalar('path_style'),
             'port' => $this->TryGetScalar('port'),
@@ -79,7 +62,7 @@ class S3 extends S3Base
             'bucket' => $this->GetScalar('bucket'),
             'accesskey' => $accesskey,
             'secretkey' => (bool)($this->TryGetScalar('secretkey'))
-        ));
+        );
     }
     
     /** Returns the S3 bucket identifier */
@@ -104,20 +87,22 @@ class S3 extends S3Base
     protected static function cleanPath(string $path) : string { return implode('/',array_filter(explode('/',$path))); }
     
     public static function GetCreateUsage() : string { return parent::GetCreateUsage()." ".self::GetFieldCryptCreateUsage().
-        " --endpoint fspath --bucket alphanum --region alphanum [--path_style bool]".
-        " [--port uint16] [--usetls bool] [--accesskey randstr] [--secretkey randstr]"; }
+        " --endpoint fspath --bucket alphanum --region alphanum [--path_style ?bool]".
+        " [--port ?uint16] [--usetls ?bool] [--accesskey ?randstr] [--secretkey ?randstr]"; }
     
     public static function Create(ObjectDatabase $database, Input $input, FSManager $filesystem) : self
     {
-        return parent::Create($database, $input, $filesystem)->FieldCryptCreate($input)
-            ->SetScalar('endpoint', self::cleanPath($input->GetParam('endpoint', SafeParam::TYPE_FSPATH)))
-            ->SetScalar('path_style', $input->GetOptParam('path_style',SafeParam::TYPE_BOOL))
-            ->SetScalar('port', $input->GetOptParam('port', SafeParam::TYPE_UINT16))
-            ->SetScalar('usetls', $input->GetOptParam('usetls', SafeParam::TYPE_BOOL))
-            ->SetScalar('region', $input->GetParam('region', SafeParam::TYPE_ALPHANUM))
-            ->SetScalar('bucket', $input->GetParam('bucket', SafeParam::TYPE_ALPHANUM))
-            ->SetAccessKey($input->GetOptParam('accesskey', SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_NEVER))
-            ->SetSecretKey($input->GetOptParam('secretkey', SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_NEVER));
+        $params = $input->GetParams();
+        
+        return parent::Create($database, $input, $filesystem)->FieldCryptCreate($params)
+            ->SetScalar('endpoint', self::cleanPath($params->GetParam('endpoint')->GetFSPath()))
+            ->SetScalar('path_style', $params->GetOptParam('path_style',null)->GetNullBool())
+            ->SetScalar('port', $params->GetOptParam('port',null)->GetNullUint16())
+            ->SetScalar('usetls', $params->GetOptParam('usetls',null)->GetNullBool())
+            ->SetScalar('region', $params->GetParam('region')->GetAlphanum())
+            ->SetScalar('bucket', $params->GetParam('bucket')->GetAlphanum())
+            ->SetAccessKey($params->GetOptParam('accesskey',null,SafeParams::PARAMLOG_NEVER)->GetNullRandstr())
+            ->SetSecretKey($params->GetOptParam('secretkey',null,SafeParams::PARAMLOG_NEVER)->GetNullRandstr());
     }
     
     public static function GetEditUsage() : string { return parent::GetEditUsage()." ".self::GetFieldCryptEditUsage().
@@ -126,19 +111,22 @@ class S3 extends S3Base
     
     public function Edit(Input $input) : self
     {
-        if ($input->HasParam('endpoint')) $this->SetScalar('endpoint', self::cleanPath($input->GetParam('endpoint', SafeParam::TYPE_FSPATH)));
+        $params = $input->GetParams();
         
-        if ($input->HasParam('region')) $this->SetScalar('region', $input->GetParam('region', SafeParam::TYPE_ALPHANUM));
-        if ($input->HasParam('bucket')) $this->SetScalar('bucket', $input->GetParam('bucket', SafeParam::TYPE_ALPHANUM));
+        if ($params->HasParam('endpoint')) $this->SetScalar('endpoint', self::cleanPath($params->GetParam('endpoint')->GetFSPath()));
         
-        if ($input->HasParam('port')) $this->SetScalar('port', $input->GetNullParam('port', SafeParam::TYPE_UINT16));
-        if ($input->HasParam('usetls')) $this->SetScalar('usetls', $input->GetNullParam('usetls', SafeParam::TYPE_BOOL));
-        if ($input->HasParam('path_style')) $this->SetScalar('path_style', $input->GetNullParam('path_style', SafeParam::TYPE_BOOL));
+        if ($params->HasParam('region')) $this->SetScalar('region', $params->GetParam('region')->GetAlphanum());
+        if ($params->HasParam('bucket')) $this->SetScalar('bucket', $params->GetParam('bucket')->GetAlphanum());
         
-        if ($input->HasParam('accesskey')) $this->SetScalar('accesskey', $input->GetNullParam('accesskey', SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_NEVER));
-        if ($input->HasParam('secretkey')) $this->SetScalar('secretkey', $input->GetNullParam('secretkey', SafeParam::TYPE_RANDSTR, SafeParams::PARAMLOG_NEVER));
+        if ($params->HasParam('port')) $this->SetScalar('port', $params->GetParam('port')->GetNullUint16());
+        if ($params->HasParam('usetls')) $this->SetScalar('usetls', $params->GetParam('usetls')->GetNullBool());
+        if ($params->HasParam('path_style')) $this->SetScalar('path_style', $params->GetParam('path_style')->GetNullBool());
         
-        $this->FieldCryptEdit($input); return parent::Edit($input);
+        if ($params->HasParam('accesskey')) $this->SetScalar('accesskey', $params->GetParam('accesskey',SafeParams::PARAMLOG_NEVER)->GetNullRandstr());
+        if ($params->HasParam('secretkey')) $this->SetScalar('secretkey', $params->GetParam('secretkey',SafeParams::PARAMLOG_NEVER)->GetNullRandstr());
+        
+        $this->FieldCryptEdit($params); 
+        return parent::Edit($input);
     }
     
     /** s3 connection resource */ private $s3;
@@ -146,7 +134,7 @@ class S3 extends S3Base
     /** The stream wrapper ID */ private string $streamID;
     
     /** Checks for the SMB client extension */
-    public function SubConstruct() : void
+    public function PostConstruct() : void
     {
         if (!class_exists('\\Aws\\S3\\S3Client')) throw new S3AwsSdkException();
     }
@@ -190,7 +178,7 @@ class S3 extends S3Base
         
         if ($debug >= Config::ERRLOG_SENSITIVE)
             $params['debug'] = array('logfn'=>function(string $str){
-                ErrorManager::GetInstance()->LogDebug("S3 SDK: $str"); });
+                ErrorManager::GetInstance()->LogDebugInfo("S3 SDK: $str"); });
                 
         $this->s3 = new \Aws\S3\S3Client($params);
         
@@ -225,7 +213,7 @@ class S3 extends S3Base
     /**
      * Returns an array of the params used for all requests (bucket and key)
      * @param string $path key/path of object
-     * @return array `{Bucket:string,Key:string}`
+     * @return array<mixed> `{Bucket:string,Key:string}`
      */
     protected function getStdParams(string $path) : array
     {
@@ -273,7 +261,7 @@ class S3 extends S3Base
         
         if (strlen($data) !== $length)
         {
-            ErrorManager::GetInstance()->LogDebug(array(
+            ErrorManager::GetInstance()->LogDebugInfo(array(
                 'read'=>strlen($data), 'wanted'=>$length));
             
             throw new FileReadFailedException();

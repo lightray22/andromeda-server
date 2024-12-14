@@ -1,22 +1,14 @@
-<?php namespace Andromeda\Apps\Files\Storage; if (!defined('Andromeda')) { die(); }
+<?php declare(strict_types=1); namespace Andromeda\Apps\Files\Storage; if (!defined('Andromeda')) die();
 
-require_once(ROOT."/Core/Database/FieldTypes.php"); use Andromeda\Core\Database\FieldTypes;
-require_once(ROOT."/Core/Database/StandardObject.php"); use Andromeda\Core\Database\StandardObject;
-require_once(ROOT."/Core/Database/ObjectDatabase.php"); use Andromeda\Core\Database\ObjectDatabase;
-require_once(ROOT."/Core/Database/QueryBuilder.php"); use Andromeda\Core\Database\QueryBuilder;
-require_once(ROOT."/Core/Exceptions/ErrorManager.php"); use Andromeda\Core\Exceptions\ErrorManager;
-require_once(ROOT."/Core/Exceptions/Exceptions.php"); use Andromeda\Core\Exceptions;
-require_once(ROOT."/Core/IOFormat/Input.php"); use Andromeda\Core\IOFormat\Input;
-
-require_once(ROOT."/Core/Utilities.php"); use Andromeda\Core\{Main, Utilities, Transactions};
+use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, QueryBuilder};
+use Andromeda\Core\Errors\ErrorManager;
+use Andromeda\Core\IOFormat\Input;
+use Andromeda\Core\Utilities;
 
 require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
 
 require_once(ROOT."/Apps/Files/Filesystem/FSManager.php"); use Andromeda\Apps\Files\Filesystem\FSManager;
 require_once(ROOT."/Apps/Files/Storage/Exceptions.php");
-
-/** Client exception indicating that a write was attempted to a read-only storage */
-class ReadOnlyException extends Exceptions\ClientDeniedException { public $message = "READ_ONLY_FILESYSTEM"; }
 
 /** Class representing a stat result */
 class ItemStat
@@ -43,7 +35,7 @@ class PathRollback
  * Any "expected" exceptions should always be checked before storage actions.
  * @see FSManager 
  */
-abstract class Storage extends StandardObject implements Transactions
+abstract class Storage extends BaseObject // TODO was StandardObject
 {
     /** Returns the account that owns this storage (or null) */
     public function GetAccount() : ?Account { return $this->GetFilesystem()->GetOwner(); }
@@ -56,8 +48,8 @@ abstract class Storage extends StandardObject implements Transactions
     {
         $q = new QueryBuilder();
         
-        $q->Join($database, FSManager::class, 'id', static::class, 'filesystem');
-        $w = $q->Equals($database->GetClassTableName(FSManager::class).'.owner', $account->ID());
+        $q->Join($database, FSManager::class, 'id', static::class, 'obj_filesystem');
+        $w = $q->Equals($database->GetClassTableName(FSManager::class).'.obj_owner', $account->ID());
         
         return static::LoadByQuery($database, $q->Where($w));
     }
@@ -65,14 +57,14 @@ abstract class Storage extends StandardObject implements Transactions
     public static function GetFieldTemplate() : array
     {
         return array_merge(parent::GetFieldTemplate(), array(
-            'filesystem' => new FieldTypes\ObjectRef(FSManager::class)
+            'obj_filesystem' => new FieldTypes\ObjectRef(FSManager::class)
         ));
     }
     
     /**
      * Returns a printable client object of this storage
      * @param bool $activate if true, show details that require activation
-     * @return array `{id:id, filesystem:id}` \
+     * @return array<mixed> `{id:id, filesystem:id}` \
         if $activate and supported, add `{freespace:int}`
      */
     public function GetClientObject(bool $activate = false) : array
@@ -97,7 +89,7 @@ abstract class Storage extends StandardObject implements Transactions
      */
     public static function Create(ObjectDatabase $database, Input $input, FSManager $filesystem) : self
     {
-        return parent::BaseCreate($database)->SetObject('filesystem',$filesystem);
+        return static::BaseCreate($database)->SetObject('filesystem',$filesystem);
     }
     
     /** Returns the command usage for Edit() */
@@ -165,7 +157,7 @@ abstract class Storage extends StandardObject implements Transactions
         if ($this->GetFilesystem()->isReadOnly())
             throw new ReadOnlyException();
         
-        if (Main::GetInstance()->GetConfig()->isReadOnly())
+        if ($this->GetApiPackage()->GetConfig()->isReadOnly())
             throw new ReadOnlyException();
         
         return $this;
@@ -174,13 +166,13 @@ abstract class Storage extends StandardObject implements Transactions
     /** Returns true if the server is set to dry run mode */
     protected function isDryRun() : bool
     {
-        return Main::GetInstance()->GetConfig()->isDryRun();
+        return $this->GetApiPackage()->GetConfig()->isDryRun();
     }
     
     /** Disallows running a batch transaction */
     protected function disallowBatch() : self
     {
-        Main::GetInstance()->GetInterface()->DisallowBatch(); return $this;
+        $this->GetApiPackage()->GetInterface()->DisallowBatch(); return $this;
     }
     
     /** Returns an ItemStat object on the given path */
@@ -198,7 +190,7 @@ abstract class Storage extends StandardObject implements Transactions
     /**
      * Lists the contents of a folder
      * @param string $path folder path
-     * @return string[] array of names
+     * @return list<string> array of names
      */
     public function ReadFolder(string $path) : array
     {
@@ -335,7 +327,7 @@ abstract class Storage extends StandardObject implements Transactions
     {
         $this->AssertNotReadOnly();
         
-        $created = in_array($path, $this->createdItems);
+        $created = in_array($path, $this->createdItems, true);
         
         if (!$created)
         {
@@ -384,7 +376,7 @@ abstract class Storage extends StandardObject implements Transactions
 
         $this->SubTruncate($path, $length);
         
-        if (!in_array($path, $this->createdItems))
+        if (!in_array($path, $this->createdItems, true))
         {
             $oldsize = $this->getSize($path);
             
@@ -456,7 +448,7 @@ abstract class Storage extends StandardObject implements Transactions
         
         if ($overwrite) $this->deleteRollbacks($new);
         
-        if (!in_array($old, $this->createdItems))
+        if (!in_array($old, $this->createdItems, true))
         {
             $this->onRollback[] = new PathRollback($new, function()use($old,$new){
                 $this->SubRenameFile($new, $old); });
@@ -490,7 +482,7 @@ abstract class Storage extends StandardObject implements Transactions
         
         if ($overwrite) $this->deleteRollbacks($new);
         
-        if (!in_array($old, $this->createdItems))
+        if (!in_array($old, $this->createdItems, true))
         {   
             $this->onRollback[] = new PathRollback($new, function()use($old,$new){
                 $this->SubRenameFolder($new, $old); });
@@ -524,7 +516,7 @@ abstract class Storage extends StandardObject implements Transactions
         
         if ($overwrite) $this->deleteRollbacks($new);
         
-        if (!in_array($old, $this->createdItems))
+        if (!in_array($old, $this->createdItems, true))
         {   
             $this->onRollback[] = new PathRollback($new, function()use($old,$new){
                 $this->SubMoveFile($new, $old); });
@@ -558,7 +550,7 @@ abstract class Storage extends StandardObject implements Transactions
         
         if ($overwrite) $this->deleteRollbacks($new);
         
-        if (!in_array($old, $this->createdItems))
+        if (!in_array($old, $this->createdItems, true))
         {
             $this->onRollback[] = new PathRollback($new, function()use($old,$new){
                 $this->SubMoveFolder($new, $old); });
@@ -609,7 +601,7 @@ abstract class Storage extends StandardObject implements Transactions
     /** array of all instantiated storages */
     private static $instances = array();    
     
-    public function SubConstruct() : void { array_push(self::$instances, $this); }
+    public function PostConstruct() : void { array_push(self::$instances, $this); }
     
     /** array of paths that were newly created */
     protected array $createdItems = array();
@@ -622,9 +614,9 @@ abstract class Storage extends StandardObject implements Transactions
      */
     protected function renameRollbacks(string $old, string $new) : self
     {
-        if (in_array($old, $this->createdItems))
+        if (in_array($old, $this->createdItems, true))
         {
-            Utilities::delete_value($this->createdItems, $old);
+            unset(array_keys($this->createdItems, $old, true));
             
             $this->createdItems[] = $new;
         }
@@ -640,7 +632,7 @@ abstract class Storage extends StandardObject implements Transactions
     /** Deletes all pending rollback actions for the given path */
     protected function deleteRollbacks(string $path) : self
     {
-        Utilities::delete_value($this->createdItems, $path);
+        unset(array_keys($this->createdItems, $path, true));
         
         $this->onRollback = array_filter($this->onRollback, 
             function(PathRollback $obj)use($path){ return $obj->path !== $path; } );
@@ -659,8 +651,8 @@ abstract class Storage extends StandardObject implements Transactions
     
     public function rollback() 
     {
-        foreach (array_reverse($this->onRollback) as $obj) try { ($obj->func)(); } 
-            catch (\Throwable $e) { ErrorManager::GetInstance()->LogException($e); }
+        foreach (array_reverse($this->onRollback) as $obj) 
+            ErrorManager::GetInstance()->LoggedTry($obj->func);
         
         $this->createdItems = array();        
         $this->onRollback = array();
@@ -675,8 +667,8 @@ abstract class Storage extends StandardObject implements Transactions
     {
         foreach (self::$instances as $fs)
         {
-            try { $fs->rollback(); } catch (\Throwable $e) {
-                ErrorManager::GetInstance()->LogException($e); }
+            ErrorManager::GetInstance()->LoggedTry(
+                function()use($fs){ $fs->rollback(); });
         }
     }    
 }
