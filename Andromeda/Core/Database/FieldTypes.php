@@ -911,6 +911,8 @@ class NullObjectRefT extends BaseField
 {
     /** ID reference */
     protected ?string $objId;
+    /** @var ?T object reference (cache) */
+    protected ?BaseObject $object;
     
     /** 
      * field class
@@ -936,6 +938,7 @@ class NullObjectRefT extends BaseField
     /** @return $this */
     public function InitDBValue($value) : self
     {
+        unset($this->object);
         if ($value !== null)
             $value = (string)$value;
         
@@ -953,11 +956,12 @@ class NullObjectRefT extends BaseField
      */
     public function TryGetObject() : ?BaseObject
     {
+        if (isset($this->object)) return $this->object;
         if ($this->objId === null) return null;
         
         $obj = ($this->class)::TryLoadByID($this->database, $this->objId);
         
-        if ($obj !== null) return $obj;
+        if ($obj !== null) return $this->object = $obj;
         throw new Exceptions\ForeignKeyException($this->class);
     }
     
@@ -971,6 +975,7 @@ class NullObjectRefT extends BaseField
      */
     public function SetObject(?BaseObject $object) : bool
     {
+        $this->object = $object;
         if ($object === null)
         {
             if ($this->objId === null) 
@@ -1001,6 +1006,8 @@ class ObjectRefT extends BaseField
 {
     /** ID reference */
     protected string $objId;
+    /** @var T object reference (cache) */
+    protected BaseObject $object;
     
     /** 
      * field class 
@@ -1025,6 +1032,7 @@ class ObjectRefT extends BaseField
     /** @return $this */
     public function InitDBValue($value) : self
     {
+        unset($this->object);
         if ($value === null)
             throw new FieldDataNullException($this->name);
         else $value = (string)$value;
@@ -1043,9 +1051,11 @@ class ObjectRefT extends BaseField
      */
     public function GetObject() : BaseObject
     {
+        if (isset($this->object)) return $this->object;
+
         $obj = ($this->class)::TryLoadByID($this->database, $this->objId);
         
-        if ($obj !== null) return $obj;
+        if ($obj !== null) return $this->object = $obj;
         throw new Exceptions\ForeignKeyException($this->class);
     }
     
@@ -1062,6 +1072,7 @@ class ObjectRefT extends BaseField
      */
     public function SetObject(BaseObject $object) : bool
     {
+        $this->object = $object;
         if (isset($this->objId) && $object->ID() === $this->objId) return false;
 
         if ($object->isCreated())

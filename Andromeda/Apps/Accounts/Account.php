@@ -23,7 +23,7 @@ use Andromeda\Apps\Accounts\Resource\{Contact, EmailContact, Client, RecoveryKey
  * @phpstan-import-type ContactJ from Contact
  * @phpstan-import-type ClientJ from Client
  * @phpstan-type PublicAccountJ array{id:string, username:string, dispname:?string, contacts:list<string>}
- * @phpstan-type UserAccountJ array{id:string, username:string, dispname:?string, policy?:PolicyBaseJ, date_created?:float, date_loggedon?:?float, date_active?:?float, date_passwordset?:?float, recoverykeys?:array<string,RecoveryKeyJ>, twofactors?:array<string,TwoFactorJ>, contacts?:array<string,ContactJ>, clients?:array<string,ClientJ>}
+ * @phpstan-type UserAccountJ array{id:string, username:string, dispname:?string, crypto?:bool, policy?:PolicyBaseJ, date_created?:float, date_loggedon?:?float, date_active?:?float, date_passwordset?:?float, recoverykeys?:array<string,RecoveryKeyJ>, twofactors?:array<string,TwoFactorJ>, contacts?:array<string,ContactJ>, clients?:array<string,ClientJ>}
  * @phpstan-type AdminAccountJ array{comment:?string, date_modified:?float, groups:list<string>, policy_from?:array{session_timeout:?string, client_timeout:?string, max_password_age:?string, limit_sessions:?string, limit_contacts:?string, limit_recoverykeys:?string, admin:?string, disabled:?string, forcetf:?string, allowcrypto:?string, userdelete:?string, account_search:?string, group_search:?string}}
  */
 class Account extends PolicyBase implements IKeySource
@@ -687,16 +687,18 @@ class Account extends PolicyBase implements IKeySource
 
     /**
      * Gets a copy of the account's master key, encrypted
+     * @param string $salt the salt to use for deriving the key
      * @param string $nonce the nonce to use for encryption
-     * @param string $wrapkey the key to use for encryption
+     * @param string $wrappass the key to use to wrap the master key
+     * @param bool $fast if true, does a very fast transformation (use only if the password is itself a key)
      * @throws CryptoUnlockRequiredException if crypto has not been unlocked
      * @return string the encrypted copy of the master key
      */
-    public function GetEncryptedMasterKey(string $nonce, string $wrapkey) : string
+    public function GetEncryptedMasterKey(string $salt, string $nonce, string $wrappass, bool $fast = false) : string
     {
         if (isset($this->keysource))
-            return $this->keysource->GetEncryptedMasterKey($nonce, $wrapkey);
-        return $this->BaseGetEncryptedMasterKey($nonce, $wrapkey);
+            return $this->keysource->GetEncryptedMasterKey($salt, $nonce, $wrappass, $fast);
+        return $this->BaseGetEncryptedMasterKey($salt, $nonce, $wrappass, $fast);
     }
     
     /** @var array<callable(ObjectDatabase, self, bool): void> */
@@ -803,6 +805,7 @@ class Account extends PolicyBase implements IKeySource
 
         if ($full) $retval += array(
             'policy' => $this->GetPolicyClientObject(),
+            'crypto' => ($this->master_key->TryGetValue() !== null),
 
             'date_created' => $this->date_created->GetValue(),
             'date_loggedon' => $this->date_loggedon->TryGetValue(),

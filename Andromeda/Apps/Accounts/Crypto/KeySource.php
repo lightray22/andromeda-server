@@ -27,12 +27,14 @@ interface IKeySource
 
     /**
      * Gets a copy of the master key, encrypted
+     * @param string $salt the salt to use for deriving the key
      * @param string $nonce the nonce to use for encryption
-     * @param string $wrapkey the key to use for encryption
+     * @param string $wrappass the key to use to wrap the master key
+     * @param bool $fast if true, does a very fast transformation (use only if the password is itself a key)
      * @throws Exceptions\CryptoUnlockRequiredException if crypto has not been unlocked
      * @return string the encrypted copy of the master key
      */
-    public function GetEncryptedMasterKey(string $nonce, string $wrapkey) : string;
+    public function GetEncryptedMasterKey(string $salt, string $nonce, string $wrappass, bool $fast = false) : string;
 }
 
 /** An object that holds an encrypted copy of a crypto key */
@@ -67,13 +69,14 @@ trait KeySource
     
     /**
      * Initializes crypto with a new key, storing an encrypted copy of the given key
-     * @param string $wrapkey the key to use to wrap the master key
+     * @param string $wrappass the key to use to wrap the master key
+     * @param bool $fast if true, does a very fast transformation (use only if the password is itself a key)
      * @param bool $rekey true if crypto exists and we want to keep the same master key
      * @throws Exceptions\CryptoUnlockRequiredException if crypto is not unlocked, and rekeying
      * @throws Exceptions\CryptoAlreadyInitializedException if crypto already exists and not re-keying
      * @return $this
      */
-    protected function InitializeCrypto(string $wrapkey, bool $rekey = false) : self
+    protected function InitializeCrypto(string $wrappass, bool $fast = false, bool $rekey = false) : self
     {
         if (!$rekey && $this->hasCrypto())
             throw new Exceptions\CryptoAlreadyInitializedException();
@@ -86,8 +89,7 @@ trait KeySource
         $this->master_salt->SetValue($master_salt);
         $this->master_nonce->SetValue($master_nonce);
         
-        $wrapkey = Crypto::DeriveKey($wrapkey, $master_salt, Crypto::SecretKeyLength(), true);
-
+        $wrapkey = Crypto::DeriveKey($wrappass, $master_salt, Crypto::SecretKeyLength(), $fast);
         $this->master_raw = $rekey ? $this->master_raw : Crypto::GenerateSecretKey();
         $master_key = Crypto::EncryptSecret($this->master_raw, $master_nonce, $wrapkey);
         $this->master_key->SetValue($master_key);
@@ -97,10 +99,12 @@ trait KeySource
 
     /**
      * Attempts to unlock crypto using the given password
+     * @param bool $fast if true, does a very fast transformation (use only if the password is itself a key)
      * @throws Exceptions\CryptoNotInitializedException if no key material exists
      * @throws DecryptionFailedException if decryption fails
+     * @return $this
      */
-    protected function UnlockCrypto(string $wrapkey) : self
+    protected function UnlockCrypto(string $wrappass, bool $fast = false) : self
     {
         if (isset($this->master_raw)) return $this; // already unlocked
         
@@ -111,9 +115,19 @@ trait KeySource
         if ($key === null || $master_salt === null || $master_nonce === null)
             throw new Exceptions\CryptoNotInitializedException();
         
-        $wrapkey = Crypto::DeriveKey($wrapkey, $master_salt, Crypto::SecretKeyLength(), true);
+        $wrapkey = Crypto::DeriveKey($wrappass, $master_salt, Crypto::SecretKeyLength(), $fast);
         $this->master_raw = Crypto::DecryptSecret($key, $master_nonce, $wrapkey);
 
+        return $this;
+    }
+
+    /** 
+     * Re-locks crypto by trashing the unlocked key 
+     * @return $this
+     */
+    protected function LockCrypto() : self
+    {
+        unset($this->master_raw);
         return $this;
     }
     
@@ -133,11 +147,12 @@ trait KeySource
         return Crypto::DecryptSecret($data, $nonce, $this->master_raw);
     }
 
-    public function GetEncryptedMasterKey(string $nonce, string $wrapkey) : string
+    public function GetEncryptedMasterKey(string $salt, string $nonce, string $wrappass, bool $fast = false) : string
     {
         if (!isset($this->master_raw)) 
             throw new Exceptions\CryptoUnlockRequiredException();
 
+        $wrapkey = Crypto::DeriveKey($wrappass, $salt, Crypto::SecretKeyLength(), $fast);
         return Crypto::EncryptSecret($this->master_raw, $nonce, $wrapkey);
     }
     

@@ -158,16 +158,16 @@ class JoinObjectTest extends \PHPUnit\Framework\TestCase
         $qstr1 = "SELECT a2obj_core_database_testobject1.* FROM a2obj_core_database_testobject1 "
             ."JOIN a2obj_core_database_testjoinobject ON a2obj_core_database_testjoinobject.\"obj1\" = a2obj_core_database_testobject1.\"id\" WHERE \"obj2\" = :d0";
         $qstr2 = 'SELECT a2obj_core_database_testobject1.* FROM a2obj_core_database_testobject1 WHERE a2obj_core_database_testobject1."id" = :d0';
-        $qstr3 = 'SELECT a2obj_core_database_testobject2.* FROM a2obj_core_database_testobject2 WHERE a2obj_core_database_testobject2."id" = :d0';
-        $qstr4 = 'SELECT a2obj_core_database_testjoinobject.* FROM a2obj_core_database_testjoinobject WHERE "obj2" = :d0';
+        $qstr3 = 'SELECT a2obj_core_database_testjoinobject.* FROM a2obj_core_database_testjoinobject WHERE "obj2" = :d0';
+        $qstr4 = 'SELECT a2obj_core_database_testobject2.* FROM a2obj_core_database_testobject2 WHERE a2obj_core_database_testobject2."id" = :d0';
 
         $database->expects($this->exactly(4))->method('read')
             ->withConsecutive([$qstr1], [$qstr2], [$qstr3], [$qstr4])
             ->willReturnOnConsecutiveCalls(
                 [['id'=>$id1A="testobj1A"]], // LoadTestObject1
                 [['id'=>$id1B='testobj1B']], // TryLoadByID
-                [['id'=>$id2]], // GetRight
                 [['id'=>"testjoin",'obj1'=>$id1A,'obj2'=>$id2]], // pre-delete load
+                [['id'=>$id2]], // GetRight
             );
         
         $database->expects($this->exactly(3))->method('write')->willReturn(1); // create, delete, delete
@@ -181,11 +181,11 @@ class JoinObjectTest extends \PHPUnit\Framework\TestCase
         $obj1s = TestJoinObject::LoadTestObject1($objdb, $obj2); // CACHED, no read
         $this->assertCount(2, $obj1s);
 
-        $jobj->Delete(); // calls read (GetRight)
+        $jobj->Delete();
         $obj1s = TestJoinObject::LoadTestObject1($objdb, $obj2); // CACHED, no read
         $this->assertCount(1, $obj1s);
 
-        TestJoinObject::DeleteByTestObject2($objdb, $obj2); // calls read (select before delete) - GetRight is cached
+        TestJoinObject::DeleteByTestObject2($objdb, $obj2); // calls read (select before delete) - calls read (GetRight)
         $obj1s = TestJoinObject::LoadTestObject1($objdb, $obj2); // CACHED, no read
         $this->assertCount(0, $obj1s);
     }

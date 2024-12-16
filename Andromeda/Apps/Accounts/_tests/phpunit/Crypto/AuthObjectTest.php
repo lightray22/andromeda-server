@@ -1,10 +1,12 @@
 <?php declare(strict_types=1); namespace Andromeda\Apps\Accounts\Crypto; require_once("init.php");
 
-use Andromeda\Core\Database\{BaseObject, ObjectDatabase, PDODatabase, TableTypes};
+use Andromeda\Core\Database\{BaseObject, ObjectDatabase, TableTypes};
 
 class MyAuthObject extends BaseObject
 {
-    use AuthObject, TableTypes\TableNoChildren;
+    use AuthObjectFull, TableTypes\TableNoChildren;
+    
+    protected static function GetFullKeyPrefix() : string { return "test"; }
     
     protected function CreateFields() : void
     {
@@ -17,21 +19,14 @@ class MyAuthObject extends BaseObject
         parent::CreateFields();
     }        
     
-    /** @return static */
-    public static function Create(ObjectDatabase $database, bool $init) : self
-    {
-        $obj = $database->CreateObject(static::class);
-        
-        if ($init) $obj->InitAuthKey();
-        
-        return $obj;
-    }
-    
-    public function pubTryGetAuthKey() : ?string {
-        return $this->TryGetAuthKey(); }
-    
     public function pubGetAuthHash() : ?string {
         return $this->authkey->TryGetValue(); }
+
+    public function pubTryGetAuthKey() : ?string {
+        return $this->TryGetAuthKey(); }
+
+    public function pubInitAuthKey() : string {
+        return $this->InitAuthKey(); }
     
     /** @return $this */
     public function pubSetAuthKey(?string $key) : self {
@@ -42,8 +37,8 @@ class AuthObjectTest extends \PHPUnit\Framework\TestCase
 {
     public function testEmpty() : void
     {
-        $objdb = new ObjectDatabase($this->createMock(PDODatabase::class));
-        $obj = MyAuthObject::Create($objdb, false);
+        $objdb = $this->createMock(ObjectDatabase::class);
+        $obj = new MyAuthObject($objdb, [], false);
 
         $this->assertNull($obj->pubTryGetAuthKey());
         $this->assertNull($obj->pubGetAuthHash());
@@ -54,8 +49,9 @@ class AuthObjectTest extends \PHPUnit\Framework\TestCase
     
     public function testBasic() : void
     {
-        $objdb = new ObjectDatabase($this->createMock(PDODatabase::class));
-        $obj = MyAuthObject::Create($objdb, true);
+        $objdb = $this->createMock(ObjectDatabase::class);
+        $obj = new MyAuthObject($objdb, [], false);
+        $obj->pubInitAuthKey();
 
         $key = $obj->pubTryGetAuthKey();
         $this->assertIsString($key);
@@ -74,8 +70,8 @@ class AuthObjectTest extends \PHPUnit\Framework\TestCase
     
     public function testSetKey() : void
     {
-        $objdb = new ObjectDatabase($this->createMock(PDODatabase::class));
-        $obj = MyAuthObject::Create($objdb, false);
+        $objdb = $this->createMock(ObjectDatabase::class);
+        $obj = new MyAuthObject($objdb, [], false);
         
         $key = "mytest123"; $obj->pubSetAuthKey($key);
         $this->assertSame($key, $obj->pubTryGetAuthKey());
@@ -90,7 +86,7 @@ class AuthObjectTest extends \PHPUnit\Framework\TestCase
         $key = "1qo95feuuz5ixu9d4o530sxvbto8b99j";
         $hash = '$argon2id$v=19$m=1024,t=1,p=1$SEREcGtDQ2hQaHRDcmZYcQ$rbYiVNjqfVeKKTrseQ0z+eiYGIGhHCzPCoe+5bfOknc';
         
-        $objdb = new ObjectDatabase($this->createMock(PDODatabase::class));
+        $objdb = $this->createMock(ObjectDatabase::class);
         $obj = new MyAuthObject($objdb, array('id'=>'test123','authkey'=>$hash), false);
         
         $exc = false; try { $obj->pubTryGetAuthKey(); } // key not available yet
@@ -107,7 +103,7 @@ class AuthObjectTest extends \PHPUnit\Framework\TestCase
         $key = "testKey123456789";
         $hash = '$2y$10$JvPO9nS5Papx9Z4KrwLhAOc2DIkJm5kRm1hv8z/dGcMqH23MHEaFi';
         
-        $objdb = new ObjectDatabase($this->createMock(PDODatabase::class));
+        $objdb = $this->createMock(ObjectDatabase::class);
         $obj = new MyAuthObject($objdb, array('id'=>'test123','authkey'=>$hash), false);
         
         $this->assertSame($hash, $obj->pubGetAuthHash());
@@ -115,5 +111,43 @@ class AuthObjectTest extends \PHPUnit\Framework\TestCase
         
         $this->assertNotEquals($hash, $obj->pubGetAuthHash()); // re-hash
         $this->assertTrue($obj->CheckKeyMatch($key));
+    }
+
+    public function testTryGetFullKey() : void
+    {
+        $objdb = $this->createMock(ObjectDatabase::class);
+        $obj = new MyAuthObject($objdb, ['id'=>$id='test123'], false);
+        $obj->pubInitAuthKey();
+        
+        $key = $obj->pubTryGetAuthKey();
+        $this->assertSame("test:$id:$key", $obj->TryGetFullKey());
+        
+        $obj->pubSetAuthKey(null);
+        $this->assertNull($obj->TryGetFullKey());
+
+        $this->expectException(Exceptions\RawKeyNotAvailableException::class);
+        $obj->GetFullKey();
+    }
+    
+    public function testCheckFullKey() : void
+    {
+        $objdb = $this->createMock(ObjectDatabase::class);
+        $obj = new MyAuthObject($objdb, ['id'=>$id='test123'], false);
+        $obj->pubInitAuthKey();
+        
+        $key = $obj->pubTryGetAuthKey();
+        $full = "test:$id:$key";
+        
+        $this->assertTrue($obj->CheckFullKey($full));
+        $obj->pubSetAuthKey(null);
+        $this->assertFalse($obj->CheckFullKey($full));
+    }
+    
+    public function testGetIDFromFullKey() : void
+    {
+        $this->assertNull(MyAuthObject::TryGetIDFromFullKey(""));
+        $this->assertNull(MyAuthObject::TryGetIDFromFullKey("test:test2")); // too short
+        $this->assertNull(MyAuthObject::TryGetIDFromFullKey("aa:id123:fullkey456")); // wrong tag
+        $this->assertSame($id="myid123", MyAuthObject::TryGetIDFromFullKey("test:$id:fullkey456"));
     }
 }

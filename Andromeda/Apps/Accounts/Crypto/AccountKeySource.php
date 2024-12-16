@@ -41,15 +41,16 @@ trait AccountKeySource
     /** 
      * Sets the given account for the newly created key source
      * MUST be called when creating an object with this trait
-     * @param ?string $wrapkey key to use to initialize crypto
+     * @param string $wrappass key to use to initialize crypto
+     * @param bool $fast if true, does a very fast transformation (use only if the password is itself a key)
      * @return $this
      */
-    protected function AccountKeySourceCreate(Account $account, ?string $wrapkey = null) : self
+    protected function AccountKeySourceCreate(Account $account, string $wrappass, bool $fast = false) : self
     {
         $this->account->SetObject($account);
         
-        if ($wrapkey !== null && $account->hasCrypto())
-            $this->InitializeCryptoFromAccount($wrapkey);
+        if ($account->hasCrypto())
+            $this->InitializeCryptoFromAccount($wrappass, $fast);
         
         return $this;
     }
@@ -61,12 +62,13 @@ trait AccountKeySource
      * Initializes crypto, storing a copy of the account's master key
      *
      * Crypto must be unlocked for the account to get a copy of the key
-     * @param string $wrapkey the key to use to encrypt
+     * @param string $wrappass the key to use to wrap the master key
+     * @param bool $fast if true, does a very fast transformation (use only if the password is itself a key)
      * @throws Exceptions\CryptoAlreadyInitializedException if already initialized
      * @see Account::GetEncryptedMasterKey()
      * @return $this
      */
-    protected function InitializeCryptoFromAccount(string $wrapkey) : self
+    protected function InitializeCryptoFromAccount(string $wrappass, bool $fast = false) : self
     {
         // Account won't give us the key directly so we can't just call InitializeCryptoFrom
         if ($this->hasCrypto()) throw new Exceptions\CryptoAlreadyInitializedException();
@@ -76,10 +78,9 @@ trait AccountKeySource
         $this->master_salt->SetValue($master_salt);
         $this->master_nonce->SetValue($master_nonce);
         
-        $wrapkey = Crypto::DeriveKey($wrapkey, $master_salt, Crypto::SecretKeyLength(), true);
-        $master_key = $this->GetAccount()->GetEncryptedMasterKey($master_nonce, $wrapkey);
+        $master_key = $this->GetAccount()->GetEncryptedMasterKey($master_salt, $master_nonce, $wrappass, $fast);
         $this->master_key->SetValue($master_key);
 
-        return $this;
+        return $this->UnlockCrypto($wrappass, $fast);
     }
 }

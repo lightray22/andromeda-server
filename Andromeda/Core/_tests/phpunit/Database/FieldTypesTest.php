@@ -744,12 +744,11 @@ class FieldTypesTest extends \PHPUnit\Framework\TestCase
         $field = (new NullObjectRefT(TestObject1::class, 'myobj'))->SetParent($parent);
         
         $obj = new TestObject1($database, array('id'=>$id='test456'), false);
-        
-        $database->expects($this->once())
-            ->method('TryLoadUniqueByKey')->willReturn($obj);
+        $database->expects($this->exactly(0))->method('TryLoadUniqueByKey'); // cached
         
         $field->SetObject($obj);
         $this->assertSame($obj, $field->TryGetObject());
+        $this->assertSame($obj, $field->TryGetObject()); // cached
         $this->assertSame($id, $field->TryGetObjectID());
         
         $field->SetObject(null);
@@ -787,6 +786,7 @@ class FieldTypesTest extends \PHPUnit\Framework\TestCase
             ->willReturn($obj);
             
         $this->assertSame($obj, $field->GetObject());
+        $this->assertSame($obj, $field->GetObject()); // cached
     }
     
     public function testObjectValue() : void
@@ -798,9 +798,7 @@ class FieldTypesTest extends \PHPUnit\Framework\TestCase
         $field = (new ObjectRefT(TestObject1::class, 'myobj'))->SetParent($parent);
         
         $obj = new TestObject1($database, array('id'=>$id='test456'), false);
-        
-        $database->expects($this->once())
-            ->method('TryLoadUniqueByKey')->willReturn($obj);
+        $database->expects($this->exactly(0))->method('TryLoadUniqueByKey'); // cached
 
         $field->SetObject($obj);
         $this->assertSame($obj, $field->GetObject());

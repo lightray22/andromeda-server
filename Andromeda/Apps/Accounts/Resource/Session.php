@@ -66,7 +66,7 @@ class Session extends BaseObject implements IKeySource
         $obj->client->SetObject($client);
         
         $obj->AccountKeySourceCreate(
-            $account, $obj->InitAuthKey());
+            $account, $obj->InitAuthKey(), true);
         
         return $obj;
     }
@@ -156,7 +156,7 @@ class Session extends BaseObject implements IKeySource
         if (!$this->BaseCheckKeyMatch($key)) return false;
         
         if ($this->hasCrypto())
-            $this->UnlockCrypto($key); // shouldn't throw if key matches
+            $this->UnlockCrypto($key, true); // shouldn't throw if key matches
         
         $time = $this->database->GetTime();
         $maxage = $this->GetAccount()->GetSessionTimeout(); 
@@ -174,7 +174,7 @@ class Session extends BaseObject implements IKeySource
      */
     public function InitializeCrypto() : self
     {
-        return $this->InitializeCryptoFromAccount($this->GetAuthKey());
+        return $this->InitializeCryptoFromAccount($this->GetAuthKey(), true);
     }
     
     /**
