@@ -19,10 +19,16 @@ class ObjectDatabase
     
     /** time of construction */
     private float $time;
+
+    /** whether or not to check return values of writes */
+    private bool $checkWrites = true;
     
-    public function __construct(PDODatabase $db) 
+    /** @param bool $checkWrites if false, don't check write results (unit test only!) */
+    public function __construct(PDODatabase $db, bool $checkWrites = true) 
     {
-        $this->db = $db; $this->time = microtime(true);
+        $this->db = $db;
+        $this->time = microtime(true);
+        $this->checkWrites = $checkWrites;
     }
     
     /** Returns the internal database instance */
@@ -276,7 +282,7 @@ class ObjectDatabase
         // mariadb doesn't support "LIMIT & IN/ALL/ANY/SOME" unless wrapped in an extra subquery...
         $delstr = "DELETE FROM $basetbl WHERE id IN (SELECT id FROM ($selstr) AS t)";
 
-        if (($ret = $this->db->write($delstr, $query->GetParams())) !== $count)
+        if (($ret = $this->db->write($delstr, $query->GetParams())) !== $count && $this->checkWrites)
             throw new Exceptions\DeleteFailedException("$class ret:$ret want:$count");
 
         foreach ($objects as $obj) $this->RemoveObject($obj);
@@ -533,7 +539,7 @@ class ObjectDatabase
             $basetbl = $this->GetClassTableName($class::GetBaseTableClass());
             $delstr = "DELETE FROM $basetbl $query";
 
-            if ($this->db->write($delstr, $query->GetParams()) !== 1)
+            if ($this->db->write($delstr, $query->GetParams()) !== 1 && $this->checkWrites)
                 throw new Exceptions\DeleteFailedException($class);
         }
 
@@ -607,7 +613,7 @@ class ObjectDatabase
             $table = $this->GetClassTableName($class);
             $query = "UPDATE $table SET $setstr WHERE id=:id";
             
-            if ($this->db->write($query, $data) !== 1)
+            if ($this->db->write($query, $data) !== 1 && $this->checkWrites)
                 throw new Exceptions\UpdateFailedException($class);
             
             $this->UnsetObjectKeyFields($object, $fields);
@@ -663,7 +669,7 @@ class ObjectDatabase
             $table = $this->GetClassTableName($class);
             $query = "INSERT INTO $table ($colstr) VALUES ($idxstr)";
 
-            if ($this->db->write($query, $data) !== 1)
+            if ($this->db->write($query, $data) !== 1 && $this->checkWrites)
                 throw new Exceptions\InsertFailedException($class);
             
             // NOTE this is the reason we need ALL fields not just modified

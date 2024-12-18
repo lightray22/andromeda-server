@@ -7,6 +7,12 @@ use Andromeda\Core\Exceptions\DecryptionFailedException;
 
 interface IKeySource
 {
+    /** 
+     * Returns the key source's master key - DO NOT use directly 
+     * @throws Exceptions\CryptoUnlockRequiredException if crypto has not been unlocked
+     */
+    public function GetMasterKey() : string;
+
     /**
      * Encrypts a value using the source's crypto
      * @param string $data the plaintext to be encrypted
@@ -24,17 +30,6 @@ interface IKeySource
      * @return string the plaintext decrypted with the source's key
      */
     public function DecryptSecret(string $data, string $nonce) : string;
-
-    /**
-     * Gets a copy of the master key, encrypted
-     * @param string $salt the salt to use for deriving the key
-     * @param string $nonce the nonce to use for encryption
-     * @param string $wrappass the key to use to wrap the master key
-     * @param bool $fast if true, does a very fast transformation (use only if the password is itself a key)
-     * @throws Exceptions\CryptoUnlockRequiredException if crypto has not been unlocked
-     * @return string the encrypted copy of the master key
-     */
-    public function GetEncryptedMasterKey(string $salt, string $nonce, string $wrappass, bool $fast = false) : string;
 }
 
 /** An object that holds an encrypted copy of a crypto key */
@@ -47,15 +42,6 @@ trait KeySource
     /** The salt used to encrypt the master key */
     private FieldTypes\NullStringType $master_salt;
 
-    /** Returns true if server-side crypto is available on the source */
-    public function hasCrypto() : bool { return $this->master_key->TryGetValue() !== null; }
-    
-    /** The decrypted master key if available */
-    private string $master_raw;
-    
-    /** Returns true if crypto has been unlocked in this request and is available for operations */
-    public function isCryptoAvailable() : bool { return isset($this->master_raw); }
-    
     protected function KeySourceCreateFields() : void
     {
         $fields = array();
@@ -65,6 +51,22 @@ trait KeySource
         $this->master_salt = $fields[] =  new FieldTypes\NullStringType('master_salt');
         
         $this->RegisterChildFields($fields);
+    }
+
+    /** Returns true if server-side crypto is available on the source */
+    public function hasCrypto() : bool { return $this->master_key->TryGetValue() !== null; }
+    
+    /** The decrypted master key if available */
+    private string $master_raw;
+    
+    /** Returns true if crypto has been unlocked in this request and is available for operations */
+    public function isCryptoAvailable() : bool { return isset($this->master_raw); }
+
+    public function GetMasterKey() : string
+    { 
+        if (!isset($this->master_raw))
+            throw new Exceptions\CryptoUnlockRequiredException();
+        return $this->master_raw;
     }
     
     /**
@@ -76,7 +78,7 @@ trait KeySource
      * @throws Exceptions\CryptoAlreadyInitializedException if crypto already exists and not re-keying
      * @return $this
      */
-    protected function InitializeCrypto(string $wrappass, bool $fast = false, bool $rekey = false) : self
+    protected function BaseInitializeCrypto(string $wrappass, bool $fast = false, bool $rekey = false) : self
     {
         if (!$rekey && $this->hasCrypto())
             throw new Exceptions\CryptoAlreadyInitializedException();
@@ -147,15 +149,6 @@ trait KeySource
         return Crypto::DecryptSecret($data, $nonce, $this->master_raw);
     }
 
-    public function GetEncryptedMasterKey(string $salt, string $nonce, string $wrappass, bool $fast = false) : string
-    {
-        if (!isset($this->master_raw)) 
-            throw new Exceptions\CryptoUnlockRequiredException();
-
-        $wrapkey = Crypto::DeriveKey($wrappass, $salt, Crypto::SecretKeyLength(), $fast);
-        return Crypto::EncryptSecret($this->master_raw, $nonce, $wrapkey);
-    }
-    
     /** 
      * Erases all key material from the object
      * @return $this

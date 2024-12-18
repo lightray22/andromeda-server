@@ -17,7 +17,7 @@ class Session extends BaseObject implements IKeySource
 {
     use TableTypes\TableNoChildren;
     
-    use AccountKeySource { InitializeCrypto as BaseInitializeCrypto; }
+    use AccountKeySource;
     use AuthObject { CheckKeyMatch as BaseCheckKeyMatch; }
     
     /** The date this session was created */
@@ -171,6 +171,7 @@ class Session extends BaseObject implements IKeySource
     /**
      * Initializes crypto for the session
      * The account must have crypto unlocked, and this session must have its raw auth key available
+     * @return $this
      */
     public function InitializeCrypto() : self
     {

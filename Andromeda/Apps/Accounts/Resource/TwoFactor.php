@@ -18,25 +18,25 @@ class TwoFactor extends BaseObject
     use TableTypes\TableNoChildren;
     
     /** Date the twofactor was created */
-    private FieldTypes\Timestamp $date_created;
+    protected FieldTypes\Timestamp $date_created;
     /** The optional user label for this twofactor */
-    private FieldTypes\NullStringType $comment;
+    protected FieldTypes\NullStringType $comment;
     /** The twofactor secret for generating codes */
-    private FieldTypes\StringType $secret;
+    protected FieldTypes\StringType $secret;
     /** The nonce if the secret is encrypted */
-    private FieldTypes\NullStringType $nonce;
+    protected FieldTypes\NullStringType $nonce;
     /** True if this twofactor has been validated */
-    private FieldTypes\BoolType $valid;
+    protected FieldTypes\BoolType $valid;
     /** The timestamp this twofactor was last used */
-    private FieldTypes\NullTimestamp $date_used;
+    protected FieldTypes\NullTimestamp $date_used;
     /**
      * The account this twofactor is for
      * @var FieldTypes\ObjectRefT<Account> 
      */
-    private FieldTypes\ObjectRefT $account;
+    protected FieldTypes\ObjectRefT $account;
     
     /** The raw secret in case it's encrypted */
-    private string $raw_secret;
+    protected string $raw_secret;
 
     protected function CreateFields() : void
     {
@@ -55,8 +55,8 @@ class TwoFactor extends BaseObject
         parent::CreateFields();
     }
     
-    /** The length of the OTP secret */
-    private const SECRET_LENGTH = 32; 
+    /** The length of the OTP secret (bytes) */
+    protected const SECRET_LENGTH = 32; 
     
     /** the time tolerance for codes, as a multiple of 30-seconds */
     public const TIME_TOLERANCE = 2;
@@ -108,7 +108,10 @@ class TwoFactor extends BaseObject
         return $database->DeleteObjectsByKey(static::class, 'account', $account->ID());
     }
     
-    /** Creates and returns a new twofactor object for the given account */
+    /** 
+     * Creates and returns a new twofactor object for the given account
+     * @return static
+     */
     public static function Create(ObjectDatabase $database, Account $account, ?string $comment = null) : self
     {
         $obj = $database->CreateObject(static::class);
@@ -116,8 +119,8 @@ class TwoFactor extends BaseObject
         $obj->comment->SetValue($comment);
         $obj->account->SetObject($account);
         
-        $ga = new \PHPGangsta_GoogleAuthenticator();
-        $obj->secret->SetValue($ga->createSecret(self::SECRET_LENGTH));
+        $google2fa = new \PragmaRX\Google2FA\Google2FA();
+        $obj->secret->SetValue($google2fa->generateSecretKey(self::SECRET_LENGTH));
         
         if ($account->hasCrypto()) $obj->InitializeCrypto();
         
@@ -125,7 +128,7 @@ class TwoFactor extends BaseObject
     }
     
     /** Returns the (decrypted) OTP secret */
-    private function GetSecret() : string
+    protected function GetSecret() : string
     {
         if (!isset($this->raw_secret))
         {
@@ -139,6 +142,13 @@ class TwoFactor extends BaseObject
         }
         
         return $this->raw_secret;
+    }
+    
+    /** Returns a URL for viewing a QR code of the OTP secret */
+    protected function GetSecretURL() : string
+    {
+        $google2fa = new \PragmaRX\Google2FA\Google2FA();
+        return $google2fa->getQRCodeUrl('Andromeda',$this->GetAccount()->GetUsername(),$this->GetSecret());
     }
     
     public function NotifyPreDeleted() : void
@@ -174,28 +184,18 @@ class TwoFactor extends BaseObject
         UsedToken::PruneOldCodes($this->database);
 
         foreach (UsedToken::LoadByTwoFactor($this->database, $this) as $usedtoken)
-        {
             if ($usedtoken->GetCode() === $code) return false;
-        }
 
-        $ga = new \PHPGangsta_GoogleAuthenticator();
-        
-        if (!$ga->verifyCode($this->GetSecret(), $code, self::TIME_TOLERANCE)) return false;
+        $google2fa = new \PragmaRX\Google2FA\Google2FA();
+        if ($google2fa->verifyKey($this->GetSecret(), $code, self::TIME_TOLERANCE) === false)
+            return false; // code failed!
 
         $this->valid->SetValue(true);
         $this->date_used->SetTimeNow();
         
-        UsedToken::Create($this->database, $this, $code);       
+        UsedToken::Create($this->database, $this, $code)->Save();
         
         return true;
-    }
-    
-    /** Returns a Google URL for viewing a QR code of the OTP secret */
-    public function GetURL() : string
-    {
-        $ga = new \PHPGangsta_GoogleAuthenticator();
-        
-        return $ga->getQRCodeGoogleUrl("Andromeda", $this->GetSecret());
     }
     
     /**
@@ -215,7 +215,7 @@ class TwoFactor extends BaseObject
         if ($secret) 
         {
             $data['secret'] = $this->GetSecret();
-            $data['qrcodeurl'] = $this->GetURL();
+            $data['qrcodeurl'] = $this->GetSecretURL();
         }
 
         return $data;

@@ -74,9 +74,6 @@ class FTP extends External
         ));
     }
     
-    /** @var ?resource */
-    private $ftpConn = null;
-    
     /** Asserts that the FTP extension exists */
     public function PostConstruct(bool $created) : void
     {
@@ -84,11 +81,8 @@ class FTP extends External
             throw new Exceptions\FTPExtensionException();
     }
     
-    /** Initiates a connection to the FTP server */
-    public function Activate() : self
+    public function VerifyUsernamePassword(string $username, string $password) : bool
     {
-        if ($this->ftpConn !== null) return $this;
-        
         $host = $this->hostname->GetValue(); 
         $port = $this->port->TryGetValue() ?? 0; // 0 to use default
         
@@ -97,22 +91,12 @@ class FTP extends External
 
         if ($ftpConn === false)
             throw new Exceptions\FTPConnectionFailure();
-        $this->ftpConn = $ftpConn; // @phpstan-ignore-line PHP 7/8 ftpConn types differ
         
-        return $this;
-    }
-    
-    public function VerifyUsernamePassword(string $username, string $password) : bool
-    {
-        $this->Activate();
-        assert($this->ftpConn !== null); // from Activate
-
         try 
         { 
-            $success = ftp_login($this->ftpConn, $username, $password); // @phpstan-ignore-line PHP 7/8 ftpConn types differ
-            
-            ftp_close($this->ftpConn); // @phpstan-ignore-line PHP 7/8 ftpConn types differ
-            unset($this->ftpConn);
+            $success = ftp_login($ftpConn, $username, $password);
+
+            ftp_close($ftpConn);
             return $success;
         }
         catch (BaseExceptions\PHPError $e) 

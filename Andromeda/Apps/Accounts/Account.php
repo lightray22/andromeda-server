@@ -33,9 +33,7 @@ class Account extends PolicyBase implements IKeySource
         isCryptoAvailable as BaseIsCryptoAvailable;
         EncryptSecret as BaseEncryptSecret;
         DecryptSecret as BaseDecryptSecret;
-        GetEncryptedMasterKey as BaseGetEncryptedMasterKey;
-        DestroyCrypto as BaseDestroyCrypto; 
-        InitializeCrypto as BaseInitializeCrypto; 
+        DestroyCrypto as BaseDestroyCrypto;
     }
 
     use TableTypes\TableNoChildren;
@@ -685,22 +683,6 @@ class Account extends PolicyBase implements IKeySource
         return $this->BaseDecryptSecret($data, $nonce);
     }
 
-    /**
-     * Gets a copy of the account's master key, encrypted
-     * @param string $salt the salt to use for deriving the key
-     * @param string $nonce the nonce to use for encryption
-     * @param string $wrappass the key to use to wrap the master key
-     * @param bool $fast if true, does a very fast transformation (use only if the password is itself a key)
-     * @throws CryptoUnlockRequiredException if crypto has not been unlocked
-     * @return string the encrypted copy of the master key
-     */
-    public function GetEncryptedMasterKey(string $salt, string $nonce, string $wrappass, bool $fast = false) : string
-    {
-        if (isset($this->keysource))
-            return $this->keysource->GetEncryptedMasterKey($salt, $nonce, $wrappass, $fast);
-        return $this->BaseGetEncryptedMasterKey($salt, $nonce, $wrappass, $fast);
-    }
-    
     /** @var array<callable(ObjectDatabase, self, bool): void> */
     private static array $crypto_handlers = array();
     

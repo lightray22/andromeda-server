@@ -186,7 +186,7 @@ class AccountsApp extends BaseApp
      * @param SafeParam $param param to extract value from
      * @return string validated alphanum or email
      */
-    public static function getUsername(SafeParam $param) : string // TODO this should go away, user should specify --email or --username
+    public static function getUsername(SafeParam $param) : string // TODO FUTURE this should go away, user should specify --email or --username
     {
         try { return $param->GetAlphanum(); }
         catch (SafeParamInvalidException $e) {
@@ -241,7 +241,7 @@ class AccountsApp extends BaseApp
      */
     protected function GetAccount(SafeParams $params, ?Authenticator $authenticator) : ?array
     {
-        if ($authenticator === null) return null;
+        if ($authenticator === null) return null; // not logged in
         
         if ($params->HasParam('account'))
         {
@@ -253,10 +253,10 @@ class AccountsApp extends BaseApp
         }
         else $account = $authenticator->GetAccount();
 
-        $admin = $authenticator->isRealAdmin();
+        $admin = $authenticator->isAdmin();
         $full = $params->GetOptParam("full",false)->GetBool();
 
-        if ($account !== $authenticator->GetAccount() && !$admin)
+        if (!$admin && $account !== $authenticator->GetAccount())
         {
             if ($full) throw new Exceptions\AdminRequiredException();
             return $account->GetPublicClientObject();

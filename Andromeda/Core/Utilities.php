@@ -162,7 +162,7 @@ abstract class Utilities
      */
     public static function escape_all(string $str, array $delims) : string
     {
-        // TODO not multibyte safe, will replace part of UTF-8 characters
+        // TODO FUTURE not multibyte safe, will replace part of UTF-8 characters
         $str = str_replace("\\", "\\\\", $str);
         foreach ($delims as $delim)
             $str = str_replace($delim,"\\$delim", $str);

@@ -74,9 +74,6 @@ class LDAP extends External
         ));
     }
     
-    /** @var ?resource */
-    private $ldapConn = null;
-
     /** Checks for the existence of the LDAP extension */
     public function PostConstruct(bool $created) : void
     {        
@@ -84,37 +81,24 @@ class LDAP extends External
             throw new Exceptions\LDAPExtensionException();
     }
     
-    /** Initiates a connection to the LDAP server */
-    public function Activate() : self
+    public function VerifyUsernamePassword(string $username, string $password) : bool
     {
-        if ($this->ldapConn !== null) return $this;
-        
         $protocol = $this->secure->GetValue() ? "ldaps" : "ldap";
         
         $ldapConn = ldap_connect("$protocol://".$this->hostname->GetValue());
         if ($ldapConn === false) throw new Exceptions\LDAPConnectionFailure();
-        $this->ldapConn = $ldapConn; // @phpstan-ignore-line PHP 7/8 ldapConn types differ
         
-        ldap_set_option($this->ldapConn, LDAP_OPT_PROTOCOL_VERSION, 3);
-        ldap_set_option($this->ldapConn, LDAP_OPT_REFERRALS, 0);
-        
-        return $this;
-    }
-    
-    public function VerifyUsernamePassword(string $username, string $password) : bool
-    {
-        $this->Activate();
-        assert($this->ldapConn !== null); // from Activate
+        ldap_set_option($ldapConn, LDAP_OPT_PROTOCOL_VERSION, 3);
+        ldap_set_option($ldapConn, LDAP_OPT_REFERRALS, 0);
         
         $prefix = $this->userprefix->TryGetValue(); 
         if ($prefix !== null) $username = "$prefix\\$username";
         
         try 
         {
-            $success = ldap_bind($this->ldapConn, $username, $password);  // @phpstan-ignore-line PHP 7/8 ldapConn types differ
+            $success = ldap_bind($ldapConn, $username, $password);
             
-            ldap_close($this->ldapConn); // @phpstan-ignore-line PHP 7/8 ldapConn types differ
-            unset($this->ldapConn);
+            ldap_close($ldapConn);
             return $success;
         }
         catch (BaseExceptions\PHPError $e) 
@@ -122,9 +106,9 @@ class LDAP extends External
             $errman = $this->GetApiPackage()->GetErrorManager();
             $errman->LogException($e);
             
-            if (($lerr = ldap_error($this->ldapConn)) !== "") // @phpstan-ignore-line PHP 7/8 ldapConn types differ
+            if (($lerr = ldap_error($ldapConn)) !== "")
             {
-                ldap_get_option($this->ldapConn, LDAP_OPT_DIAGNOSTIC_MESSAGE, $lerr2); // @phpstan-ignore-line PHP 7/8 ldapConn types differ
+                ldap_get_option($ldapConn, LDAP_OPT_DIAGNOSTIC_MESSAGE, $lerr2);
                 assert(is_string($lerr2)); // this ldap option returns a string
 
                 $errman->LogException(new Exceptions\LDAPErrorException("$lerr: $lerr2"));

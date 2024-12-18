@@ -21,9 +21,9 @@
         "ext-pdo": "*",
         "ext-sodium": "*",
         "phpmailer/phpmailer": "^6.0",
-        "phpgangsta/googleauthenticator": "dev-master",
         "phpseclib/phpseclib" : "^3.0.6",
-        "aws/aws-sdk-php": "^3.0"
+        "aws/aws-sdk-php": "^3.0",
+        "pragmarx/google2fa": "^8.0"
     },
     "suggest": {
         "ext-pdo_mysql": "For MySQL databases",

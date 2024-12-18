@@ -244,7 +244,7 @@ class AppTests(BaseAppTest):
             return False
         
         if not self.interface.isPriv:
-            if self.verbose >= 1: print("TODO impossible to test over HTTP currently")
+            if self.verbose >= 1: print("TODO ACCOUNTS impossible to test over HTTP currently")
             # TODO ACCOUNTS once accounts works, can at least have an option to prompt admin to re-enable the server manually then continue the test (like email test)?
             # maybe not worth it because lots of other accounts app stuff will have this same problem
             return False

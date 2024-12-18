@@ -17,5 +17,21 @@ class LocalTest extends \PHPUnit\Framework\TestCase
         $auth->SetPassword($account, $password="test123");
         $this->assertTrue($auth->VerifyAccountPassword($account, $password));
         $this->assertFalse($auth->VerifyAccountPassword($account, "wrong password"));
+
+        // the hash should change even with the same password (different salt)
+        $hash = $account->TryGetPasswordHash();
+        $auth->SetPassword($account, $password);
+        $this->assertNotSame($hash, $account->TryGetPasswordHash());
+    }
+
+    public function testLocalAuthRehash() : void
+    {
+        $auth = new Local();
+        $objdb = $this->createMock(ObjectDatabase::class);
+        $account = new Account($objdb, [], false);
+
+        $account->SetPasswordHash($hash = password_hash($password="test1234", PASSWORD_BCRYPT));  // @phpstan-ignore-line PHP7.4 only can return false
+        $this->assertTrue($auth->VerifyAccountPassword($account, $password));
+        $this->assertNotSame($hash, $account->TryGetPasswordHash());
     }
 }

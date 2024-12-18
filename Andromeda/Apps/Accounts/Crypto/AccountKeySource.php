@@ -65,22 +65,14 @@ trait AccountKeySource
      * @param string $wrappass the key to use to wrap the master key
      * @param bool $fast if true, does a very fast transformation (use only if the password is itself a key)
      * @throws Exceptions\CryptoAlreadyInitializedException if already initialized
-     * @see Account::GetEncryptedMasterKey()
      * @return $this
      */
     protected function InitializeCryptoFromAccount(string $wrappass, bool $fast = false) : self
     {
-        // Account won't give us the key directly so we can't just call InitializeCryptoFrom
         if ($this->hasCrypto()) throw new Exceptions\CryptoAlreadyInitializedException();
         
-        $master_salt = Crypto::GenerateSalt();
-        $master_nonce = Crypto::GenerateSecretNonce();
-        $this->master_salt->SetValue($master_salt);
-        $this->master_nonce->SetValue($master_nonce);
-        
-        $master_key = $this->GetAccount()->GetEncryptedMasterKey($master_salt, $master_nonce, $wrappass, $fast);
-        $this->master_key->SetValue($master_key);
-
-        return $this->UnlockCrypto($wrappass, $fast);
+        $this->master_raw = $this->GetAccount()->GetMasterKey();
+        $this->BaseInitializeCrypto($wrappass, $fast, true); // use rekey
+        return $this;
     }
 }

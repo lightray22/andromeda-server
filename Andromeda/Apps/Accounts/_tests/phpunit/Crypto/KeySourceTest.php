@@ -25,7 +25,7 @@ class MyKeySource extends BaseObject
 
     /** @return $this */
     public function pubInitializeCrypto(string $wrappass, bool $fast, bool $rekey = false) : self { 
-        return $this->InitializeCrypto($wrappass, $fast, $rekey); }
+        return $this->BaseInitializeCrypto($wrappass, $fast, $rekey); }
 
     /** @return $this */
     public function pubUnlockCrypto(string $wrappass, bool $fast) : self {
@@ -38,9 +38,6 @@ class MyKeySource extends BaseObject
     /** @return $this */
     public function pubDestroyCrypto() : self {
         return $this->DestroyCrypto(); }
-
-    public function pubGetEncryptedMasterKey(string $wrappass, bool $fast) : string {
-        return $this->GetEncryptedMasterKey($this->master_salt->TryGetValue()??"", $this->master_nonce->TryGetValue()??"", $wrappass, $fast); }
 
     /** @return $this */
     public function pubInitializeCryptoFromAccount(Account $account, string $wrappass, bool $fast) : self
@@ -81,6 +78,7 @@ class KeySourceTest extends \PHPUnit\Framework\TestCase
 
         $rawkey = $obj->pubGetMasterKey(true);
         $enckey = $obj->pubGetMasterKey(false);
+        $this->assertSame($rawkey, $obj->GetMasterKey());
         $this->assertNotSame($rawkey, $enckey);
 
         $this->assertTrue($obj->hasCrypto());
@@ -89,8 +87,6 @@ class KeySourceTest extends \PHPUnit\Framework\TestCase
         $obj->pubInitializeCrypto($wrappass = "wraptest", true, true); // rekey
         $this->assertSame($rawkey, $obj->pubGetMasterKey(true));
         $this->assertNotSame($enckey, $obj->pubGetMasterKey(false));
-
-        $this->assertSame($obj->pubGetMasterKey(false), $obj->pubGetEncryptedMasterKey($wrappass, true));
 
         $this->expectException(Exceptions\CryptoAlreadyInitializedException::class);
         $obj->pubInitializeCrypto($wrappass, true);
