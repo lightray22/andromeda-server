@@ -129,13 +129,6 @@ class Authenticator
             if ($auth->account->isDisabled() !== 0) 
                 throw new Exceptions\AccountDisabledException();
             
-            if (!$database->GetApiPackage()->GetConfig()->isReadOnly())
-            {
-                $auth->account->SetActiveDate();
-                $auth->session->SetActiveDate();
-                $auth->session->GetClient()->SetActiveDate();
-            }
-            
             if (($sudouser !== null || $sudoacct !== null) && !$auth->account->isAdmin())
                 throw new Exceptions\AdminRequiredException();
         }

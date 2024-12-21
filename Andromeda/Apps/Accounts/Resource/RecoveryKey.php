@@ -21,7 +21,7 @@ class RecoveryKey extends BaseObject implements IKeySource
 
     protected static function GetFullKeyPrefix() : string { return "rk"; } 
     
-    private const SET_SIZE = 8;
+    public const SET_SIZE = 8;
     
     /** Date the recovery key was created */
     private FieldTypes\Timestamp $date_created;
@@ -48,6 +48,8 @@ class RecoveryKey extends BaseObject implements IKeySource
      */
     public static function CreateSet(ObjectDatabase $database, Account $account) : array
     {        
+        $account->CheckLimitRecoveryKeys(self::SET_SIZE);
+
         return array_map(function($i)use($database, $account){ 
             return static::Create($database, $account); 
         }, range(0, self::SET_SIZE-1));
@@ -66,7 +68,7 @@ class RecoveryKey extends BaseObject implements IKeySource
         
         $obj->AccountKeySourceCreate(
             $account, $obj->InitAuthKey(), true);
-        
+
         return $obj;
     }
 

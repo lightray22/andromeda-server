@@ -617,10 +617,6 @@ class AccountsApp extends BaseApp
         
         if ($actionlog !== null) $actionlog->LogDetails('session',$session->ID()); 
         
-        /* update object dates */
-        $client->SetLoggedonDate();
-        $account->SetLoggedonDate();
-        
         return array('client'=>$client->GetClientObject(true), 
                      'account'=>$account->GetUserClientObject());
     }

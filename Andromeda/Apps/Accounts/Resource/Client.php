@@ -98,15 +98,10 @@ class Client extends BaseObject
     /** Gets the account that owns this client */
     public function GetAccount() : Account { return $this->account->GetObject(); }
 
-    /** Sets the timestamp this client was active to now */
-    public function SetActiveDate() : self
-    {
-        $this->date_active->SetTimeNow(); return $this;
-    }
-    
     /** Sets the timestamp when the client last created a session to now */
     public function SetLoggedonDate() : self 
-    { 
+    {
+        $this->GetAccount()->SetLoggedonDate();
         $this->date_loggedon->SetTimeNow(); return $this; 
     }
     
@@ -170,13 +165,17 @@ class Client extends BaseObject
         $time = $this->database->GetTime();
         $maxage = $this->GetAccount()->GetClientTimeout(); 
         $active = $this->date_active->TryGetValue();
-        
+
         if ($maxage !== null && $active !== null &&
-            $time - $active > $maxage) return false;
-        
-        $this->useragent->SetValue($interface->getUserAgent());
-        $this->lastaddr->SetValue($interface->getAddress());  
-        
+            ($time - $active) >= $maxage) return false;
+                
+        if (!$this->database->isReadOnly())
+        {
+            $this->date_active->SetTimeNow();
+            $this->useragent->SetValue($interface->getUserAgent());
+            $this->lastaddr->SetValue($interface->getAddress());  
+        }
+
         return true;
     }
     

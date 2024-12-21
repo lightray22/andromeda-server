@@ -18,6 +18,7 @@ class SessionTest extends \PHPUnit\Framework\TestCase
         $account->expects($this->once())->method('CheckLimitSessions');
 
         $session = MySession::Create($objdb, $account, $this->createMock(Client::class));
+        $this->assertSame($account, $session->GetAccount());
         $this->assertNotEmpty($key=$session->pubGetAuthKey());
         $this->assertFalse($session->CheckKeyMatch("test123"));
         $this->assertTrue($session->CheckKeyMatch($key));
@@ -44,4 +45,16 @@ class SessionTest extends \PHPUnit\Framework\TestCase
         $this->assertTrue($session->isCryptoAvailable());
     }
 
+    public function testSessionTimeout() : void
+    {
+        $objdb = new ObjectDatabase($this->createMock(PDODatabase::class), false);
+        $account = $this->createMock(Account::class);
+
+        $account->method('GetSessionTimeout')->willReturn(0); // impossible to pass
+        $account->expects($this->once())->method('SetActiveDate');
+
+        $session = MySession::Create($objdb, $account, $this->createMock(Client::class));
+        $this->assertTrue($session->CheckKeyMatch($session->pubGetAuthKey())); // no previous date active
+        $this->assertFalse($session->CheckKeyMatch($session->pubGetAuthKey())); // date active was set, now expired
+    }
 }

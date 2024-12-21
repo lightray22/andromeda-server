@@ -67,6 +67,8 @@ class Session extends BaseObject implements IKeySource
         $obj = $database->CreateObject(static::class);
         $obj->date_created->SetTimeNow();
         $obj->client->SetObject($client);
+
+        $client->SetLoggedonDate();
         
         $obj->AccountKeySourceCreate(
             $account, $obj->InitAuthKey(), true);
@@ -142,12 +144,6 @@ class Session extends BaseObject implements IKeySource
         return $database->DeleteObjectsByQuery(static::class, $q);
     }
 
-    /** Sets the timestamp this session was active to now */
-    public function SetActiveDate() : self
-    {
-        $this->date_active->SetTimeNow(); return $this;
-    }
-    
     /**
      * Authenticates the given info claiming to be this session and checks the timeout
      * @param string $key the session authentication key
@@ -161,13 +157,19 @@ class Session extends BaseObject implements IKeySource
         $time = $this->database->GetTime();
         $maxage = $this->GetAccount()->GetSessionTimeout(); 
         $active = $this->date_active->TryGetValue();
-        
+
         if ($maxage !== null && $active !== null &&
-            $time - $active > $maxage) return false;
+            ($time - $active) >= $maxage) return false;
         
         if ($this->hasCrypto())
             $this->UnlockCrypto($key, true); // shouldn't throw since the key matches
         
+        if (!$this->database->isReadOnly())
+        {
+            $this->date_active->SetTimeNow();
+            $this->GetAccount()->SetActiveDate();
+        }
+
         return true;
     }
 
