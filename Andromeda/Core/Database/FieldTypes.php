@@ -929,6 +929,7 @@ class NullObjectRefT extends BaseField
         parent::__construct($name);
         
         $this->objId = null;
+        $this->object = null;
         $this->class = $class;
     }
 

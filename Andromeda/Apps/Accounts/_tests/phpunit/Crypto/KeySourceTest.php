@@ -1,7 +1,7 @@
 <?php declare(strict_types=1); namespace Andromeda\Apps\Accounts\Crypto; require_once("init.php");
 
 use Andromeda\Core\Crypto;
-use Andromeda\Core\Database\{BaseObject, ObjectDatabase, TableTypes};
+use Andromeda\Core\Database\{BaseObject, ObjectDatabase, PDODatabase, TableTypes};
 use Andromeda\Core\Exceptions\DecryptionFailedException;
 use Andromeda\Apps\Accounts\Account;
 
@@ -18,6 +18,14 @@ class MyKeySource extends BaseObject
         $this->AccountKeySourceCreateFields();
         
         parent::CreateFields();
+    }
+
+    /** @return static */
+    public static function Create(ObjectDatabase $database, Account $account, string $wrappass)
+    {
+        $obj = $database->CreateObject(static::class);
+        $obj->AccountKeySourceCreate($account, $wrappass);
+        return $obj;
     }
 
     public function pubGetMasterKey(bool $raw) : ?string {
@@ -156,6 +164,20 @@ class KeySourceTest extends \PHPUnit\Framework\TestCase
 
         $this->expectException(Exceptions\CryptoAlreadyInitializedException::class);
         $obj->pubInitializeCryptoFromAccount($account, $wrappass, true);
+    }
+
+    public function testKeySourceCreate() : void
+    {
+        $objdb = new ObjectDatabase($this->createMock(PDODatabase::class));
+        $account = new Account($objdb, ['id'=>'myid12'], false);
+
+        $obj = MyKeySource::Create($objdb, $account, $wrappass="test");
+        $this->assertSame($account, $obj->GetAccount());
+        $this->assertFalse($obj->hasCrypto());
+
+        $account->InitializeCrypto("testpw");
+        $obj = MyKeySource::Create($objdb, $account, $wrappass);
+        $this->assertTrue($obj->hasCrypto()); // automatic!
     }
 }
 

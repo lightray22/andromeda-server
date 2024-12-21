@@ -56,7 +56,10 @@ class Session extends BaseObject implements IKeySource
     /** Returns the client that owns this session */
     public function GetClient() : Client { return $this->client->GetObject(); }
     
-    /** Create a new session for the given account and client */
+    /** 
+     * Create a new session for the given account and client 
+     * @return static
+     */
     public static function Create(ObjectDatabase $database, Account $account, Client $client) : self
     {
         $account->CheckLimitSessions();
@@ -155,15 +158,15 @@ class Session extends BaseObject implements IKeySource
     {
         if (!$this->BaseCheckKeyMatch($key)) return false;
         
-        if ($this->hasCrypto())
-            $this->UnlockCrypto($key, true); // shouldn't throw if key matches
-        
         $time = $this->database->GetTime();
         $maxage = $this->GetAccount()->GetSessionTimeout(); 
         $active = $this->date_active->TryGetValue();
         
         if ($maxage !== null && $active !== null &&
             $time - $active > $maxage) return false;
+        
+        if ($this->hasCrypto())
+            $this->UnlockCrypto($key, true); // shouldn't throw since the key matches
         
         return true;
     }

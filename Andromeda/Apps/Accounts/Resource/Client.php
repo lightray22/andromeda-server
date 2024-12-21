@@ -60,7 +60,6 @@ class Client extends BaseObject
         $this->RegisterFields($fields, self::class);
         
         $this->AuthObjectCreateFields();
-        
         parent::CreateFields();
     }
 
@@ -159,7 +158,7 @@ class Client extends BaseObject
     
     /**
      * Authenticates the given info claiming to be this client and checks the timeout
-     * @param IOInterface $interface the interface used for the request
+     * @param IOInterface $interface the interface used for the request (logs user agent/IP)
      * @param string $key the client authentication key
      * @return bool true if success, false if invalid
      * @see AuthObject::CheckKeyMatch()

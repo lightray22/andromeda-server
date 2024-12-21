@@ -57,7 +57,7 @@ abstract class Contact extends BaseObject
     
     protected function CreateFields() : void
     {
-        $fields = array();
+        $fields = $this->GetTypeFields();
         
         $this->address = $fields[] = new FieldTypes\StringType('address');
         $this->public = $fields[] = new FieldTypes\BoolType('public', false, false);
@@ -66,7 +66,8 @@ abstract class Contact extends BaseObject
         $this->account = $fields[] = new FieldTypes\ObjectRefT(Account::class, 'account');
         
         $this->RegisterFields($fields, self::class);
-        
+
+        $this->AuthObjectCreateFields();
         parent::CreateFields();
     }
 
@@ -77,10 +78,8 @@ abstract class Contact extends BaseObject
     {
         if (!$this->BaseCheckFullKey($code)) return false;
         
-        $this->SetAuthKey(null);
-        
+        $this->SetAuthKey(null); // valid contact
         $this->GetAccount()->NotifyValidContact();
-        
         return true;
     }
 
@@ -181,11 +180,14 @@ abstract class Contact extends BaseObject
      */
     public function SetIsPublic(bool $val) : self { $this->public->SetValue($val); return $this; }
     
+    /** Returns true if this contact is the "from" for its type */
+    public function GetUseAsFrom() : bool { return $this->asfrom->TryGetValue() === true; }
+
     /** 
      * Sets whether this contact should be used as from (can only be one) 
      * @return $this
      */
-    public function SetUseAsFrom(bool $val) : self
+    public function SetUseAsFrom(bool $val = true) : self
     {
         if ($val)
         {
@@ -335,7 +337,7 @@ abstract class Contact extends BaseObject
             'address' => $this->GetAddress(),
             'valid' => $this->GetIsValid(),
             'public' => $this->GetIsPublic(),
-            'asfrom' => $this->asfrom->TryGetValue() === true,
+            'asfrom' => $this->GetUseAsFrom(),
             'date_created' => $this->date_created->GetValue()
         );
     }

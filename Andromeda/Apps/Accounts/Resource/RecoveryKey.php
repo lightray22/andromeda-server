@@ -17,7 +17,7 @@ class RecoveryKey extends BaseObject implements IKeySource
 {
     use TableTypes\TableNoChildren;
     
-    use AccountKeySource, AuthObjectFull { CheckFullKey as BaseCheckFullKey; CheckKeyMatch as BaseCheckKeyMatch; }
+    use AccountKeySource, AuthObjectFull { CheckKeyMatch as BaseCheckKeyMatch; }
 
     protected static function GetFullKeyPrefix() : string { return "rk"; } 
     
@@ -36,7 +36,7 @@ class RecoveryKey extends BaseObject implements IKeySource
         
         $this->AuthObjectCreateFields();
         $this->AccountKeySourceCreateFields();
-        
+
         parent::CreateFields();
     }
     
@@ -70,22 +70,14 @@ class RecoveryKey extends BaseObject implements IKeySource
         return $obj;
     }
 
-    public function CheckFullKey(string $code) : bool
-    {
-        $retval = $this->BaseCheckFullKey($code);
-
-        if ($retval) $this->DeleteLater();
-        
-        return $retval;
-    }
-
     public function CheckKeyMatch(string $key) : bool
     {
         if (!$this->BaseCheckKeyMatch($key)) return false;
         
         if ($this->hasCrypto())
-            $this->UnlockCrypto($key, true); // shouldn't throw if key matches
-        
+            $this->UnlockCrypto($key, true); // shouldn't throw since the key matches
+
+        $this->DeleteLater(); // single-use
         return true;
     }
 
