@@ -1,9 +1,9 @@
 {
     "authors" : [{
-            "name" : "lightray22"
+            "name" : "stingray-11"
         }
     ],
-    "name" : "lightray22/andromeda-server",
+    "name" : "irondrive/andromeda-server",
     "description" : "Andromeda API server",
     "license" : "SSPL-1.0",
     "config": {
