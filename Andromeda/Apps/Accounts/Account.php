@@ -24,7 +24,7 @@ use Andromeda\Apps\Accounts\Resource\{Contact, EmailContact, Client, RecoveryKey
  * @phpstan-import-type ClientJ from Client
  * @phpstan-type PublicAccountJ array{id:string, username:string, dispname:?string, contacts:list<string>}
  * @phpstan-type UserAccountJ array{id:string, username:string, dispname:?string, crypto?:bool, policy?:PolicyBaseJ, date_created?:float, date_loggedon?:?float, date_active?:?float, date_passwordset?:?float, recoverykeys?:array<string,RecoveryKeyJ>, twofactors?:array<string,TwoFactorJ>, contacts?:array<string,ContactJ>, clients?:array<string,ClientJ>}
- * @phpstan-type AdminAccountJ array{comment:?string, date_modified:?float, groups:list<string>, policy_from?:array{session_timeout:?string, client_timeout:?string, max_password_age:?string, limit_sessions:?string, limit_contacts:?string, limit_recoverykeys:?string, admin:?string, disabled:?string, forcetf:?string, allowcrypto:?string, userdelete:?string, account_search:?string, group_search:?string}}
+ * @phpstan-type AdminAccountJ array{comment:?string, date_modified:?float, groups:list<string>, policy_from?:array{session_timeout:?string, client_timeout:?string, max_password_age:?string, limit_clients:?string, limit_contacts:?string, limit_recoverykeys:?string, admin:?string, disabled:?string, forcetf:?string, allowcrypto:?string, userdelete:?string, account_search:?string, group_search:?string}}
  */
 class Account extends PolicyBase implements IKeySource
 {
@@ -337,10 +337,10 @@ class Account extends PolicyBase implements IKeySource
     }
     
     /** Returns the maximum allowed number of sessions */
-    private function GetLimitSessions() : ?int
+    private function GetLimitClients() : ?int
     {
         $default = null;
-        $f = $this->GetInheritableField(function(PolicyBase $b){ return $b->limit_sessions; });
+        $f = $this->GetInheritableField(function(PolicyBase $b){ return $b->limit_clients; });
         return ($f !== null) ? $f->TryGetValue() ?? $default : $default;
     }
 
@@ -361,14 +361,14 @@ class Account extends PolicyBase implements IKeySource
     }
 
     /** 
-     * Checks that the current session count + delta is within the limit 
+     * Checks that the current client count + delta is within the limit 
      * @throws CounterOverLimitException if over the limit
      */
-    public function CheckLimitSessions(int $delta = 1) : void
+    public function CheckLimitClients(int $delta = 1) : void
     {
-        if (($limit = $this->GetLimitSessions()) === null) return;
-        if (Session::CountByAccount($this->database, $this)+$delta > $limit)
-            throw new CounterOverLimitException('sessions');
+        if (($limit = $this->GetLimitClients()) === null) return;
+        if (Client::CountByAccount($this->database, $this)+$delta > $limit)
+            throw new CounterOverLimitException('clients');
     }
 
     /** 
@@ -741,7 +741,7 @@ class Account extends PolicyBase implements IKeySource
             'session_timeout' => $this->GetSessionTimeout(),
             'client_timeout' => $this->GetClientTimeout(),
             'max_password_age' => $this->GetMaxPasswordAge(),
-            'limit_sessions' => $this->GetLimitSessions(),
+            'limit_clients' => $this->GetLimitClients(),
             'limit_contacts' => $this->GetLimitContacts(),
             'limit_recoverykeys' => $this->GetLimitRecoveryKeys(),
 
@@ -823,7 +823,7 @@ class Account extends PolicyBase implements IKeySource
             $session_timeout = $this->GetInheritableSource(function(PolicyBase $b){ return $b->session_timeout; });
             $client_timeout = $this->GetInheritableSource(function(PolicyBase $b){ return $b->client_timeout; });
             $max_password_age = $this->GetInheritableSource(function(PolicyBase $b){ return $b->max_password_age; });
-            $limit_sessions = $this->GetInheritableSource(function(PolicyBase $b){ return $b->limit_sessions; });
+            $limit_clients = $this->GetInheritableSource(function(PolicyBase $b){ return $b->limit_clients; });
             $limit_contacts = $this->GetInheritableSource(function(PolicyBase $b){ return $b->limit_contacts; });
             $limit_recoverykeys = $this->GetInheritableSource(function(PolicyBase $b){ return $b->limit_recoverykeys; });
 
@@ -839,7 +839,7 @@ class Account extends PolicyBase implements IKeySource
                 'session_timeout' => ($session_timeout !== null) ? (string)$session_timeout : null,
                 'client_timeout' => ($client_timeout !== null) ? (string)$client_timeout : null,
                 'max_password_age' => ($max_password_age !== null) ? (string)$max_password_age : null,
-                'limit_sessions' => ($limit_sessions !== null) ? (string)$limit_sessions : null,
+                'limit_clients' => ($limit_clients !== null) ? (string)$limit_clients : null,
                 'limit_contacts' => ($limit_contacts !== null) ? (string)$limit_contacts : null,
                 'limit_recoverykeys' => ($limit_recoverykeys !== null) ? (string)$limit_recoverykeys : null,
                 

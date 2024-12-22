@@ -220,7 +220,7 @@ class Group extends PolicyBase
                 'session_timeout' => $this->session_timeout->TryGetValue(),
                 'client_timeout' => $this->client_timeout->TryGetValue(),
                 'max_password_age' => $this->max_password_age->TryGetValue(),
-                'limit_sessions' => $this->limit_sessions->TryGetValue(),
+                'limit_clients' => $this->limit_clients->TryGetValue(),
                 'limit_contacts' => $this->limit_contacts->TryGetValue(),
                 'limit_recoverykeys' => $this->limit_recoverykeys->TryGetValue(),
 

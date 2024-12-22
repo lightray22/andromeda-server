@@ -102,7 +102,7 @@ CREATE TABLE `a2obj_apps_accounts_policybase` (
 ,  `accountsearch` integer DEFAULT NULL
 ,  `groupsearch` integer DEFAULT NULL
 ,  `userdelete` integer DEFAULT NULL
-,  `limit_sessions` integer DEFAULT NULL
+,  `limit_clients` integer DEFAULT NULL
 ,  `limit_contacts` integer DEFAULT NULL
 ,  `limit_recoverykeys` integer DEFAULT NULL
 ,  `session_timeout` integer DEFAULT NULL

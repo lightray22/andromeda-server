@@ -15,7 +15,6 @@ class SessionTest extends \PHPUnit\Framework\TestCase
     {
         $objdb = new ObjectDatabase($this->createMock(PDODatabase::class));
         $account = $this->createMock(Account::class);
-        $account->expects($this->once())->method('CheckLimitSessions');
 
         $session = MySession::Create($objdb, $account, $this->createMock(Client::class));
         $this->assertSame($account, $session->GetAccount());

@@ -15,6 +15,7 @@ class ClientTest extends \PHPUnit\Framework\TestCase
     {
         $objdb = new ObjectDatabase($this->createMock(PDODatabase::class));
         $account = $this->createMock(Account::class);
+        $account->expects($this->once())->method('CheckLimitClients');
 
         $iface = $this->createMock(IOInterface::class);
         $iface->method('GetAddress')->willReturn($address="address172");

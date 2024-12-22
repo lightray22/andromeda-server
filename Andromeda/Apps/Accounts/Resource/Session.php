@@ -62,8 +62,6 @@ class Session extends BaseObject implements IKeySource
      */
     public static function Create(ObjectDatabase $database, Account $account, Client $client) : self
     {
-        $account->CheckLimitSessions();
-
         $obj = $database->CreateObject(static::class);
         $obj->date_created->SetTimeNow();
         $obj->client->SetObject($client);
@@ -88,12 +86,6 @@ class Session extends BaseObject implements IKeySource
         return $database->TryDeleteUniqueByKey(static::class, 'client', $client->ID());
     }
     
-    /** Count all sessions for a given account */
-    public static function CountByAccount(ObjectDatabase $database, Account $account) : int
-    { 
-        return $database->CountObjectsByKey(static::class, 'account', $account->ID());
-    }
-
     /** 
      * Load all sessions for a given account 
      * @return array<string, static>

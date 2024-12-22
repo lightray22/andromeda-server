@@ -6,7 +6,7 @@ use Andromeda\Apps\Accounts\Resource\Contact;
 
 /** 
  * Base class for account/groups containing properties that can be set per-account or per-group
- * @phpstan-type PolicyBaseJ array{session_timeout:?int, client_timeout:?int, max_password_age:?int, limit_sessions:?int, limit_contacts:?int, limit_recoverykeys:?int, admin:?bool, disabled:?int, forcetf:?bool, allowcrypto:?bool, userdelete:?bool, account_search:?int, group_search:?int}
+ * @phpstan-type PolicyBaseJ array{session_timeout:?int, client_timeout:?int, max_password_age:?int, limit_clients:?int, limit_contacts:?int, limit_recoverykeys:?int, admin:?bool, disabled:?int, forcetf:?bool, allowcrypto:?bool, userdelete:?bool, account_search:?int, group_search:?int}
  */
 abstract class PolicyBase extends BaseObject
 {
@@ -39,7 +39,7 @@ abstract class PolicyBase extends BaseObject
     /** whether the user is allowed to delete their account */
     protected FieldTypes\NullBoolType $userdelete;
     /** maximum number of sessions for the account */
-    protected FieldTypes\NullIntType $limit_sessions;
+    protected FieldTypes\NullIntType $limit_clients;
     /** maximum number of contacts for the account */
     protected FieldTypes\NullIntType $limit_contacts;
     /** maximum number of recovery keys for the account */
@@ -64,7 +64,7 @@ abstract class PolicyBase extends BaseObject
         $this->account_search = $fields[] = new FieldTypes\NullIntType('accountsearch');
         $this->group_search = $fields[] = new FieldTypes\NullIntType('groupsearch');
         $this->userdelete = $fields[] = new FieldTypes\NullBoolType('userdelete');
-        $this->limit_sessions = $fields[] = new FieldTypes\NullIntType('limit_sessions');
+        $this->limit_clients = $fields[] = new FieldTypes\NullIntType('limit_clients');
         $this->limit_contacts = $fields[] = new FieldTypes\NullIntType('limit_contacts');
         $this->limit_recoverykeys = $fields[] = new FieldTypes\NullIntType('limit_recoverykeys');
         $this->session_timeout = $fields[] = new FieldTypes\NullIntType('session_timeout');
@@ -77,7 +77,7 @@ abstract class PolicyBase extends BaseObject
 
     /** defines command usage for SetProperties() */
     public static function GetPropUsage() : string { return "[--comment ?text] [--session_timeout ?uint] [--client_timeout ?uint] [--max_password_age ?uint] ".
-                                                            "[--limit_sessions ?uint8] [--limit_contacts ?uint8] [--limit_recoverykeys ?uint8] ".
+                                                            "[--limit_clients ?uint8] [--limit_contacts ?uint8] [--limit_recoverykeys ?uint8] ".
                                                             "[--admin ?bool] [--disabled ?bool] [--forcetf ?bool] [--allowcrypto ?bool] ".
                                                             "[--account_search ?uint8] [--group_search ?uint8] [--userdelete ?bool]"; }
 
@@ -94,7 +94,7 @@ abstract class PolicyBase extends BaseObject
             if ($params->HasParam($field->GetName())) 
                 $field->SetValue($params->GetParam($field->GetName())->GetNullUint());
 
-        foreach (array($this->limit_sessions, $this->limit_contacts, $this->limit_recoverykeys, $this->account_search, $this->group_search) as $field)
+        foreach (array($this->limit_clients, $this->limit_contacts, $this->limit_recoverykeys, $this->account_search, $this->group_search) as $field)
             if ($params->HasParam($field->GetName())) 
                 $field->SetValue($params->GetParam($field->GetName())->GetNullUint8());
 

@@ -72,6 +72,12 @@ class Client extends BaseObject
         return $database->LoadObjectsByKey(static::class, 'account', $account->ID());
     }
 
+    /** Count all clients for a given account */
+    public static function CountByAccount(ObjectDatabase $database, Account $account) : int
+    { 
+        return $database->CountObjectsByKey(static::class, 'account', $account->ID());
+    }
+
     /** Delete all clients for a given account */
     public static function DeleteByAccount(ObjectDatabase $database, Account $account) : int
     { 
@@ -134,6 +140,8 @@ class Client extends BaseObject
      */
     public static function Create(IOInterface $interface, ObjectDatabase $database, Account $account, ?string $name = null) : self
     {
+        $account->CheckLimitClients();
+
         $obj = $database->CreateObject(static::class);
         $obj->date_created->SetTimeNow();
         
