@@ -118,9 +118,8 @@ class ErrorLog extends BaseLog
      * Create a new DB error log entry from an ErrorInfo
      * @param ObjectDatabase $database database reference
      * @param ErrorInfo $info error log info to copy
-     * @return static new ErrorLog database object
      */
-    public static function Create(ObjectDatabase $database, ErrorInfo $info) : self
+    public static function Create(ObjectDatabase $database, ErrorInfo $info) : static
     {
         $obj = $database->CreateObject(static::class);
         

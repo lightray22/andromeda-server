@@ -30,6 +30,7 @@ class Emailer extends BaseObject
     public const TYPE_QMAIL = 2; 
     public const TYPE_SMTP = 3;
     
+    /** @var array<string,int> */
     private const MAIL_TYPES = array(
         'phpmail'=>self::TYPE_PHPMAIL, 
         'sendmail'=>self::TYPE_SENDMAIL, 

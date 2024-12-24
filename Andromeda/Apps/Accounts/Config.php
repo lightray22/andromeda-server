@@ -41,9 +41,9 @@ class Config extends BaseConfig
     {
         $fields = array();
 
-        $this->create_account = $fields[] =     new FieldTypes\IntType('createaccount',false,0);
-        $this->require_contact = $fields[] =    new FieldTypes\IntType('requirecontact',false,0);
-        $this->username_isContact = $fields[] = new FieldTypes\BoolType('usernameiscontact',false,false);
+        $this->create_account = $fields[] =     new FieldTypes\IntType('createaccount', default:0);
+        $this->require_contact = $fields[] =    new FieldTypes\IntType('requirecontact', default:0);
+        $this->username_isContact = $fields[] = new FieldTypes\BoolType('usernameiscontact', default:false);
         $this->default_group = $fields[]      = new FieldTypes\NullObjectRefT(Group::class, 'default_group');
         $this->default_auth = $fields[]       = new FieldTypes\NullObjectRefT(AuthSource\External::class, 'default_auth');
         
@@ -53,7 +53,7 @@ class Config extends BaseConfig
     }
     
     /** Creates a new Config singleton */
-    public static function Create(ObjectDatabase $database) : self 
+    public static function Create(ObjectDatabase $database) : static
     {
         return $database->CreateObject(static::class);
     }
@@ -132,6 +132,7 @@ class Config extends BaseConfig
     /** Allow anyone to create a new account (public) */
     public const CREATE_PUBLIC = 2;
     
+    /** @var array<string,int> */
     private const CREATE_TYPES = array(
         'disable'=>0, 
         'allowlist'=>self::CREATE_ALLOWLIST, 
@@ -154,6 +155,7 @@ class Config extends BaseConfig
     /** Require that accounts have validated contact info */
     public const CONTACT_VALID = 2;
     
+    /** @var array<string,int> */
     private const CONTACT_TYPES = array(
         'none'=>0, 
         'exist'=>self::CONTACT_EXIST, 

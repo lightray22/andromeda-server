@@ -21,9 +21,8 @@ abstract class SingletonObject extends BaseObject
      * Gets the instance of the given class, possibly loading it from the DB
      * @param ObjectDatabase $database reference to the database
      * @throws Exceptions\SingletonNotFoundException if no object is loaded
-     * @return static
      */
-    public static function GetInstance(ObjectDatabase $database) : self
+    public static function GetInstance(ObjectDatabase $database) : static
     {
         $key = self::GetIndex($database);
         

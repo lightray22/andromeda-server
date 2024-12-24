@@ -60,7 +60,7 @@ abstract class Contact extends BaseObject
         $fields = $this->GetTypeFields();
         
         $this->address = $fields[] = new FieldTypes\StringType('address');
-        $this->public = $fields[] = new FieldTypes\BoolType('public', false, false);
+        $this->public = $fields[] = new FieldTypes\BoolType('public', default:false);
         $this->asfrom = $fields[] = new FieldTypes\NullBoolType('from');
         $this->date_created = $fields[] = new FieldTypes\Timestamp('date_created');
         $this->account = $fields[] = new FieldTypes\ObjectRefT(Account::class, 'account');
@@ -208,9 +208,8 @@ abstract class Contact extends BaseObject
      * @param Account $account account of contact
      * @param string $address the contact address
      * @param bool $verify true to send a validation message
-     * @return static
      */
-    public static function Create(ObjectDatabase $database, Account $account, string $address, bool $verify = false) : self
+    public static function Create(ObjectDatabase $database, Account $account, string $address, bool $verify = false) : static
     {
         $account->CheckLimitContacts();
         

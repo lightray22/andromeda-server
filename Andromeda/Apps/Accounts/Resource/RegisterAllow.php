@@ -42,9 +42,8 @@ class RegisterAllow extends BaseObject
      * @param ObjectDatabase $database database reference
      * @param value-of<self::TYPES> $type entry type enum
      * @param string $value value of allowlist entry
-     * @return static new allowlist entry
      */
-    public static function Create(ObjectDatabase $database, int $type, string $value) : self
+    public static function Create(ObjectDatabase $database, int $type, string $value) : static
     {
         $obj = $database->CreateObject(static::class);
         $obj->date_created->SetTimeNow();

@@ -3,7 +3,7 @@
 use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, QueryBuilder, TableTypes};
 
 use Andromeda\Apps\Accounts\Account;
-use Andromeda\Apps\Accounts\Crypto\{AuthObject, AccountKeySource, IKeySource};
+use Andromeda\Apps\Accounts\Crypto\{AuthObject, AccountKeySource, IKeySource, Exceptions\RawKeyNotAvailableException};
 
 /**
  * Implements an account session, the primary implementor of authentication
@@ -17,7 +17,7 @@ class Session extends BaseObject implements IKeySource
 {
     use TableTypes\TableNoChildren;
     
-    use AccountKeySource;
+    use AccountKeySource { UnlockCrypto as BaseUnlockCrypto; }
     use AuthObject { CheckKeyMatch as BaseCheckKeyMatch; }
     
     /** The date this session was created */
@@ -35,7 +35,7 @@ class Session extends BaseObject implements IKeySource
         $fields = array();
 
         $this->date_created = $fields[] = new FieldTypes\Timestamp('date_created');
-        $this->date_active =  $fields[] = new FieldTypes\NullTimestamp('date_active');
+        $this->date_active =  $fields[] = new FieldTypes\NullTimestamp('date_active', saveOnRollback:true);
         $this->client =       $fields[] = new FieldTypes\ObjectRefT(Client::class, 'client');
         
         $this->RegisterFields($fields, self::class);
@@ -56,11 +56,8 @@ class Session extends BaseObject implements IKeySource
     /** Returns the client that owns this session */
     public function GetClient() : Client { return $this->client->GetObject(); }
     
-    /** 
-     * Create a new session for the given account and client 
-     * @return static
-     */
-    public static function Create(ObjectDatabase $database, Account $account, Client $client) : self
+    /** Create a new session for the given account and client */
+    public static function Create(ObjectDatabase $database, Account $account, Client $client) : static
     {
         $obj = $database->CreateObject(static::class);
         $obj->date_created->SetTimeNow();
@@ -153,9 +150,6 @@ class Session extends BaseObject implements IKeySource
         if ($maxage !== null && $active !== null &&
             ($time - $active) >= $maxage) return false;
         
-        if ($this->hasCrypto())
-            $this->UnlockCrypto($key, true); // shouldn't throw since the key matches
-        
         if (!$this->database->isReadOnly())
         {
             $this->date_active->SetTimeNow();
@@ -175,6 +169,21 @@ class Session extends BaseObject implements IKeySource
         return $this->InitializeCryptoFromAccount($this->GetAuthKey(), true);
     }
     
+    /**
+     * Attempts to unlock crypto using the previously checked key, sets the account key source
+     * @throws RawKeyNotAvailableException if CheckKeyMatch was not run with the key
+     * @return $this
+     */
+    public function UnlockCrypto() : self
+    {
+        if (!isset($this->authkey_raw))
+            throw new RawKeyNotAvailableException();
+
+        $this->BaseUnlockCrypto($this->authkey_raw, true);
+        $this->account->GetObject()->SetCryptoKeySource($this);
+        return $this;
+    }
+
     /**
      * Returns a printable client object for this session from its account
      * @return SessionJ

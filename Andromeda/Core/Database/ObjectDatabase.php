@@ -433,7 +433,7 @@ class ObjectDatabase
         foreach ($this->objectsByBase as $bclass=>$objs)
             foreach ($objs as $obj)
         {
-            $retval[$bclass][$obj->ID()] = get_class($obj);
+            $retval[$bclass][$obj->ID()] = $obj::class;
         }
         return $retval;
     }
@@ -531,7 +531,7 @@ class ObjectDatabase
 
         if (!array_key_exists(spl_object_hash($object),$this->created))
         {
-            $class = get_class($object);
+            $class = $object::class;
             $query = new QueryBuilder();
             $query->Where($query->Equals('id',$object->ID()));
 
@@ -1035,7 +1035,7 @@ class ObjectDatabase
     private function SetUniqueKeysFromData(BaseObject $object, array $data) : void
     {
         $objstr = spl_object_hash($object);
-        $class = get_class($object);
+        $class = $object::class;
         
         foreach ($data as $key=>$value)
         {
@@ -1058,7 +1058,7 @@ class ObjectDatabase
     private function SetObjectKeyFields(BaseObject $object, array $fields) : void
     {
         $objstr = spl_object_hash($object);
-        $class = get_class($object);
+        $class = $object::class;
         
         $this->objectsByKey[$class] ??= array();
         $this->uniqueByKey[$class] ??= array();
@@ -1117,7 +1117,7 @@ class ObjectDatabase
     private function UnsetObjectKeyFields(BaseObject $object, array $fields) : void
     {
         $objstr = spl_object_hash($object);
-        $class = get_class($object);
+        $class = $object::class;
 
         $this->objectsKeyValues[$objstr] ??= array();
         $this->uniqueKeyValues[$objstr] ??= array();
@@ -1153,7 +1153,7 @@ class ObjectDatabase
     private function UnsetAllObjectKeyFields(BaseObject $object) : void
     {
         $objstr = spl_object_hash($object);
-        $class = get_class($object);
+        $class = $object::class;
         
         if (array_key_exists($objstr, $this->objectsKeyValues))
         {

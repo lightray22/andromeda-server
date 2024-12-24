@@ -52,11 +52,8 @@ class Config extends BaseConfig
     /** True if metrics should be logged to a file */
     private FieldTypes\BoolType $metrics_filelog;
     
-    /** 
-     * Creates a new config singleton with default values 
-     * @return static
-     */
-    public static function Create(ObjectDatabase $database) : self
+    /** Creates a new config singleton with default values */
+    public static function Create(ObjectDatabase $database) : static
     {
         $obj = $database->CreateObject(static::class);
         $obj->apps->SetArray(array());
@@ -75,21 +72,21 @@ class Config extends BaseConfig
         $fields = array();
         
         $fields[] = $this->datadir =            new FieldTypes\NullStringType('datadir');
-        $fields[] = $this->read_only =          new FieldTypes\BoolType('read_only',false, false);
-        $fields[] = $this->enabled =            new FieldTypes\BoolType('enabled',false, true);
-        $fields[] = $this->email =              new FieldTypes\BoolType('email',false, true);
-        $fields[] = $this->apps =               new FieldTypes\JsonArray('apps',false);
+        $fields[] = $this->read_only =          new FieldTypes\BoolType('read_only', default:false);
+        $fields[] = $this->enabled =            new FieldTypes\BoolType('enabled', default:true);
+        $fields[] = $this->email =              new FieldTypes\BoolType('email', default:true);
+        $fields[] = $this->apps =               new FieldTypes\JsonArray('apps');
         
-        $fields[] = $this->actionlog_db =      new FieldTypes\BoolType('actionlog_db',false, false);
-        $fields[] = $this->actionlog_file  =   new FieldTypes\BoolType('actionlog_file',false, false);
-        $fields[] = $this->actionlog_details = new FieldTypes\IntType ('actionlog_details',false, self::ACTLOG_DETAILS_BASIC);
-        $fields[] = $this->debug =              new FieldTypes\IntType ('debug',false, self::ERRLOG_ERRORS);
-        $fields[] = $this->debug_http =         new FieldTypes\BoolType('debug_http',false, false);
-        $fields[] = $this->debug_dblog =        new FieldTypes\BoolType('debug_dblog',false, true);
-        $fields[] = $this->debug_filelog =      new FieldTypes\BoolType('debug_filelog',false, false);
-        $fields[] = $this->metrics =            new FieldTypes\IntType ('metrics',false, 0);
-        $fields[] = $this->metrics_dblog =      new FieldTypes\BoolType('metrics_dblog',false, false);
-        $fields[] = $this->metrics_filelog =    new FieldTypes\BoolType('metrics_filelog',false, false);
+        $fields[] = $this->actionlog_db =      new FieldTypes\BoolType('actionlog_db', default:false);
+        $fields[] = $this->actionlog_file  =   new FieldTypes\BoolType('actionlog_file', default:false);
+        $fields[] = $this->actionlog_details = new FieldTypes\IntType ('actionlog_details', default:self::ACTLOG_DETAILS_BASIC);
+        $fields[] = $this->debug =              new FieldTypes\IntType ('debug', default:self::ERRLOG_ERRORS);
+        $fields[] = $this->debug_http =         new FieldTypes\BoolType('debug_http', default:false);
+        $fields[] = $this->debug_dblog =        new FieldTypes\BoolType('debug_dblog', default:true);
+        $fields[] = $this->debug_filelog =      new FieldTypes\BoolType('debug_filelog', default:false);
+        $fields[] = $this->metrics =            new FieldTypes\IntType ('metrics', default:0);
+        $fields[] = $this->metrics_dblog =      new FieldTypes\BoolType('metrics_dblog', default:false);
+        $fields[] = $this->metrics_filelog =    new FieldTypes\BoolType('metrics_filelog', default:false);
         
         $this->RegisterFields($fields, self::class);
         
@@ -254,6 +251,7 @@ class Config extends BaseConfig
     /** log more detailed info, and full objects when deleted */
     public const ACTLOG_DETAILS_FULL = 2;
     
+    /** @var array<string,int> */
     public const ACTLOG_DETAILS_TYPES = array(
         'none'=>0, 
         'basic'=>self::ACTLOG_DETAILS_BASIC, 
@@ -271,6 +269,7 @@ class Config extends BaseConfig
     /** also show input params, function arguments, SQL values */ 
     public const ERRLOG_SENSITIVE = 3;
     
+    /** @var array<string,int> */
     public const DEBUG_TYPES = array(
         'none'=>0, 
         'errors'=>self::ERRLOG_ERRORS, 
@@ -309,6 +308,7 @@ class Config extends BaseConfig
     /** Show extended performance metrics */
     public const METRICS_EXTENDED = 2;
     
+    /** @var array<string,int> */
     public const METRICS_TYPES = array(
         'none'=>0, 
         'basic'=>self::METRICS_BASIC, 

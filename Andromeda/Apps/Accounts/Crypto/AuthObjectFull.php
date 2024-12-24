@@ -49,7 +49,7 @@ trait AuthObjectFull
     {
         $code = explode(":", $code, 3);
         
-        if (count($code) !== 3 || $code[0] !== static::GetFullKeyPrefix()) return false;
+        if (count($code) !== 3 || $code[0] !== static::GetFullKeyPrefix() || $code[1] !== $this->ID()) return false;
         
         return $this->CheckKeyMatch($code[2]);
     }

@@ -1,8 +1,5 @@
 <?php declare(strict_types=1); namespace Andromeda\Core; if (!defined('Andromeda')) die();
 
-if (!function_exists('json_encode')) 
-    die("PHP JSON Extension Required".PHP_EOL);
-
 /** 
  * Abstract with some global static utility functions
  * @phpstan-type ScalarArray array<NULL|scalar|array<NULL|scalar|array<mixed>>>
@@ -90,7 +87,7 @@ abstract class Utilities
             else if (is_object($val))
             {
                 $val = method_exists($val,'__toString')
-                    ? (string)$val : get_class($val);
+                    ? (string)$val : $val::class;
             }
             else if (is_scalar($val))
             {

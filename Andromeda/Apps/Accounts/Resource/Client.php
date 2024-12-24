@@ -51,7 +51,7 @@ class Client extends BaseObject
         $this->useragent =     $fields[] = new FieldTypes\StringType('useragent');
         
         $this->date_created =  $fields[] = new FieldTypes\Timestamp('date_created');
-        $this->date_active =   $fields[] = new FieldTypes\NullTimestamp('date_active');
+        $this->date_active =   $fields[] = new FieldTypes\NullTimestamp('date_active', saveOnRollback:true);
         $this->date_loggedon = $fields[] = new FieldTypes\NullTimestamp('date_loggedon');
         
         $this->name =          $fields[] = new FieldTypes\NullStringType('name');
@@ -136,9 +136,8 @@ class Client extends BaseObject
      * @param ObjectDatabase $database database reference
      * @param Account $account the account that owns this client
      * @param string $name custom name to show for the client
-     * @return static new Client
      */
-    public static function Create(IOInterface $interface, ObjectDatabase $database, Account $account, ?string $name = null) : self
+    public static function Create(IOInterface $interface, ObjectDatabase $database, Account $account, ?string $name = null) : static
     {
         $account->CheckLimitClients();
 

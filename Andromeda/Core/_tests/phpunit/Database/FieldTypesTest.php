@@ -107,7 +107,7 @@ class FieldTypesTest extends \PHPUnit\Framework\TestCase
         $field = (new NullStringType('myfield'))->SetParent($parent);
         $this->assertNull($field->TryGetValue());
 
-        $field = (new NullStringType('myfield', false, 'a'))->SetParent($parent);
+        $field = (new NullStringType('myfield', default:'a'))->SetParent($parent);
         $this->assertSame('a', $field->TryGetValue());
         $this->assertSame(1, $field->GetDelta());
     }
@@ -164,7 +164,7 @@ class FieldTypesTest extends \PHPUnit\Framework\TestCase
     {
         $parent = $this->createMock(BaseObject::class);
 
-        $field = (new StringType('myfield', false, 'a'))->SetParent($parent);
+        $field = (new StringType('myfield', default:'a'))->SetParent($parent);
         $this->assertSame('a', $field->GetValue());
         $this->assertSame(1, $field->GetDelta());
     }
@@ -223,11 +223,11 @@ class FieldTypesTest extends \PHPUnit\Framework\TestCase
         $field = (new NullBoolType('myfield'))->SetParent($parent);
         $this->assertNull($field->TryGetValue());
         
-        $field = (new NullBoolType('myfield', false, false))->SetParent($parent);
+        $field = (new NullBoolType('myfield', default:false))->SetParent($parent);
         $this->assertSame(false, $field->TryGetValue());
         $this->assertSame(1, $field->GetDelta());
         
-        $field = (new NullBoolType('myfield', false, true))->SetParent($parent);
+        $field = (new NullBoolType('myfield', default:true))->SetParent($parent);
         $this->assertSame(true, $field->TryGetValue());
         $this->assertSame(1, $field->GetDelta());
     }
@@ -287,11 +287,11 @@ class FieldTypesTest extends \PHPUnit\Framework\TestCase
     {
         $parent = $this->createMock(BaseObject::class);
         
-        $field = (new BoolType('myfield', false, false))->SetParent($parent);
+        $field = (new BoolType('myfield', default:false))->SetParent($parent);
         $this->assertSame(false, $field->GetValue());
         $this->assertSame(1, $field->GetDelta());
         
-        $field = (new BoolType('myfield', false, true))->SetParent($parent);
+        $field = (new BoolType('myfield', default:true))->SetParent($parent);
         $this->assertSame(true, $field->GetValue());
         $this->assertSame(1, $field->GetDelta());
     }
@@ -350,11 +350,11 @@ class FieldTypesTest extends \PHPUnit\Framework\TestCase
         $field = (new NullIntType('myfield'))->SetParent($parent);
         $this->assertNull($field->TryGetValue());
 
-        $field = (new NullIntType('myfield', false, 0))->SetParent($parent);
+        $field = (new NullIntType('myfield', default:0))->SetParent($parent);
         $this->assertSame(0, $field->TryGetValue());
         $this->assertSame(1, $field->GetDelta());
         
-        $field = (new NullIntType('myfield', false, 1))->SetParent($parent);
+        $field = (new NullIntType('myfield', default:1))->SetParent($parent);
         $this->assertSame(1, $field->TryGetValue());
         $this->assertSame(1, $field->GetDelta());
     }
@@ -415,11 +415,11 @@ class FieldTypesTest extends \PHPUnit\Framework\TestCase
     {
         $parent = $this->createMock(BaseObject::class);
         
-        $field = (new IntType('myfield', false, 0))->SetParent($parent);
+        $field = (new IntType('myfield', default:0))->SetParent($parent);
         $this->assertSame(0, $field->GetValue());
         $this->assertSame(1, $field->GetDelta());
         
-        $field = (new IntType('myfield', false, 1))->SetParent($parent);
+        $field = (new IntType('myfield', default:1))->SetParent($parent);
         $this->assertSame(1, $field->GetValue());
         $this->assertSame(1, $field->GetDelta());
     }
@@ -476,11 +476,11 @@ class FieldTypesTest extends \PHPUnit\Framework\TestCase
         $field = (new NullFloatType('myfield'))->SetParent($parent);
         $this->assertNull($field->TryGetValue());
         
-        $field = (new NullFloatType('myfield', false, 0.0))->SetParent($parent);
+        $field = (new NullFloatType('myfield', default:0.0))->SetParent($parent);
         $this->assertSame(0.0, $field->TryGetValue());
         $this->assertSame(1, $field->GetDelta());
         
-        $field = (new NullFloatType('myfield', false, 1.1))->SetParent($parent);
+        $field = (new NullFloatType('myfield', default:1.1))->SetParent($parent);
         $this->assertSame(1.1, $field->TryGetValue());
         $this->assertSame(1, $field->GetDelta());
     }
@@ -538,11 +538,11 @@ class FieldTypesTest extends \PHPUnit\Framework\TestCase
     {
         $parent = $this->createMock(BaseObject::class);
         
-        $field = (new FloatType('myfield', false, 0.0))->SetParent($parent);
+        $field = (new FloatType('myfield', default:0.0))->SetParent($parent);
         $this->assertSame(0.0, $field->GetValue());
         $this->assertSame(1, $field->GetDelta());
         
-        $field = (new FloatType('myfield', false, 1.1))->SetParent($parent);
+        $field = (new FloatType('myfield', default:1.1))->SetParent($parent);
         $this->assertSame(1.1, $field->GetValue());
         $this->assertSame(1, $field->GetDelta());
     }
@@ -568,7 +568,7 @@ class FieldTypesTest extends \PHPUnit\Framework\TestCase
         $parent->method('GetDatabase')->willReturn($objdb);
         $objdb->method('GetTime')->willReturn($val2=5.56);
         
-        $field = (new Timestamp('myfield',false,$val1=7.62))->SetParent($parent);
+        $field = (new Timestamp('myfield', default:$val1=7.62))->SetParent($parent);
         
         $this->assertSame($val1, $field->GetValue());
         $field->SetTimeNow();
@@ -628,7 +628,7 @@ class FieldTypesTest extends \PHPUnit\Framework\TestCase
         $parent = $this->createMock(BaseObject::class);
         
         $limit = (new NullIntType('mylimit'))->SetParent($parent);
-        $counter = (new Counter('mycounter', false, $limit))->SetParent($parent);
+        $counter = (new Counter('mycounter', limit:$limit))->SetParent($parent);
         
         $this->assertTrue($counter->CheckDelta(9999));
         
@@ -650,10 +650,10 @@ class FieldTypesTest extends \PHPUnit\Framework\TestCase
     {
         $parent = $this->createMock(BaseObject::class);
         
-        $limit = (new NullIntType('mylimit', false, 10))->SetParent($parent);
+        $limit = (new NullIntType('mylimit', default:10))->SetParent($parent);
         $this->assertSame(10, $limit->TryGetValue());
         
-        $counter = (new Counter('mycounter', false, $limit))->SetParent($parent);
+        $counter = (new Counter('mycounter', limit:$limit))->SetParent($parent);
         
         $counter->DeltaValue(10); // okay
         

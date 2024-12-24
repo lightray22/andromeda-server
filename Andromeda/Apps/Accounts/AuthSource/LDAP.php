@@ -36,7 +36,7 @@ class LDAP extends External
 
     public static function GetPropUsage() : string { return "--hostname hostname [--secure bool] [--userprefix ?utf8]"; }
     
-    public static function Create(ObjectDatabase $database, SafeParams $params) : self
+    public static function Create(ObjectDatabase $database, SafeParams $params) : static
     {
         $obj = parent::Create($database, $params);
         

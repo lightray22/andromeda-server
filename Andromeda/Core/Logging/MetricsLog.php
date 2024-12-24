@@ -175,10 +175,9 @@ class MetricsLog extends BaseObject
      * @param DBStats $init construct stats
      * @param RunContext $context run context with metrics
      * @param DBStats $total total request stats
-     * @return static created metrics object
      */
     public static function Create(int $level, ObjectDatabase $database, DBStats $init, 
-                                RunContext $context, DBStats $total) : self
+                                RunContext $context, DBStats $total) : static
     {
         $obj = $database->CreateObject(static::class);
         $obj->date_created->SetTimeNow();

@@ -26,9 +26,8 @@ abstract class BaseRunner
     /**
      * Run the given Input command
      * @param Input $input the user input command to run
-     * @return mixed
      */
-    public abstract function Run(Input $input);
+    public abstract function Run(Input $input) : void;
     
     /**
      * Rolls back the current transaction

@@ -252,21 +252,14 @@ class Authenticator
         if (!$account->hasCrypto())
             throw new Exceptions\CryptoInitRequiredException();
         
-        if ($session !== null && $session->isCryptoAvailable())
-        {
-            $account->SetCryptoKeySource($session);
-        }
+        if ($session !== null && $session->hasCrypto())
+            $session->UnlockCrypto(); // key should've been checked previously
         else if ($params->HasParam('auth_recoverykey'))
         {
             $recoverykey = $params->GetParam('auth_recoverykey',SafeParams::PARAMLOG_NEVER)->GetUTF8String();
 
-            $keyobj = RecoveryKey::TryLoadByFullKey($account->GetDatabase(), $recoverykey, $account);
-            if ($keyobj === null) throw new Exceptions\AuthenticationFailedException();
-            
-            if (!$keyobj->CheckFullKey($recoverykey)) // unlocks crypto
+            if (!$account->CheckRecoveryKey($recoverykey)) // unlocks crypto also
                 throw new Exceptions\AuthenticationFailedException();
-    
-            $account->SetCryptoKeySource($keyobj);
         }
         else if ($params->HasParam('auth_password'))
         {
@@ -282,8 +275,8 @@ class Authenticator
     }
   
     /** 
-     * Runs TryRequireCrypto() on all instantiated authenticators 
-     * for $account and throws if not unlocked 
+     * Runs TryRequireCrypto() on all instantiated authenticators matching $account
+     * @throws Exceptions\CryptoKeyRequiredException if no key source is found
      */
     public static function RequireCryptoFor(Account $account) : void
     {

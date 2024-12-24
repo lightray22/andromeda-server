@@ -72,11 +72,11 @@ Parameters can be placed in the URL query string, the POST body as `application/
 For development, simply clone the repo and use `composer install` to download and install the required PHP dependencies.  By default this includes development-specific dependencies, which may require additional PHP extensions beyond what is listed below.  For production, download a release tarball with dependencies included or use the `tools/mkrelease` script.  Database installation is done with the `./andromeda-install` entry point.  **DO NOT** use the git repo directly in production as it contains development-only materials (testutil app, etc.).
 
 ### Basic Requirements
-Andromeda requires **64-bit** PHP >= 7.4 with libargon2.  Required PHP extensions are JSON (7.4 only), mbstring, PDO, sodium.  The files app S3 backend also requires simplexml.  Supported databases are MySQL/mariadb, PostgreSQL and SQLite. These require their corresponding extensions (mysqli, pdo_mysql, pgsql, pdo_pgsql, sqlite3, pdo_sqlite). SQLite uses [WAL mode](https://www.sqlite.org/wal.html) which imposes some requirements on filesystem capabilities.  Ubuntu 20.04 is currently used as the version baseline, so the minimum database versions are MySQL 8.0, MariaDB 10.3, PostgresQL 12.
+Andromeda requires **64-bit** PHP >= 8.1 with libargon2.  Required PHP extensions are mbstring, PDO, sodium.  The files app S3 backend also requires simplexml.  Supported databases are MySQL/mariadb, PostgreSQL and SQLite. These require their corresponding extensions (mysqli, pdo_mysql, pgsql, pdo_pgsql, sqlite3, pdo_sqlite). SQLite uses [WAL mode](https://www.sqlite.org/wal.html) which imposes some requirements on filesystem capabilities.  Ubuntu 22.04 is currently used as the version baseline, so the minimum database versions are MySQL 8.0, MariaDB 10.6, PostgreSQL 14.
 
 Andromeda does not use any OS or webserver-specific functions and should work on any platform where PHP runs.  No specific PHP or webserver configuration is required.  Windows works but is supported only on a "best-effort" basis.  32-bit PHP is NOT supported or tested and is known to not work with files > 2GB.  The following platforms are officially supported and tested regularly:
-* Ubuntu 20.04 amd64 (PHP 7.4) + Apache
-* Ubuntu 23.10 amd64 (PHP 8.2) + Nginx
+* Ubuntu 22.04 amd64 (PHP 8.1) + Apache
+* Ubuntu 24.10 amd64 (PHP 8.3) + Nginx
 
 ### Additional php.ini Config
 It is recommended to set `max_execution_time` and `memory_limit` to -1 to avoid issues with requests not completing.  The `post_max_size` and `upload_max_filsize` settings can have any value (and clients must handle it) but small values will reduce upload performance greatly.  Nginx also imposes its own limit on upload size, 1M by default.  All upload filesize limits should be increased to something large (like 100M) to optimize performance.

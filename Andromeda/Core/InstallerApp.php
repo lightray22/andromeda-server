@@ -101,7 +101,7 @@ abstract class InstallerApp
      * @return ScalarOrArray the result value to be output to the user
      * @throws Exceptions\UnknownActionException if unknown action
      */
-    public function Run(Input $input)
+    public function Run(Input $input) : mixed
     {
         switch ($input->GetAction())
         {

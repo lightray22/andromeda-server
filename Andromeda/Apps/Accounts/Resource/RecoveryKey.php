@@ -55,11 +55,8 @@ class RecoveryKey extends BaseObject implements IKeySource
         }, range(0, self::SET_SIZE-1));
     }
  
-    /**
-     * Creates a single recovery key for an account
-     * @return static
-     */
-    public static function Create(ObjectDatabase $database, Account $account) : self
+    /** Creates a single recovery key for an account */
+    public static function Create(ObjectDatabase $database, Account $account) : static
     {
         $account->CheckLimitRecoveryKeys();
 
@@ -72,12 +69,16 @@ class RecoveryKey extends BaseObject implements IKeySource
         return $obj;
     }
 
-    public function CheckKeyMatch(string $key) : bool
+    /** Checks the key, also unlocks crypto and sets the account key source */
+    protected function CheckKeyMatch(string $key) : bool
     {
         if (!$this->BaseCheckKeyMatch($key)) return false;
         
         if ($this->hasCrypto())
+        {
             $this->UnlockCrypto($key, true); // shouldn't throw since the key matches
+            $this->account->GetObject()->SetCryptoKeySource($this);
+        }
 
         $this->DeleteLater(); // single-use
         return true;

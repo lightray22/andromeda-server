@@ -29,7 +29,7 @@ abstract class BaseApp
      * @param Input $input the user input
      * @return ScalarOrArray the value to be output to the user
      */
-    public abstract function Run(Input $input);
+    public abstract function Run(Input $input) : mixed;
 
     /**
      * Returns an array of strings showing the CLI usage of the app

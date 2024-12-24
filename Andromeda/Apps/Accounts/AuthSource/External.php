@@ -1,11 +1,19 @@
 <?php declare(strict_types=1); namespace Andromeda\Apps\Accounts\AuthSource; if (!defined('Andromeda')) die();
 
 use Andromeda\Core\Utilities;
-use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, QueryBuilder, TableTypes};
+use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, TableTypes};
 use Andromeda\Core\IOFormat\SafeParams;
 use Andromeda\Core\Errors\BaseExceptions;
 
-use Andromeda\Apps\Accounts\{Account, Config, Group, GroupJoin};
+use Andromeda\Apps\Accounts\{Account, Config, Group};
+
+/** Enum describing the "enabled" state of the External auth */
+enum ExternalState: int
+{
+    case Disabled = 0;    /** Cannot use this auth source */
+    case PreExisting = 1; /** Only allow users that already exist in the DB to sign in */
+    case FullEnable = 2;  /** Allow auto-creating new accounts for all external signins */
+}
 
 /** 
  * Manages configured external authentication sources 
@@ -57,7 +65,7 @@ abstract class External extends BaseObject implements IAuthSource
         $fields = array();
         
         $this->date_created =  $fields[] = new FieldTypes\Timestamp('date_created');
-        $this->enabled =       $fields[] = new FieldTypes\IntType('enabled', false, self::ENABLED_FULL);
+        $this->enabled =       $fields[] = new FieldTypes\IntType('enabled', default:ExternalState::FullEnable->value);
         $this->description =   $fields[] = new FieldTypes\NullStringType('description');
         $this->default_group = $fields[] = new FieldTypes\NullObjectRefT(Group::class, 'default_group');
 
@@ -95,11 +103,8 @@ abstract class External extends BaseObject implements IAuthSource
             throw new Exceptions\InvalidAuthSourceException($e); }
     }
 
-    /** 
-     * Creates a new external authentication backend, and optionally a default group for it
-     * @return static
-     */
-    public static function Create(ObjectDatabase $database, SafeParams $params) : self
+    /** Creates a new external authentication backend, and optionally a default group for it */
+    public static function Create(ObjectDatabase $database, SafeParams $params) : static
     {
         $obj = $database->CreateObject(static::class);
         $obj->date_created->SetTimeNow();
@@ -192,16 +197,15 @@ abstract class External extends BaseObject implements IAuthSource
         return $this;
     }
 
-    public const ENABLED_EXIST = 1; /** Only allow users that already exist in the DB to sign in */
-    public const ENABLED_FULL = 2;  /** Allow auto-creating new accounts for all external signins */
-    
+    /** @var array<string,int> */
     private const ENABLED_TYPES = array(
-        'disable'=>0, 
-        'exist'=>self::ENABLED_EXIST, 
-        'full'=>self::ENABLED_FULL);
+        'disable'=>ExternalState::Disabled->value, 
+        'preexist'=>ExternalState::PreExisting->value, 
+        'fullenable'=>ExternalState::FullEnable->value);
     
     /** Returns the enum of how/if this is enabled */
-    public function GetEnabled() : int { return $this->enabled->GetValue(); }
+    public function GetEnabled() : ExternalState { 
+        return ExternalState::tryFrom($this->enabled->GetValue()) ?? ExternalState::Disabled; }
     
     /** Returns the description set for this auth source, or the class name if none is set */
     public function GetDescription() : string
@@ -229,7 +233,7 @@ abstract class External extends BaseObject implements IAuthSource
         if ($admin) 
         {
             $retval['type'] = $this->GetTypeName();
-            $retval['enabled'] = array_flip(self::ENABLED_TYPES)[$this->GetEnabled()];
+            $retval['enabled'] = array_flip(self::ENABLED_TYPES)[$this->GetEnabled()->value];
             $retval['default_group'] = $this->default_group->TryGetObjectID();
             $retval['date_created'] = $this->date_created->GetValue();
         }

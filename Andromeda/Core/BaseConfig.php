@@ -29,18 +29,14 @@ abstract class BaseConfig extends SingletonObject
         parent::CreateFields();
     }
     
-    /** 
-     * Create a new config singleton in the given database 
-     * @return static
-     */
-    public abstract static function Create(ObjectDatabase $database);
+    /** Create a new config singleton in the given database */
+    public abstract static function Create(ObjectDatabase $database) : static;
 
     /** 
      * @throws Exceptions\InstallRequiredException if config is not installed
      * @throws Exceptions\UpgradeRequiredException if the version in the given data does not match
-     * @return static 
      */
-    public static function GetInstance(ObjectDatabase $database) : self
+    public static function GetInstance(ObjectDatabase $database) : static
     {
         try { return parent::GetInstance($database); }
         catch (DatabaseException $e) 
@@ -54,11 +50,8 @@ abstract class BaseConfig extends SingletonObject
     /** true if we should skip the version check when loading */
     protected static bool $skipVersionCheck = false;
     
-    /** 
-     * Load the object and force updating its version instead of checking 
-     * @return static
-     */
-    public static function ForceUpdate(ObjectDatabase $database) : self
+    /** Load the object and force updating its version instead of checking */
+    public static function ForceUpdate(ObjectDatabase $database) : static
     {
         static::$skipVersionCheck = true;
         $obj = static::GetInstance($database);

@@ -36,7 +36,7 @@ class TestutilApp extends BaseApp
         return $retval;
     }
     
-    public function Run(Input $input)
+    public function Run(Input $input) : mixed
     {
         $params = $input->GetParams();
         

@@ -99,6 +99,7 @@ class HTTP extends IOInterface
             $fname = (string)$file['name'];
             $ferror = (int)$file['error'];
             // https://www.php.net/manual/en/features.file-upload.errors.php
+            // TODO can we make use of PHP 8.1's full_path here? browsers can submit PATHS as file names!
                 
             if ($ferror !== 0 || !is_uploaded_file($fpath))
                 throw new Exceptions\FileUploadFailException((string)$ferror);

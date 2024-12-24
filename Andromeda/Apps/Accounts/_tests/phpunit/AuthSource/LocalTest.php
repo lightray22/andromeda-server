@@ -30,7 +30,7 @@ class LocalTest extends \PHPUnit\Framework\TestCase
         $objdb = $this->createMock(ObjectDatabase::class);
         $account = new Account($objdb, [], false);
 
-        $account->SetPasswordHash($hash = password_hash($password="test1234", PASSWORD_BCRYPT));  // @phpstan-ignore-line PHP7.4 only can return false
+        $account->SetPasswordHash($hash = password_hash($password="test1234", PASSWORD_BCRYPT));
         $this->assertTrue($auth->VerifyAccountPassword($account, $password));
         $this->assertNotSame($hash, $account->TryGetPasswordHash());
     }

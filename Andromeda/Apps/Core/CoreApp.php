@@ -72,7 +72,7 @@ class CoreApp extends BaseApp
      * @throws CoreExceptions\UnknownActionException if the given action is not valid
      * @see BaseApp::Run()
      */
-    public function Run(Input $input)
+    public function Run(Input $input) : mixed
     {
         // if the accounts app is installed, use it for authentication
         if (array_key_exists('accounts', $this->API->GetAppRunner()->GetApps()))

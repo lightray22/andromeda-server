@@ -26,9 +26,8 @@ abstract class JoinObject extends BaseObject
      * @param T $matchobj1 the object to match with
      * @param string $matchprop2 name of the column to match with
      * @param U $matchobj2 the object to match with
-     * @return static
      */
-    protected static function TryLoadJoinObject(ObjectDatabase $database, string $matchprop1, BaseObject $matchobj1, string $matchprop2, BaseObject $matchobj2) : ?self
+    protected static function TryLoadJoinObject(ObjectDatabase $database, string $matchprop1, BaseObject $matchobj1, string $matchprop2, BaseObject $matchobj2) : ?static
     {
         $q = new QueryBuilder();
         $q->Where($q->Equals($matchprop1, $matchobj1->ID()));
@@ -48,7 +47,7 @@ abstract class JoinObject extends BaseObject
     protected static function LoadFromJoin(ObjectDatabase $database, string $destprop, string $destclass, string $matchprop, BaseObject $matchobj) : array
     {
         $cache = &self::GetCache($database);
-        $matchclass = get_class($matchobj);
+        $matchclass = $matchobj::class;
 
         if (isset($cache[static::class][$matchclass]))
             return $cache[static::class][$matchclass]; // @phpstan-ignore-line missing class-map feature
@@ -84,21 +83,17 @@ abstract class JoinObject extends BaseObject
      * @param T $obj1 left side of the join
      * @param U $obj2 right side of the join
      * @param ?callable(static): void $initfunc function to be run before saving
-     * @return static new join object
      */
-    protected static function CreateJoin(ObjectDatabase $database, BaseObject $obj1, BaseObject $obj2, ?callable $initfunc = null) : self
+    protected static function CreateJoin(ObjectDatabase $database, BaseObject $obj1, BaseObject $obj2, ?callable $initfunc = null) : static
     {
         $cache = &self::GetCache($database);
 
         $obj = $database->CreateObject(static::class);
 
-        $class1 = get_class($obj1);
-        $class2 = get_class($obj2);
-
-        if (isset($cache[static::class][$class1]))
-            $cache[static::class][$class1][$obj2->ID()] = $obj2;
-        if (isset($cache[static::class][$class2]))
-            $cache[static::class][$class2][$obj1->ID()] = $obj1;
+        if (isset($cache[static::class][$obj1::class]))
+            $cache[static::class][$obj1::class][$obj2->ID()] = $obj2;
+        if (isset($cache[static::class][$obj2::class]))
+            $cache[static::class][$obj2::class][$obj1->ID()] = $obj1;
 
         $obj->GetLeftField()->SetObject($obj1);
         $obj->GetRightField()->SetObject($obj2);
@@ -114,8 +109,8 @@ abstract class JoinObject extends BaseObject
         $obj2 = $this->GetRightField()->GetObject();
 
         $cache = &self::GetCache($this->database);
-        unset($cache[static::class][get_class($obj1)][$obj2->ID()]);
-        unset($cache[static::class][get_class($obj2)][$obj1->ID()]);
+        unset($cache[static::class][$obj1::class][$obj2->ID()]);
+        unset($cache[static::class][$obj2::class][$obj1->ID()]);
 
         parent::NotifyPostDeleted();
     }

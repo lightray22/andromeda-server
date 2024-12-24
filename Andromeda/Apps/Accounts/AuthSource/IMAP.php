@@ -51,7 +51,7 @@ class IMAP extends External
     
     public static function GetPropUsage() : string { return "--protocol imap|pop3|nntp --hostname hostname [--port ?uint16] [--implssl bool] [--secauth bool]"; }
     
-    public static function Create(ObjectDatabase $database, SafeParams $params) : self
+    public static function Create(ObjectDatabase $database, SafeParams $params) : static
     {
         $obj = parent::Create($database, $params);
         

@@ -128,11 +128,8 @@ class ActionLog extends BaseLog
         parent::CreateFields();
     }
 
-    /** 
-     * Creates a new access log entry from the given resources
-     * @return static
-     */
-    public static function Create(ObjectDatabase $database, IOInterface $interface, Input $input) : self
+    /** Creates a new access log entry from the given resources */
+    public static function Create(ObjectDatabase $database, IOInterface $interface, Input $input) : static
     {
         $obj = $database->CreateObject(static::class);
 

@@ -40,7 +40,9 @@ class SessionTest extends \PHPUnit\Framework\TestCase
         $this->assertTrue($session->isCryptoAvailable());
 
         $session->pubLockCrypto();
-        $this->assertTrue($session->CheckKeyMatch($session->pubGetAuthKey())); // authkey unlocks
+        $this->assertTrue($session->CheckKeyMatch($session->pubGetAuthKey()));
+        $this->assertFalse($session->isCryptoAvailable()); // CheckKeyMatch does NOT unlock crypto
+        $session->UnlockCrypto();
         $this->assertTrue($session->isCryptoAvailable());
     }
 

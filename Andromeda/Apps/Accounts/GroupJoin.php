@@ -100,9 +100,8 @@ class GroupJoin extends JoinObject
      * Creates a new groupjoin object, adding the account to the group
      * @param Account $account account to add to the group
      * @param Group $group group to be added to
-     * @return static
      */
-    public static function Create(ObjectDatabase $database, Account $account, Group $group) : self
+    public static function Create(ObjectDatabase $database, Account $account, Group $group) : static
     {
         if ($group->isDefault())
             throw new Exceptions\ImplicitGroupMembershipException();

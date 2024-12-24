@@ -106,7 +106,7 @@ class AccountsApp extends BaseApp
      * @throws UnknownActionException if the given action is not valid
      * @see BaseApp::Run()
      */
-    public function Run(Input $input)
+    public function Run(Input $input) : mixed
     {
         $authenticator = Authenticator::TryAuthenticate(
             $this->database, $input, $this->API->GetInterface());
@@ -228,7 +228,8 @@ class AccountsApp extends BaseApp
         
         $auths = AuthSource\External::LoadAll($this->database);
         
-        if (!$admin) $auths = array_filter($auths, function(AuthSource\External $m){ return $m->GetEnabled() !== 0; });
+        if (!$admin) $auths = array_filter($auths, function(AuthSource\External $m){ 
+            return $m->GetEnabled() !== AuthSource\ExternalState::Disabled; });
         
         return array_map(function(AuthSource\External $m)use($admin){ 
             return $m->GetClientObject($admin); }, $auths);
@@ -514,23 +515,20 @@ class AccountsApp extends BaseApp
         
         $reqauthsrc = null; if ($params->HasParam('authsource'))
         {
-            $mgrid = $params->GetParam('authsource', SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
-            
-            $reqauthsrc = AuthSource\External::TryLoadByID($this->database,$mgrid);
+            $srcid = $params->GetParam('authsource', SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
+            $reqauthsrc = AuthSource\External::TryLoadByID($this->database,$srcid);
             if ($reqauthsrc === null) throw new Exceptions\UnknownAuthSourceException();
         }
         
         if ($account !== null) /** check password */
         {
             $authsrc = $account->GetAuthSource();
-            
-            /** check the authsrc matches if given */
+
+             /** check the requested authsrc matches, if given */
             if ($reqauthsrc !== null && $reqauthsrc !== $authsrc)
                 throw new Exceptions\AuthenticationFailedException();
-            
-            if ($authsrc instanceof AuthSource\External && $authsrc->GetEnabled() === 0)
-                 throw new Exceptions\AuthenticationFailedException();
-             
+            if ($authsrc instanceof AuthSource\External && $authsrc->GetEnabled() === AuthSource\ExternalState::Disabled)
+                throw new Exceptions\AuthenticationFailedException();
             if (!$account->VerifyPassword($password))
                 throw new Exceptions\AuthenticationFailedException();
         }
@@ -539,9 +537,8 @@ class AccountsApp extends BaseApp
             $authsrc = $reqauthsrc ?? $this->config->GetDefaultAuth();
             if ($authsrc === null) throw new Exceptions\UnknownAuthSourceException();
             
-            if ($authsrc->GetEnabled() < AuthSource\External::ENABLED_FULL)
+            if ($authsrc->GetEnabled() < AuthSource\ExternalState::FullEnable)
                 throw new Exceptions\AuthenticationFailedException();
-            
             if (!$authsrc->VerifyUsernamePassword($username, $password))
                 throw new Exceptions\AuthenticationFailedException();
             

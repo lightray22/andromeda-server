@@ -20,8 +20,7 @@ class MyKeySource extends BaseObject
         parent::CreateFields();
     }
 
-    /** @return static */
-    public static function Create(ObjectDatabase $database, Account $account, string $wrappass)
+    public static function Create(ObjectDatabase $database, Account $account, string $wrappass) : static
     {
         $obj = $database->CreateObject(static::class);
         $obj->AccountKeySourceCreate($account, $wrappass);

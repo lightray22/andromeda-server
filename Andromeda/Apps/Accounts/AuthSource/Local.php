@@ -27,15 +27,10 @@ class Local implements IAuthSource
      * Hashes and sets the given password on a given account
      * @param Account $account the account to set
      * @param string $password the password to set
-     * @throws Exceptions\PasswordHashFailedException if hashing fails
      */
     public static function SetPassword(Account $account, string $password) : void
-    {    
+    {
         $hash = password_hash($password, PASSWORD_ARGON2ID);
-
-        if (!is_string($hash)) // @phpstan-ignore-line PHP7.4 only can return false
-            throw new Exceptions\PasswordHashFailedException();
-        
         $account->SetPasswordHash($hash);
     }
 }

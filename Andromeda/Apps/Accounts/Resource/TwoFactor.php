@@ -45,7 +45,7 @@ class TwoFactor extends BaseObject
         $this->comment =      $fields[] = new FieldTypes\NullStringType('comment');
         $this->secret =       $fields[] = new FieldTypes\StringType('secret');
         $this->nonce =        $fields[] = new FieldTypes\NullStringType('nonce');
-        $this->valid =        $fields[] = new FieldTypes\BoolType('valid', false, false);
+        $this->valid =        $fields[] = new FieldTypes\BoolType('valid', default:false);
         $this->date_created = $fields[] = new FieldTypes\Timestamp('date_created');
         $this->date_used =    $fields[] = new FieldTypes\NullTimestamp('date_used');
         $this->account =      $fields[] = new FieldTypes\ObjectRefT(Account::class, 'account');
@@ -108,11 +108,8 @@ class TwoFactor extends BaseObject
         return $database->DeleteObjectsByKey(static::class, 'account', $account->ID());
     }
     
-    /** 
-     * Creates and returns a new twofactor object for the given account
-     * @return static
-     */
-    public static function Create(ObjectDatabase $database, Account $account, ?string $comment = null) : self
+    /** Creates and returns a new twofactor object for the given account */
+    public static function Create(ObjectDatabase $database, Account $account, ?string $comment = null) : static
     {
         $obj = $database->CreateObject(static::class);
         $obj->date_created->SetTimeNow();

@@ -63,6 +63,7 @@ abstract class IOInterface
     /** Returns the path to the DB config file requested by the interface */
     public function GetDBConfigFile() : ?string { return null; }
     
+    /** @var array<string,int> */
     public const OUTPUT_TYPES = array(
         'none'=>0, 
         'plain'=>self::OUTPUT_PLAIN, 

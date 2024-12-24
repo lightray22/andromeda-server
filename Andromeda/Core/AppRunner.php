@@ -137,9 +137,8 @@ class AppRunner extends BaseRunner
      * commit before we get the response to this remote call.
      * @param string $url the base URL of the remote API
      * @see AppRunner::Run()
-     * @return mixed
      */
-    public function RunRemote(string $url, Input $input)
+    public function RunRemote(string $url, Input $input) : mixed
     {
         $data = HTTP::RemoteRequest($url, $input);
 

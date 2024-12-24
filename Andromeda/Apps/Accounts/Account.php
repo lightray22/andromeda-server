@@ -65,7 +65,7 @@ class Account extends PolicyBase implements IKeySource
         $this->authsource = $fields[] = new FieldTypes\NullObjectRefT(External::class, 'authsource');
         $this->date_passwordset = $fields[] = new FieldTypes\NullTimestamp('date_passwordset');
         $this->date_loggedon = $fields[] = new FieldTypes\NullTimestamp('date_loggedon');
-        $this->date_active = $fields[] = new FieldTypes\NullTimestamp('date_active',true);
+        $this->date_active = $fields[] = new FieldTypes\NullTimestamp('date_active', saveOnRollback:true);
         $this->RegisterFields($fields, self::class);
         
         $this->KeySourceCreateFields();
@@ -294,11 +294,8 @@ class Account extends PolicyBase implements IKeySource
     /** Gets the timestamp when this user was last active */
     public function GetActiveDate() : ?float { return $this->date_active->TryGetValue(); }
     
-    /** Sets the last-active timestamp to now (if not global read-only) */
-    public function SetActiveDate() : self      
-    {
-        return $this;
-    }
+    /** Sets the last-active timestamp to now */
+    public function SetActiveDate() : self { $this->date_active->SetTimeNow(); return $this; }
 
     /** Gets the timestamp when this user last created a session */
     public function GetLoggedonDate() : ?float { return $this->date_loggedon->TryGetValue(); }
@@ -505,9 +502,8 @@ class Account extends PolicyBase implements IKeySource
      * @param ObjectDatabase $database database reference
      * @param string $username the account's username
      * @param string $password the account's password, if not external auth
-     * @return static created account
      */
-    public static function Create(ObjectDatabase $database, string $username, string $password) : self
+    public static function Create(ObjectDatabase $database, string $username, string $password) : static
     {
         $account = static::CreateCommon($database, $username);
         $account->ChangePassword($password);
@@ -519,9 +515,8 @@ class Account extends PolicyBase implements IKeySource
      * @param ObjectDatabase $database database reference
      * @param string $username the account's username
      * @param AuthSource\External $source the auth source for the account
-     * @return static created account
      */
-    public static function CreateExternal(ObjectDatabase $database, string $username, AuthSource\External $source) : self
+    public static function CreateExternal(ObjectDatabase $database, string $username, AuthSource\External $source) : static
     {
         $account = static::CreateCommon($database, $username);
         $account->authsource->SetObject($source);
@@ -532,9 +527,8 @@ class Account extends PolicyBase implements IKeySource
      * Creates a new user account (no password set)
      * @param ObjectDatabase $database database reference
      * @param string $username the account's username
-     * @return static created account
      */
-    protected static function CreateCommon(ObjectDatabase $database, string $username) : self
+    protected static function CreateCommon(ObjectDatabase $database, string $username) : static
     {
         $account = $database->CreateObject(static::class);
         $account->date_created->SetTimeNow();
@@ -717,7 +711,7 @@ class Account extends PolicyBase implements IKeySource
         return $this;
     }
     
-    /** Disables crypto on the account, stripping all keys */
+    /** Disables crypto on the account (and all subobjects), decrypting things, stripping all keys */
     public function DestroyCrypto() : self
     {
         foreach (self::$crypto_handlers as $func) 

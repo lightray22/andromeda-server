@@ -42,7 +42,7 @@ class CoreInstallApp extends InstallerApp
      * {@inheritDoc}
      * @see InstallerApp::Run()
      */
-    public function Run(Input $input)
+    public function Run(Input $input) : mixed
     {
         $params = $input->GetParams();
         

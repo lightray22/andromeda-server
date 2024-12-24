@@ -273,11 +273,3 @@ class SessionRequiredException extends BaseExceptions\ClientErrorException
         parent::__construct("SESSION_REQUIRED", $details);
     }
 }
-
-/** Exception indicating that generating the password hash failed */
-class PasswordHashFailedException extends BaseExceptions\ServerException
-{
-    public function __construct(?string $details = null) {
-        parent::__construct("PASSWORD_HASH_FAILED", $details);
-    }
-}
