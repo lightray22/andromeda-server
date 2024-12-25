@@ -4,7 +4,7 @@ use Andromeda\Core\Database\{ObjectDatabase, PDODatabase};
 use Andromeda\Core\IOFormat\IOInterface;
 use Andromeda\Apps\Accounts\Account;
 
-class MyClient extends Client
+class ClientTest_Client extends Client
 {
     public function pubGetAuthKey() : string { return $this->GetAuthKey(); }
 }
@@ -21,7 +21,7 @@ class ClientTest extends \PHPUnit\Framework\TestCase
         $iface->method('GetAddress')->willReturn($address="address172");
         $iface->method('GetUserAgent')->willReturn($uagent="Firefox");
 
-        $client = MyClient::Create($iface, $objdb, $account, $name="testnameee");
+        $client = ClientTest_Client::Create($iface, $objdb, $account, $name="testnameee");
         $this->assertSame($account, $client->GetAccount());
         $this->assertNotEmpty($key=$client->pubGetAuthKey());
         $this->assertFalse($client->CheckKeyMatch($iface, "test123"));
@@ -39,7 +39,7 @@ class ClientTest extends \PHPUnit\Framework\TestCase
 
         $account->method('GetClientTimeout')->willReturn(0); // impossible to pass
 
-        $client = MyClient::Create($iface, $objdb, $account);
+        $client = ClientTest_Client::Create($iface, $objdb, $account);
         $this->assertTrue($client->CheckKeyMatch($iface, $client->pubGetAuthKey())); // no previous date active
         $this->assertFalse($client->CheckKeyMatch($iface, $client->pubGetAuthKey())); // date active was set, now expired*/
     }

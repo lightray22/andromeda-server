@@ -4,7 +4,7 @@ use Andromeda\Core\Database\{ObjectDatabase, PDODatabase};
 use Andromeda\Core\IOFormat\SafeParams;
 use Andromeda\Apps\Accounts\Account;
 
-class MyContact extends Contact
+class ContactTest_Contact extends Contact
 {
     public static function SubclassGetFetchUsage() : string { return ""; }
     
@@ -29,7 +29,7 @@ class ContactTest extends \PHPUnit\Framework\TestCase
         $account = $this->createMock(Account::class);
         $account->expects($this->once())->method('CheckLimitContacts');
 
-        $contact = MyContact::Create($objdb, $account, $address="test@test.com");
+        $contact = ContactTest_Contact::Create($objdb, $account, $address="test@test.com");
 
         $this->assertSame($contact->GetAddress(), $address);
         $this->assertTrue($contact->GetIsValid());
@@ -43,7 +43,7 @@ class ContactTest extends \PHPUnit\Framework\TestCase
     {
         $objdb = new ObjectDatabase($this->createMock(PDODatabase::class));
         $account = $this->createMock(Account::class);
-        $contact = MyContact::Create($objdb, $account, $address="test@test.com", true);
+        $contact = ContactTest_Contact::Create($objdb, $account, $address="test@test.com", true);
         $this->assertIsString($contact->lastmessage);
         $this->assertFalse($contact->GetIsValid());
 

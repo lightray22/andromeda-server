@@ -2,7 +2,7 @@
 
 use Andromeda\Core\Database\{BaseObject, ObjectDatabase, TableTypes};
 
-class MyAuthObject extends BaseObject
+class AuthObjectTest_AuthObject extends BaseObject
 {
     use AuthObjectFull, TableTypes\TableNoChildren;
     
@@ -38,7 +38,7 @@ class AuthObjectTest extends \PHPUnit\Framework\TestCase
     public function testEmpty() : void
     {
         $objdb = $this->createMock(ObjectDatabase::class);
-        $obj = new MyAuthObject($objdb, [], false);
+        $obj = new AuthObjectTest_AuthObject($objdb, [], false);
 
         $this->assertNull($obj->pubTryGetAuthKey());
         $this->assertNull($obj->pubGetAuthHash());
@@ -50,7 +50,7 @@ class AuthObjectTest extends \PHPUnit\Framework\TestCase
     public function testBasic() : void
     {
         $objdb = $this->createMock(ObjectDatabase::class);
-        $obj = new MyAuthObject($objdb, [], false);
+        $obj = new AuthObjectTest_AuthObject($objdb, [], false);
         $obj->pubInitAuthKey();
 
         $key = $obj->pubTryGetAuthKey();
@@ -71,7 +71,7 @@ class AuthObjectTest extends \PHPUnit\Framework\TestCase
     public function testSetKey() : void
     {
         $objdb = $this->createMock(ObjectDatabase::class);
-        $obj = new MyAuthObject($objdb, [], false);
+        $obj = new AuthObjectTest_AuthObject($objdb, [], false);
         
         $key = "mytest123"; $obj->pubSetAuthKey($key);
         $this->assertSame($key, $obj->pubTryGetAuthKey());
@@ -87,7 +87,7 @@ class AuthObjectTest extends \PHPUnit\Framework\TestCase
         $hash = '$argon2id$v=19$m=1024,t=1,p=1$SEREcGtDQ2hQaHRDcmZYcQ$rbYiVNjqfVeKKTrseQ0z+eiYGIGhHCzPCoe+5bfOknc';
         
         $objdb = $this->createMock(ObjectDatabase::class);
-        $obj = new MyAuthObject($objdb, array('id'=>'test123','authkey'=>$hash), false);
+        $obj = new AuthObjectTest_AuthObject($objdb, array('id'=>'test123','authkey'=>$hash), false);
         
         $exc = false; try { $obj->pubTryGetAuthKey(); } // key not available yet
         catch (Exceptions\RawKeyNotAvailableException $e) { $exc = true; }
@@ -104,7 +104,7 @@ class AuthObjectTest extends \PHPUnit\Framework\TestCase
         $hash = '$2y$10$JvPO9nS5Papx9Z4KrwLhAOc2DIkJm5kRm1hv8z/dGcMqH23MHEaFi';
         
         $objdb = $this->createMock(ObjectDatabase::class);
-        $obj = new MyAuthObject($objdb, array('id'=>'test123','authkey'=>$hash), false);
+        $obj = new AuthObjectTest_AuthObject($objdb, array('id'=>'test123','authkey'=>$hash), false);
         
         $this->assertSame($hash, $obj->pubGetAuthHash());
         $this->assertTrue($obj->CheckKeyMatch($key));
@@ -116,7 +116,7 @@ class AuthObjectTest extends \PHPUnit\Framework\TestCase
     public function testTryGetFullKey() : void
     {
         $objdb = $this->createMock(ObjectDatabase::class);
-        $obj = new MyAuthObject($objdb, ['id'=>$id='test123'], false);
+        $obj = new AuthObjectTest_AuthObject($objdb, ['id'=>$id='test123'], false);
         $obj->pubInitAuthKey();
         
         $key = $obj->pubTryGetAuthKey();
@@ -132,7 +132,7 @@ class AuthObjectTest extends \PHPUnit\Framework\TestCase
     public function testCheckFullKey() : void
     {
         $objdb = $this->createMock(ObjectDatabase::class);
-        $obj = new MyAuthObject($objdb, ['id'=>$id='test123'], false);
+        $obj = new AuthObjectTest_AuthObject($objdb, ['id'=>$id='test123'], false);
         $obj->pubInitAuthKey();
         
         $key = $obj->pubTryGetAuthKey();
@@ -145,9 +145,9 @@ class AuthObjectTest extends \PHPUnit\Framework\TestCase
     
     public function testGetIDFromFullKey() : void
     {
-        $this->assertNull(MyAuthObject::TryGetIDFromFullKey(""));
-        $this->assertNull(MyAuthObject::TryGetIDFromFullKey("test:test2")); // too short
-        $this->assertNull(MyAuthObject::TryGetIDFromFullKey("aa:id123:fullkey456")); // wrong tag
-        $this->assertSame($id="myid123", MyAuthObject::TryGetIDFromFullKey("test:$id:fullkey456"));
+        $this->assertNull(AuthObjectTest_AuthObject::TryGetIDFromFullKey(""));
+        $this->assertNull(AuthObjectTest_AuthObject::TryGetIDFromFullKey("test:test2")); // too short
+        $this->assertNull(AuthObjectTest_AuthObject::TryGetIDFromFullKey("aa:id123:fullkey456")); // wrong tag
+        $this->assertSame($id="myid123", AuthObjectTest_AuthObject::TryGetIDFromFullKey("test:$id:fullkey456"));
     }
 }

@@ -5,7 +5,7 @@ use Andromeda\Core\Database\{BaseObject, ObjectDatabase, PDODatabase, TableTypes
 use Andromeda\Core\Exceptions\DecryptionFailedException;
 use Andromeda\Apps\Accounts\Account;
 
-class MyKeySource extends BaseObject
+class KeySourceTest_KeySource extends BaseObject
 {
     use AccountKeySource, TableTypes\TableNoChildren;
     
@@ -58,7 +58,7 @@ class KeySourceTest extends \PHPUnit\Framework\TestCase
 {
     public function testEmptyKeySource1() : void
     {
-        $obj = new MyKeySource($this->createMock(ObjectDatabase::class), [], false);
+        $obj = new KeySourceTest_KeySource($this->createMock(ObjectDatabase::class), [], false);
 
         $this->assertFalse($obj->hasCrypto());
         $this->assertFalse($obj->isCryptoAvailable());
@@ -72,7 +72,7 @@ class KeySourceTest extends \PHPUnit\Framework\TestCase
 
     public function testEmptyKeySource2() : void
     {
-        $obj = new MyKeySource($this->createMock(ObjectDatabase::class), [], false);
+        $obj = new KeySourceTest_KeySource($this->createMock(ObjectDatabase::class), [], false);
 
         $this->expectException(Exceptions\CryptoNotInitializedException::class);
         $obj->pubUnlockCrypto("testkey", true);
@@ -80,7 +80,7 @@ class KeySourceTest extends \PHPUnit\Framework\TestCase
 
     public function testInitCrypto() : void
     {
-        $obj = new MyKeySource($this->createMock(ObjectDatabase::class), [], false);
+        $obj = new KeySourceTest_KeySource($this->createMock(ObjectDatabase::class), [], false);
         $obj->pubInitializeCrypto($wrappass = "wraptest", true);
 
         $rawkey = $obj->pubGetMasterKey(true);
@@ -107,7 +107,7 @@ class KeySourceTest extends \PHPUnit\Framework\TestCase
         $rawkey = Crypto::GenerateSecretKey();
         $wrapkey = Crypto::DeriveKey($wrappass = "wrapkey123", $master_salt, Crypto::SecretKeyLength(), true);
 
-        $obj = new MyKeySource($this->createMock(ObjectDatabase::class), [
+        $obj = new KeySourceTest_KeySource($this->createMock(ObjectDatabase::class), [
             'master_key' => Crypto::EncryptSecret($rawkey, $master_nonce, $wrapkey),
             'master_nonce' => $master_nonce, 
             'master_salt' => $master_salt
@@ -131,7 +131,7 @@ class KeySourceTest extends \PHPUnit\Framework\TestCase
 
     public function testDestroyCrypto() : void
     {
-        $obj = new MyKeySource($this->createMock(ObjectDatabase::class), [], false);
+        $obj = new KeySourceTest_KeySource($this->createMock(ObjectDatabase::class), [], false);
         $obj->pubInitializeCrypto($wrappass = "wraptest", true);
 
         $this->assertTrue($obj->hasCrypto());
@@ -152,7 +152,7 @@ class KeySourceTest extends \PHPUnit\Framework\TestCase
         $account->InitializeCrypto($password="test123");
         $this->assertTrue($account->isCryptoAvailable());
 
-        $obj = new MyKeySource($objdb, [], false);
+        $obj = new KeySourceTest_KeySource($objdb, [], false);
         $obj->pubInitializeCryptoFromAccount($account, $wrappass="wrap123", true);
 
         $this->assertTrue($obj->hasCrypto());
@@ -170,12 +170,12 @@ class KeySourceTest extends \PHPUnit\Framework\TestCase
         $objdb = new ObjectDatabase($this->createMock(PDODatabase::class));
         $account = new Account($objdb, ['id'=>'myid12'], false);
 
-        $obj = MyKeySource::Create($objdb, $account, $wrappass="test");
+        $obj = KeySourceTest_KeySource::Create($objdb, $account, $wrappass="test");
         $this->assertSame($account, $obj->GetAccount());
         $this->assertFalse($obj->hasCrypto());
 
         $account->InitializeCrypto("testpw");
-        $obj = MyKeySource::Create($objdb, $account, $wrappass);
+        $obj = KeySourceTest_KeySource::Create($objdb, $account, $wrappass);
         $this->assertTrue($obj->hasCrypto()); // automatic!
     }
 }

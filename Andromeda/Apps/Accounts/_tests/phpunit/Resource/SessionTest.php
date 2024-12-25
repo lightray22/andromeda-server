@@ -3,9 +3,14 @@
 use Andromeda\Core\Database\{ObjectDatabase, PDODatabase};
 use Andromeda\Apps\Accounts\{Account, Config};
 
-class MySession extends Session
+class SessionTest_Session extends Session
 {
     public function pubGetAuthKey() : string { return $this->GetAuthKey(); }
+    public function pubLockCrypto() : void { $this->LockCrypto(); }
+}
+
+class SessionTest_Account extends Account
+{
     public function pubLockCrypto() : void { $this->LockCrypto(); }
 }
 
@@ -16,7 +21,7 @@ class SessionTest extends \PHPUnit\Framework\TestCase
         $objdb = new ObjectDatabase($this->createMock(PDODatabase::class));
         $account = $this->createMock(Account::class);
 
-        $session = MySession::Create($objdb, $account, $this->createMock(Client::class));
+        $session = SessionTest_Session::Create($objdb, $account, $this->createMock(Client::class));
         $this->assertSame($account, $session->GetAccount());
         $this->assertNotEmpty($key=$session->pubGetAuthKey());
         $this->assertFalse($session->CheckKeyMatch("test123"));
@@ -26,24 +31,26 @@ class SessionTest extends \PHPUnit\Framework\TestCase
     public function testSessionCrypto() : void
     {
         $objdb = new ObjectDatabase($this->createMock(PDODatabase::class), false);
-        $account = new Account($objdb, ['id'=>'acct125'], false);
+        $account = new SessionTest_Account($objdb, ['id'=>'acct125'], false);
         Config::Create($objdb)->Save(); // init singleton
 
-        $session = MySession::Create($objdb, $account, $this->createMock(Client::class));
+        $session = SessionTest_Session::Create($objdb, $account, $this->createMock(Client::class));
         $this->assertFalse($session->hasCrypto());
 
         $account->InitializeCrypto("test123");
         $session->InitializeCrypto();
         $this->assertTrue($session->isCryptoAvailable());
 
-        $session = MySession::Create($objdb, $account, $this->createMock(Client::class));
+        $session = SessionTest_Session::Create($objdb, $account, $this->createMock(Client::class));
         $this->assertTrue($session->isCryptoAvailable());
 
         $session->pubLockCrypto();
+        $account->pubLockCrypto();
         $this->assertTrue($session->CheckKeyMatch($session->pubGetAuthKey()));
         $this->assertFalse($session->isCryptoAvailable()); // CheckKeyMatch does NOT unlock crypto
         $session->UnlockCrypto();
         $this->assertTrue($session->isCryptoAvailable());
+        $this->assertTrue($account->isCryptoAvailable()); // from the session
     }
 
     public function testSessionTimeout() : void
@@ -54,7 +61,7 @@ class SessionTest extends \PHPUnit\Framework\TestCase
         $account->method('GetSessionTimeout')->willReturn(0); // impossible to pass
         $account->expects($this->once())->method('SetActiveDate');
 
-        $session = MySession::Create($objdb, $account, $this->createMock(Client::class));
+        $session = SessionTest_Session::Create($objdb, $account, $this->createMock(Client::class));
         $this->assertTrue($session->CheckKeyMatch($session->pubGetAuthKey())); // no previous date active
         $this->assertFalse($session->CheckKeyMatch($session->pubGetAuthKey())); // date active was set, now expired
     }
