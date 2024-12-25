@@ -1,5 +1,5 @@
 
-import abc, os, mysql.connector, psycopg2, atexit
+import abc, os, atexit
 
 from Interface import Interface
 from TestUtils import *
@@ -63,6 +63,7 @@ class SQLite(Database):
 
 class MySQL(Database):
     def install(self, util:TestUtils, interface:Interface):
+        import mysql.connector
         self.config['driver'] = 'mysql'
 
         params = self.config.copy()
@@ -86,6 +87,7 @@ class MySQL(Database):
 
 class PostgreSQL(Database):
     def install(self, util:TestUtils, interface:Interface):
+        import psycopg2
         self.config['driver'] = 'pgsql'
 
         params = self.config.copy()
