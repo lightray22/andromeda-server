@@ -22,7 +22,7 @@ class CoreInstallApp extends InstallerApp
         $retval = array_merge(array(
             'usage [--appname alphanum]',
             'dbconf '.PDODatabase::GetInstallUsage(),
-            ...array_map(function($u){ return "(dbconf) $u"; }, PDODatabase::GetInstallUsages()),
+            ...array_map(function($u){ return "(dbconf...) $u"; }, PDODatabase::GetInstallUsages()),
             'scanapps',
         ), parent::getUsage());
     

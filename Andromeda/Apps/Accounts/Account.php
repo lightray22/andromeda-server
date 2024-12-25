@@ -616,7 +616,7 @@ class Account extends PolicyBase implements IKeySource
     public function ChangePassword(string $new_password) : Account
     {
         if ($this->hasCrypto())
-            $this->InitializeCrypto($new_password, true); // keeps same key
+            $this->InitializeCrypto($new_password, rekey:true); // keeps same key
         
         if ($this->GetAuthSource() instanceof AuthSource\Local)
             AuthSource\Local::SetPassword($this, $new_password);
@@ -700,7 +700,7 @@ class Account extends PolicyBase implements IKeySource
      */
     public function InitializeCrypto(string $password, bool $rekey = false) : self
     {
-        $this->BaseInitializeCrypto($password, $rekey);
+        $this->BaseInitializeCrypto($password, rekey:$rekey);
 
         foreach ($this->GetTwoFactors() as $twofactor) 
             $twofactor->InitializeCrypto();

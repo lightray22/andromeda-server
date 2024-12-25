@@ -27,14 +27,17 @@
     },
     "suggest": {
         "ext-pdo_mysql": "For MySQL databases",
+        "ext-mysqli": "For MySQL databases",
         "ext-pdo_sqlite": "For SQLite databases",
+        "ext-sqlite3": "For SQLite databases",
         "ext-pdo_pgsql": "For Postgresql databases",
         "ext-pgsql": "For Postgresql databases",
         "ext-imap": "For IMAP authentication",
         "ext-ldap": "For LDAP authentication",
         "ext-ftp": "For FTP authentication and the FTP storage backend",
         "ext-smbclient": "For the SMB storage backend",
-        "ext-simplexml": "For the S3 storage backend"
+        "ext-simplexml": "For the S3 storage backend",
+        "ext-dom": "For the S3 storage backend"
     },
     "require-dev": {
         "phpmetrics/phpmetrics": "^2.0",

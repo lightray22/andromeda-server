@@ -16,7 +16,7 @@ See the [error logging how-to](Core-and-CoreApp.md#error-logging) for more detai
 ## Generated Documentation
 
 * [Repository](https://github.com/irondrive/andromeda-server-docs)
-* [Doctum Output](https://irondrive.github.io/andromeda-server-docs/doctum_build)
+* [Deployment](https://irondrive.github.io/andromeda-server-docs)
 
 The API documentation is generated using the `tools/mkdocs` script.
 
@@ -93,4 +93,4 @@ The test framework uses a `pytest-config.json` file that must be located in the 
 
 Note that HTTP testing can be done with PHP's integrated web server rather than needing to install a real one, e.g. `php -S localhost:8080`.  
 
-Python 3.10 is the minimum required (Ubuntu 22.04 is the current baseline).  Other (possibly non-exhaustive) requirements: `sudo apt install python3-dev python3-pkgconfig libmysqlclient-dev postgresql-server-dev-all; pip install requests colorama mysql mysql-connector-python psycopg2`
+Python 3.10 is the minimum required (Ubuntu 22.04 is the current baseline).  Other (possibly non-exhaustive) requirements: `sudo apt install python3-dev python3-pkgconfig libmysqlclient-dev postgresql-server-dev-all python3-requests python3-colorama python3-mysql.connector python3-psycopg2`

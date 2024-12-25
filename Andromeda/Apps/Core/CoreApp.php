@@ -49,14 +49,14 @@ class CoreApp extends BaseApp
             'testmail [--mailid id] [--dest email] [--testkey int]',
             'getmailers',
             'createmailer [--test email] '.Emailer::GetCreateUsage(),
-            ...array_map(function($u){ return "(createmailer) $u"; },Emailer::GetCreateUsages()),
+            ...array_map(function($u){ return "(createmailer...) $u"; },Emailer::GetCreateUsages()),
             'deletemailer --mailid id',
             'geterrors '.ErrorLog::GetPropUsage($this->database).' '.ErrorLog::GetLoadUsage(),
             'counterrors '.ErrorLog::GetPropUsage($this->database).' '.ErrorLog::GetCountUsage(),
             'getactions '.BaseActionLog::GetPropUsage($this->database).' '.BaseActionLog::GetLoadUsage().' [--expand bool]',
-            ...array_map(function($u){ return "(getactions) $u"; },BaseActionLog::GetAppPropUsages($this->database)),
+            ...array_map(function($u){ return "(getactions...) $u"; },BaseActionLog::GetAppPropUsages($this->database)),
             'countactions '.BaseActionLog::GetPropUsage($this->database).' '.BaseActionLog::GetCountUsage(),
-            ...array_map(function($u){ return "(countactions) $u"; },BaseActionLog::GetAppPropUsages($this->database)),
+            ...array_map(function($u){ return "(countactions...) $u"; },BaseActionLog::GetAppPropUsages($this->database)),
         );
     }
     

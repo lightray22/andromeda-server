@@ -55,8 +55,8 @@ class AccountsApp extends BaseApp
             'sendrecovery (--username alphanum|email | '.Contact::GetFetchUsage().')',
             'createaccount (--username alphanum | '.Contact::GetFetchUsage().') --password raw [--admin bool]',
             'createsession (--username alphanum|email | '.Contact::GetFetchUsage().') --auth_password raw [--authsource id] [--old_password raw] [--new_password raw]',
-            '(createsession) [--auth_recoverykey utf8 | --auth_twofactor int] [--name ?name]',
-            '(createsession) --auth_clientid id --auth_clientkey randstr',
+            '(createsession... create client) [--auth_recoverykey utf8 | --auth_twofactor int] [--name ?name]',
+            '(createsession... reuse client) --auth_clientid id --auth_clientkey randstr',
             'createrecoverykeys --auth_password raw --auth_twofactor int [--replace bool]',
             'createtwofactor --auth_password raw [--comment ?text]',
             'verifytwofactor --auth_twofactor int',
@@ -84,7 +84,7 @@ class AccountsApp extends BaseApp
             'sendmessage (--account id | --group id) --subject utf8 --text text [--html raw]',
             'getauthsources',
             'createauthsource --auth_password raw '.AuthSource\External::GetPropUsage().' [--test_username text --test_password raw]',
-            ...array_map(function($u){ return "(createauthsource) $u"; }, AuthSource\External::GetPropUsages()),
+            ...array_map(function($u){ return "(createauthsource...) $u"; }, AuthSource\External::GetPropUsages()),
             'testauthsource --authsrc id [--test_username alphanum|email --test_password raw]',
             'editauthsource --authsrc id --auth_password raw '.AuthSource\External::GetPropUsage().' [--test_username text --test_password raw]',
             'deleteauthsource --authsrc id --auth_password raw',
@@ -577,7 +577,7 @@ class AccountsApp extends BaseApp
             else Authenticator::StaticTryRequireTwoFactor($params, $account);
             
             $cname = $params->GetOptParam('name',null)->GetNullName();
-            $client = Client::Create($interface, $this->database, $account, $cname);
+            $client = Client::Create($interface, $this->database, $account, $cname)->Save();
         }
         
         if ($actionlog !== null) $actionlog->LogDetails('client',$client->ID()); 
@@ -610,7 +610,7 @@ class AccountsApp extends BaseApp
         
         /* delete old session associated with this client, create a new one */
         Session::DeleteByClient($this->database, $client);
-        $session = Session::Create($this->database, $account, $client);
+        $session = Session::Create($this->database, $account, $client)->Save();
         
         if ($actionlog !== null) $actionlog->LogDetails('session',$session->ID()); 
         
