@@ -577,7 +577,7 @@ class AccountsApp extends BaseApp
             else Authenticator::StaticTryRequireTwoFactor($params, $account);
             
             $cname = $params->GetOptParam('name',null)->GetNullName();
-            $client = Client::Create($interface, $this->database, $account, $cname)->Save();
+            $client = Client::Create($interface, $this->database, $account, $cname);
         }
         
         if ($actionlog !== null) $actionlog->LogDetails('client',$client->ID()); 
@@ -610,7 +610,7 @@ class AccountsApp extends BaseApp
         
         /* delete old session associated with this client, create a new one */
         Session::DeleteByClient($this->database, $client);
-        $session = Session::Create($this->database, $account, $client)->Save();
+        $session = Session::Create($this->database, $account, $client);
         
         if ($actionlog !== null) $actionlog->LogDetails('session',$session->ID()); 
         

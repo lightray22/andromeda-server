@@ -15,7 +15,7 @@ class TwoFactorTest extends \PHPUnit\Framework\TestCase
         $objdb = new ObjectDatabase($this->createMock(PDODatabase::class),false);
         $account = new Account($objdb, ['id'=>'test123'], false);
 
-        $tf = TwoFactorTest_TwoFactor::Create($objdb, $account, $comment="test comment")->Save();
+        $tf = TwoFactorTest_TwoFactor::Create($objdb, $account, $comment="test comment");
         $this->assertSame($comment, $tf->GetComment());
         $this->assertFalse($tf->GetIsValid());
         
@@ -34,7 +34,7 @@ class TwoFactorTest extends \PHPUnit\Framework\TestCase
         $objdb = new ObjectDatabase($this->createMock(PDODatabase::class),false);
         $account = new Account($objdb, ['id'=>'test123'], false);
 
-        $tf = TwoFactorTest_TwoFactor::Create($objdb, $account)->Save();
+        $tf = TwoFactorTest_TwoFactor::Create($objdb, $account);
         $this->assertFalse($tf->hasCrypto());
 
         $account->InitializeCrypto("mypassword");
@@ -43,7 +43,7 @@ class TwoFactorTest extends \PHPUnit\Framework\TestCase
         $google2fa = new \PragmaRX\Google2FA\Google2FA();
         $this->assertTrue($tf->CheckCode($google2fa->getCurrentOtp($tf->pubGetSecret()))); // still works?
 
-        $tf = TwoFactorTest_TwoFactor::Create($objdb, $account)->Save();
+        $tf = TwoFactorTest_TwoFactor::Create($objdb, $account);
         $this->assertTrue($tf->hasCrypto()); // created after account already had crypto
         $tf->DestroyCrypto();
         $this->assertFalse($tf->hasCrypto());
@@ -55,7 +55,7 @@ class TwoFactorTest extends \PHPUnit\Framework\TestCase
         $objdb = new ObjectDatabase($this->createMock(PDODatabase::class),false);
         $account = new Account($objdb, ['id'=>'test123'], false);
 
-        $tf = TwoFactorTest_TwoFactor::Create($objdb, $account)->Save();
+        $tf = TwoFactorTest_TwoFactor::Create($objdb, $account);
         UsedToken::LoadByTwoFactor($objdb, $tf); // init empty cache so we don't have to mock PDO Database returns
 
         $google2fa = new \PragmaRX\Google2FA\Google2FA();

@@ -166,14 +166,6 @@ class ForeignKeyException extends DatabaseException
     }
 }
 
-/** Exception indicating that a link can't be set to an unsaved object */
-class ObjectRefNotSavedException extends DatabaseException
-{
-    public function __construct(?string $details = null) {
-        parent::__construct("OBJECTREF_NOT_SAVED", $details);
-    }
-}
-
 /** Exception that the DB provided null for a non-null field */
 class FieldDataNullException extends DatabaseException
 {

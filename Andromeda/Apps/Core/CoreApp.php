@@ -341,7 +341,7 @@ class CoreApp extends BaseApp
     {
         if (!$isAdmin) throw new Exceptions\AdminRequiredException();
         
-        $emailer = Emailer::Create($this->database, $params)->Save();
+        $emailer = Emailer::Create($this->database, $params);
         
         if ($params->HasParam('test'))
         {

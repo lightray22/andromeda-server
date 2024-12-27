@@ -989,9 +989,6 @@ class NullObjectRefT extends BaseField
 
         if ($object->ID() === $this->objId) return false;
         
-        if ($object->isCreated())
-            throw new Exceptions\ObjectRefNotSavedException();
-
         $this->NotifyModified();
         $this->objId = $object->ID();
         $this->delta++;
@@ -1075,9 +1072,6 @@ class ObjectRefT extends BaseField
     {
         $this->object = $object;
         if (isset($this->objId) && $object->ID() === $this->objId) return false;
-
-        if ($object->isCreated())
-            throw new Exceptions\ObjectRefNotSavedException();
 
         $this->NotifyModified();
         $this->objId = $object->ID();
