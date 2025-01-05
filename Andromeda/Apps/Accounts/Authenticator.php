@@ -253,12 +253,13 @@ class Authenticator
             throw new Exceptions\CryptoInitRequiredException();
         
         if ($session !== null && $session->hasCrypto())
-            $session->UnlockCrypto(); // key should've been checked previously
+            $session->UnlockCrypto(); // CheckKeyMatch should've been checked before using the session
         else if ($params->HasParam('auth_recoverykey'))
         {
             $recoverykey = $params->GetParam('auth_recoverykey',SafeParams::PARAMLOG_NEVER)->GetUTF8String();
 
-            if (!$account->CheckRecoveryKey($recoverykey)) // unlocks crypto also
+            $obj = RecoveryKey::TryLoadByFullKey($account->GetDatabase(), $recoverykey, $account);
+            if ($obj === null || !$obj->hasCrypto() || !$obj->CheckFullKey($recoverykey))
                 throw new Exceptions\AuthenticationFailedException();
         }
         else if ($params->HasParam('auth_password'))
@@ -266,12 +267,10 @@ class Authenticator
             $password = $params->GetParam('auth_password',SafeParams::PARAMLOG_NEVER)->GetRawString();
             
             try { $account->UnlockCryptoFromPassword($password); }
-            catch (DecryptionFailedException $e) { 
+            catch (DecryptionFailedException $e) {
                 throw new Exceptions\AuthenticationFailedException(); }
         }
-        
-        if (!$account->isCryptoAvailable())
-            throw new Exceptions\CryptoKeyRequiredException();
+        else throw new Exceptions\CryptoKeyRequiredException();
     }
   
     /** 

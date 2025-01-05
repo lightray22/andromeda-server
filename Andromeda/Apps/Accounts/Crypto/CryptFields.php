@@ -5,6 +5,7 @@ use Andromeda\Core\Database\FieldTypes\{BaseField, NullStringType, ObjectRefT};
 use Andromeda\Core\Database\Exceptions\FieldDataNullException;
 
 use Andromeda\Apps\Accounts\{Account, Authenticator};
+use Andromeda\Apps\Accounts\Crypto\Exceptions\CryptoUnlockRequiredException;
 
 // TODO FILES possibly will need to bring back OptFieldCrypt, and the object-central parts of FieldCrypt (SetEncrypted?)
 
@@ -88,7 +89,10 @@ class NullCryptStringType extends CryptField
         return $this->SetValue($this->TryGetValue(), $crypt);
     }
     
-    /** Returns the field's value, decrypting if needed (maybe null) */
+    /** 
+     * Returns the field's value, decrypting if needed (maybe null) 
+     * @throws CryptoUnlockRequiredException if crypto has not been unlocked
+     */
     public function TryGetValue() : ?string
     {
         if (!isset($this->plainvalue))
@@ -182,7 +186,10 @@ class CryptStringType extends CryptField
         return $this->SetValue($this->GetValue(), $crypt);
     }
     
-    /** Returns the field's value, decrypting if needed */
+    /** 
+     * Returns the field's value, decrypting if needed
+     * @throws CryptoUnlockRequiredException if crypto has not been unlocked
+     */
     public function GetValue() : string
     {
         if (!isset($this->plainvalue))

@@ -78,7 +78,7 @@ trait AuthObject
 
     /**
      * Returns the raw auth key
-     * @throws Exceptions\RawKeyNotAvailableException if the real key is not in memory or is nullnull
+     * @throws Exceptions\RawKeyNotAvailableException if the real key is not in memory or is null
      */
     protected function GetAuthKey() : string
     {

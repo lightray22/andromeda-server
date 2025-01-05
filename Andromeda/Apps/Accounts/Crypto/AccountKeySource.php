@@ -43,6 +43,8 @@ trait AccountKeySource
      * MUST be called when creating an object with this trait
      * @param string $wrappass key to use to initialize crypto
      * @param bool $fast if true, does a very fast transformation (use only if the password is itself a key)
+     * @throws Exceptions\CryptoAlreadyInitializedException if already initialized
+     * @throws Exceptions\CryptoUnlockRequiredException if account crypto not unlocked
      * @return $this
      */
     protected function AccountKeySourceCreate(Account $account, string $wrappass, bool $fast = false) : self
@@ -65,10 +67,12 @@ trait AccountKeySource
      * @param string $wrappass the key to use to wrap the master key
      * @param bool $fast if true, does a very fast transformation (use only if the password is itself a key)
      * @throws Exceptions\CryptoAlreadyInitializedException if already initialized
+     * @throws Exceptions\CryptoUnlockRequiredException if account crypto not unlocked
      * @return $this
      */
     protected function InitializeCryptoFromAccount(string $wrappass, bool $fast = false) : self
     {
+        // check now since we are re-keying
         if ($this->hasCrypto()) throw new Exceptions\CryptoAlreadyInitializedException();
         
         $this->master_raw = $this->GetAccount()->GetMasterKey();

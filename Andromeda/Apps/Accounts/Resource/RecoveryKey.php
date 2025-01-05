@@ -3,7 +3,7 @@
 use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, TableTypes};
 
 use Andromeda\Apps\Accounts\Account;
-use Andromeda\Apps\Accounts\Crypto\{AuthObjectFull, AccountKeySource, IKeySource};
+use Andromeda\Apps\Accounts\Crypto\{AuthObjectFull, AccountKeySource, IKeySource, Exceptions\RawKeyNotAvailableException};
 
 /**
  * A recovery key allows account recovery by bypassing a password
@@ -76,7 +76,8 @@ class RecoveryKey extends BaseObject implements IKeySource
         
         if ($this->hasCrypto())
         {
-            $this->UnlockCrypto($key, true); // shouldn't throw since the key matches
+            // should not throw DecryptionFailedException since authkey is known to match
+            $this->UnlockCrypto($key, true);
             $this->account->GetObject()->SetCryptoKeySource($this);
         }
 
@@ -107,6 +108,7 @@ class RecoveryKey extends BaseObject implements IKeySource
 
     /**
      * Gets a printable client object for this key
+     * @throws RawKeyNotAvailableException if $secret and raw key is unavailable
      * @return RecoveryKeyJ
      */
     public function GetClientObject(bool $secret = false) : array

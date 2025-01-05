@@ -4,7 +4,7 @@ use Andromeda\Core\IOFormat\IOInterface;
 use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, QueryBuilder, TableTypes};
 
 use Andromeda\Apps\Accounts\Account;
-use Andromeda\Apps\Accounts\Crypto\AuthObject;
+use Andromeda\Apps\Accounts\Crypto\{AuthObject, Exceptions\RawKeyNotAvailableException};
 
 /**
  * A client registered for authenticating as an account
@@ -188,6 +188,7 @@ class Client extends BaseObject
     
     /**
      * Gets this client as a printable object
+     * @throws RawKeyNotAvailableException if $secret and raw key is unavailable
      * @return ClientJ
      */
     public function GetClientObject(bool $secret = false) : array

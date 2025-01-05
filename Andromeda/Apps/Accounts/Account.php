@@ -7,7 +7,7 @@ use Andromeda\Core\Database\Exceptions\CounterOverLimitException;
 
 use Andromeda\Apps\Accounts\AuthSource\External;
 use Andromeda\Apps\Accounts\Crypto\{KeySource, IKeySource};
-use Andromeda\Apps\Accounts\Crypto\Exceptions\CryptoUnlockRequiredException;
+use Andromeda\Apps\Accounts\Crypto\Exceptions\{CryptoAlreadyInitializedException, CryptoNotInitializedException, CryptoUnlockRequiredException};
 use Andromeda\Apps\Accounts\Resource\{Contact, EmailContact, Client, RecoveryKey, Session, TwoFactor};
 
 /**
@@ -612,7 +612,10 @@ class Account extends PolicyBase implements IKeySource
         else return ($max === null || $this->database->GetTime()-$date < $max);
     }
     
-    /** Re-keys the account's crypto if it exists, and re-hashes its password (if using local auth) */
+    /** 
+     * Re-keys the account's crypto if it exists, and re-hashes its password (if using local auth)
+     * @throws CryptoUnlockRequiredException if crypto has not been unlocked
+     */
     public function ChangePassword(string $new_password) : Account
     {
         if ($this->hasCrypto())
@@ -645,7 +648,11 @@ class Account extends PolicyBase implements IKeySource
     public function isCryptoAvailable() : bool { 
         return isset($this->keysource) || $this->BaseIsCryptoAvailable(); }
     
-    /** Unlocks crypto from the given account password */
+    /** 
+     * Unlocks crypto from the given account password
+     * @throws DecryptionFailedException if decryption fails (password is wrong)
+     * @throws CryptoNotInitializedException if no key material exists
+     */
     public function UnlockCryptoFromPassword(string $password) : self {
         return $this->UnlockCrypto($password); }
 
@@ -697,6 +704,7 @@ class Account extends PolicyBase implements IKeySource
      * @param string $password the password to derive keys from
      * @param bool $rekey true if crypto exists and we want to keep the same master key
      * @throws CryptoUnlockRequiredException if crypto is not unlocked
+     * @throws CryptoAlreadyInitializedException if crypto already exists and not re-keying
      */
     public function InitializeCrypto(string $password, bool $rekey = false) : self
     {

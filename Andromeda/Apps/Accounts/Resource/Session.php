@@ -3,7 +3,8 @@
 use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, QueryBuilder, TableTypes};
 
 use Andromeda\Apps\Accounts\Account;
-use Andromeda\Apps\Accounts\Crypto\{AuthObject, AccountKeySource, IKeySource, Exceptions\RawKeyNotAvailableException};
+use Andromeda\Apps\Accounts\Crypto\{AuthObject, AccountKeySource, IKeySource};
+use Andromeda\Apps\Accounts\Crypto\Exceptions\{CryptoAlreadyInitializedException, CryptoNotInitializedException, CryptoUnlockRequiredException, RawKeyNotAvailableException};
 
 /**
  * Implements an account session, the primary implementor of authentication
@@ -162,6 +163,9 @@ class Session extends BaseObject implements IKeySource
     /**
      * Initializes crypto for the session
      * The account must have crypto unlocked, and this session must have its raw auth key available
+     * @throws RawKeyNotAvailableException if our raw key is unavailable
+     * @throws CryptoAlreadyInitializedException if already initialized
+     * @throws CryptoUnlockRequiredException if account crypto not unlocked
      * @return $this
      */
     public function InitializeCrypto() : self
@@ -172,6 +176,7 @@ class Session extends BaseObject implements IKeySource
     /**
      * Attempts to unlock crypto using the previously checked key, sets the account key source
      * @throws RawKeyNotAvailableException if CheckKeyMatch was not run with the key
+     * @throws CryptoNotInitializedException if no key material exists
      * @return $this
      */
     public function UnlockCrypto() : self
@@ -179,6 +184,7 @@ class Session extends BaseObject implements IKeySource
         if (!isset($this->authkey_raw))
             throw new RawKeyNotAvailableException();
 
+        // should not throw DecryptionFailedException since authkey is known to match
         $this->BaseUnlockCrypto($this->authkey_raw, true);
         $this->account->GetObject()->SetCryptoKeySource($this);
         return $this;
@@ -186,6 +192,7 @@ class Session extends BaseObject implements IKeySource
 
     /**
      * Returns a printable client object for this session from its account
+     * @throws RawKeyNotAvailableException if $secret and raw key is unavailable
      * @return SessionJ
      */
     public function GetClientObject(bool $secret = false) : array

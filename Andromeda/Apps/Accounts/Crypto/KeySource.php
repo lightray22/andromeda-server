@@ -27,6 +27,7 @@ interface IKeySource
      * @param string $data the ciphertext to be decrypted
      * @param string $nonce the nonce used for encryption
      * @throws Exceptions\CryptoUnlockRequiredException if crypto has not been unlocked
+     * @throws DecryptionFailedException if the stored key is corrupt (shouldn't happen)
      * @return string the plaintext decrypted with the source's key
      */
     public function DecryptSecret(string $data, string $nonce) : string;
@@ -103,7 +104,7 @@ trait KeySource
      * Attempts to unlock crypto using the given password
      * @param bool $fast if true, does a very fast transformation (use only if the password is itself a key)
      * @throws Exceptions\CryptoNotInitializedException if no key material exists
-     * @throws DecryptionFailedException if decryption fails
+     * @throws DecryptionFailedException if decryption fails (password is wrong)
      * @return $this
      */
     protected function UnlockCrypto(string $wrappass, bool $fast = false) : self

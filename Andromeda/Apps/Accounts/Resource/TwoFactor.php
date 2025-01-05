@@ -4,6 +4,7 @@ use Andromeda\Core\Crypto;
 use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, QueryBuilder, TableTypes};
 
 use Andromeda\Apps\Accounts\Account;
+use Andromeda\Apps\Accounts\Crypto\Exceptions\CryptoUnlockRequiredException;
 
 /** 
  * Describes an OTP twofactor authentication source for an account 
@@ -124,7 +125,10 @@ class TwoFactor extends BaseObject
         return $obj;
     }
     
-    /** Returns the (decrypted) OTP secret */
+    /** 
+     * Returns the (decrypted) OTP secret
+     * @throws CryptoUnlockRequiredException if account crypto has not been unlocked
+     */
     protected function GetSecret() : string
     {
         if (!isset($this->raw_secret))
@@ -141,7 +145,10 @@ class TwoFactor extends BaseObject
         return $this->raw_secret;
     }
     
-    /** Returns a URL for viewing a QR code of the OTP secret */
+    /** 
+     * Returns a URL for viewing a QR code of the OTP secret
+     * @throws CryptoUnlockRequiredException if account crypto has not been unlocked
+     */
     protected function GetSecretURL() : string
     {
         $google2fa = new \PragmaRX\Google2FA\Google2FA();
@@ -153,7 +160,10 @@ class TwoFactor extends BaseObject
         UsedToken::DeleteByTwoFactor($this->database, $this);
     }
     
-    /** Stores the secret as encrypted by the owner */
+    /** 
+     * Stores the secret as encrypted by the owner
+     * @throws CryptoUnlockRequiredException if account crypto has not been unlocked
+     */
     public function InitializeCrypto() : self
     {
         $nonce = Crypto::GenerateSecretNonce();
@@ -167,7 +177,10 @@ class TwoFactor extends BaseObject
         return $this;
     }
     
-    /** Stores the secret as plaintext (not encrypted) */
+    /** 
+     * Stores the secret as plaintext (not encrypted)
+     * @throws CryptoUnlockRequiredException if account crypto has not been unlocked
+     */
     public function DestroyCrypto() : self
     {
         $this->secret->SetValue($this->GetSecret());
@@ -175,7 +188,10 @@ class TwoFactor extends BaseObject
         return $this;
     }
     
-    /** Checks and returns whether the given twofactor code is valid */
+    /** 
+     * Checks and returns whether the given twofactor code is valid
+     * @throws CryptoUnlockRequiredException if account crypto has not been unlocked
+     */
     public function CheckCode(string $code) : bool
     {
         UsedToken::PruneOldCodes($this->database);
@@ -198,6 +214,7 @@ class TwoFactor extends BaseObject
     /**
      * Returns a printable client object for this twofactor
      * @param bool $secret if true, show the OTP secret
+     * @throws CryptoUnlockRequiredException if $secret and crypto has not been unlocked
      * @return TwoFactorJ
      */
     public function GetClientObject(bool $secret = false) : array
