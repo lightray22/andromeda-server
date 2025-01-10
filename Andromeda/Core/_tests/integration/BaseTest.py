@@ -12,8 +12,8 @@ class BaseTest():
 
     def __init__(self, util:TestUtils, interface:Interface, verbose:int):
         self.util = util
-        self.verbose = verbose
         self.interface = interface
+        self.verbose = verbose
 
     def runTests(self, testMatch:str) -> int:
         """ Run all tests for this module and return the test count """
@@ -45,7 +45,7 @@ class BaseTest():
         return testCount
     
     def afterInstall(self):
-        """ Function to run after install, before appTests """
+        """ Function to run after install, before ANY appTests """
         pass
     
     def beforeTests(self):
@@ -58,9 +58,12 @@ class BaseTest():
 
 class BaseAppTest(BaseTest):
     """ The base class that all app test modules inherit from """
+    appTestMap:dict = None
     config = None
-    def __init__(self, util:TestUtils, interface:Interface, verbose:int, config):
+
+    def __init__(self, util:TestUtils, interface:Interface, verbose:int, appTestMap:dict, config):
         super().__init__(util, interface, verbose)
+        self.appTestMap = appTestMap
         self.config = config if config is not None else {}
 
     @abc.abstractmethod

@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-import os, sys, json, getopt, time, random, importlib, colorama
-
 from Interface import Interface
 from Database import Database
 from BaseTest import BaseAppTest
@@ -50,7 +48,7 @@ class InstallTests():
             if appname in appTests:
                 appParams = appTests[appname].getInstallParams()
                 if appParams is not None: params.update(appParams)
-        retvals = util.assertOk(interface.run(app='core',action='setupall',install=True))
+        retvals = util.assertOk(interface.run(app='core',action='setupall',install=True,params=params))
         for appname, retval in retvals.items():
             if appname in appTests:
                 appTests[appname].checkInstallRetval(retval)

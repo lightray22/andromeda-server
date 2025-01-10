@@ -107,7 +107,7 @@ class Main():
 
         # build the app list by scanning
         for appname in os.listdir(self.phproot+'/Apps'): 
-            if appname == "Accounts" or appname == "Files": continue # TODO TEMP accounts enable files/accounts when they work!
+            if appname == "Files": continue # TODO FILES enable me later
             path = self.phproot+'/Apps/'+appname+'/'+appname+'App.php'
             if not os.path.exists(path): continue 
             else: self.appList.append(appname.lower())
@@ -147,7 +147,7 @@ class Main():
         for appname, module in self.appModules.items():
             appConfig = None
             if appname in self.config: appConfig = self.config[appname]
-            appTestMap[appname] = module.AppTests(testUtils, interface, self.verbose, appConfig)
+            appTestMap[appname] = module.AppTests(testUtils, interface, self.verbose, appTestMap, appConfig)
 
         printCyanOnBlack("-- BEGIN INSTALLS -- ")
         InstallTests(self.verbose).run(testUtils, interface, database, appTestMap)

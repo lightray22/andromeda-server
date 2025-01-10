@@ -116,30 +116,39 @@ class HTTP extends IOInterface
 
         return new Input($app, $act, $params, $pfiles, $auth);
     }
+
+    /** True if output has started */
+    private bool $initSent = false;
     
     /**
-     * Sends the no-cache header and, if UserOutput, the HTTP code
+     * Sends the no-cache header and, if UserOutput, the HTTP code (both only if not already sent)
      * @param Output $output output object
      */
     private function InitOutput(Output $output) : void
-    {
-        if ($this->outmode === 0)
-            http_response_code($output->GetCode());
+    {        
+        if (!$this->initSent)
+        {
+            if ($this->outmode === 0)
+                http_response_code($output->GetCode());
         
-        header("Cache-Control: no-cache");
+            header("Cache-Control: no-cache");
+            $this->initSent = true;
+        }
     }
     
     public function UserOutput(Output $output, bool $skipHeaders = false) : bool
     {
-        if (!$skipHeaders) $this->InitOutput($output);
+        if (!$skipHeaders)
+            $this->InitOutput($output);
         
         return parent::UserOutput($output);
     }
     
     public function FinalOutput(Output $output, bool $skipHeaders = false) : void
     {
-        if (!$skipHeaders) $this->InitOutput($output);
-
+        if (!$skipHeaders)
+            $this->InitOutput($output);
+        
         if ($this->outmode === self::OUTPUT_PLAIN)
         {
             if (!$skipHeaders) // unit testing

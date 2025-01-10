@@ -55,6 +55,9 @@ class HTTP(Interface):
         """ Runs an HTTP request with extra HTTP-specific options, returns (code, data) """
         self.apiCount += 1
 
+        get = get.copy()
+        post = post.copy()
+        headers = headers.copy()
         for key,val in get.items():
             if val is None: get[key] = ""
         for key,val in post.items():

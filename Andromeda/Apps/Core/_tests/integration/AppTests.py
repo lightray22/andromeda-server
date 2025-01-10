@@ -17,27 +17,23 @@ class AppTests(BaseAppTest):
         return { }
 
     def installSelf(self):
-        return self.util.assertOk(self.interface.run(app='core',action='install',install=True))
+        return self.util.assertOk(self.interface.run(app='core',action='install',install=True,params=self.getInstallParams()))
 
     def checkInstallRetval(self, retval):
         self.util.assertSame(None, retval)
 
-    hasAccounts:bool = False
     canAdmin:bool = False
 
-    def beforeTests(self): # init
+    def afterInstall(self): # init
         apps = self.util.assertOk(self.interface.run(app='core',action='getconfig'))['apps']
-        self.hasAccounts = ('accounts' in apps)
-        self.canAdmin = self.hasAccounts or self.interface.isPriv
+        self.canAdmin = ('accounts' in apps) or self.interface.isPriv
 
-    def addAdmin(self, params:dict):
-        """ Adds the required parameters to be admin """
-        # TODO ACCOUNTS see accounts test, do login here
-        return params
-    
-    def asAdmin(self, params:dict = {}):
+    def asAdmin(self, params:dict = {}, withUser:bool = False):
         """ Returns params with admin params added if not a private interface """
-        return params if self.interface.isPriv else self.addAdmin(params)
+        if ('accounts' in self.appTestMap):
+            return self.appTestMap['accounts'].asAdmin(params, withUser)
+        else:
+            assert(self.interface.isPriv)
     
     #################################################
         
@@ -98,8 +94,6 @@ class AppTests(BaseAppTest):
         res1 = self.util.assertOk(self.interface.run(app='core',action='scanapps',params=params))
         self.util.assertIn('core', res1)
         self.util.assertIn('testutil', res1)
-        if self.hasAccounts:
-            self.util.assertIn('accounts',res1)
         res2 = self.util.assertOk(self.interface.run(app='core',action='getconfig',params=params))['apps']
         for appname in res2:
             self.util.assertIn(appname, res1)
@@ -114,8 +108,11 @@ class AppTests(BaseAppTest):
             return False
         
         res = self.interface.run(app='core',action='phpinfo',isJson=False,params=self.asAdmin()).decode("utf-8")
-        self.util.assertStartsWith(res, "phpinfo()")
-        self.util.assertIn("PHP Version =>", res)
+        if self.interface.isPriv:
+            self.util.assertStartsWith(res, "phpinfo()")
+        else:
+            self.util.assertStartsWith(res, "<!DOCTYPE html")
+        self.util.assertIn("PHP Version", res)
 
     def testServerInfo(self):
         """ Tests the core serverinfo command """
@@ -208,9 +205,8 @@ class AppTests(BaseAppTest):
         params['datadir'] = self.config['datadir']
         res = self.util.assertOk(self.interface.run(app='core',action='setconfig',params=params))
         self.util.assertSame(res['datadir'], os.path.abspath(params['datadir']))
-        res = self.util.assertOk(self.interface.run(app='core',action='getconfig'))
+        res = self.util.assertOk(self.interface.run(app='core',action='getconfig',params=self.asAdmin()))
         self.util.assertSame(res['datadir'], os.path.abspath(params['datadir']))
-        params['datadir'] = None
         res = self.util.assertOk(self.interface.run(app='core',action='setconfig',params=params))
         self.util.assertSame(res['datadir'], params['datadir'])
 
@@ -244,9 +240,7 @@ class AppTests(BaseAppTest):
             return False
         
         if not self.interface.isPriv:
-            if self.verbose >= 1: print("TODO ACCOUNTS impossible to test over HTTP currently")
-            # TODO ACCOUNTS once accounts works, can at least have an option to prompt admin to re-enable the server manually then continue the test (like email test)?
-            # maybe not worth it because lots of other accounts app stuff will have this same problem
+            if self.verbose >= 1: print("can't test HTTP disable over HTTP, skipping")
             return False
         self.util.assertSame(self.util.assertOk(self.interface.run(app='core',action='setconfig',params={'enabled':False}))['enabled'], False)
         self.util.assertSame(self.util.assertOk(self.interface.run(app='core',action='getconfig'))['enabled'], False) # has no effect on CLI

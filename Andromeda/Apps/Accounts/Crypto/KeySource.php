@@ -27,7 +27,7 @@ interface IKeySource
      * @param string $data the ciphertext to be decrypted
      * @param string $nonce the nonce used for encryption
      * @throws Exceptions\CryptoUnlockRequiredException if crypto has not been unlocked
-     * @throws DecryptionFailedException if the stored key is corrupt (shouldn't happen)
+     * @throws DecryptionFailedException if the key is wrong for the data
      * @return string the plaintext decrypted with the source's key
      */
     public function DecryptSecret(string $data, string $nonce) : string;

@@ -45,8 +45,8 @@ def testActionLogging(self):
     self.util.assertSame(self.util.assertOk(self.interface.run(app='core',action='setconfig',params=self.asAdmin({'actionlog_db':True})))['actionlog_db'], True)
     self.util.assertOk(self.interface.run(app='core',action='getconfig')); dblogs += 1
     self.util.assertOk(self.interface.run(app='testutil',action='random')); dblogs += 1
-    checkTwoActions(list(self.util.assertOk(self.interface.run(app='core',action='getactions')).values())); dblogs += 1
-    self.util.assertSame(self.util.assertOk(self.interface.run(app='core',action='countactions')), dblogs); dblogs += 1
+    checkTwoActions(list(self.util.assertOk(self.interface.run(app='core',action='getactions',params=self.asAdmin())).values())); dblogs += 1
+    self.util.assertSame(self.util.assertOk(self.interface.run(app='core',action='countactions',params=self.asAdmin())), dblogs); dblogs += 1
 
     # test logging to db+file and check the file content
     params = self.asAdmin({'datadir':self.config['datadir'],'actionlog_file':True}) # now logging to both
@@ -59,7 +59,7 @@ def testActionLogging(self):
         actions.reverse() # ordered oldest to newest!
     self.util.assertCount(actions, filelogs)
     checkTwoActions(actions[0:2])
-    self.util.assertSame(self.util.assertOk(self.interface.run(app='core',action='countactions')), dblogs); dblogs += 1; filelogs += 1
+    self.util.assertSame(self.util.assertOk(self.interface.run(app='core',action='countactions',params=self.asAdmin())), dblogs); dblogs += 1; filelogs += 1
 
     # test logging to the file only (just count file lines)
     self.util.assertOk(self.interface.run(app='core',action='setconfig',params=self.asAdmin({'actionlog_db':False}))); filelogs += 1
@@ -77,7 +77,7 @@ def testActionLogging(self):
 
     # test actionlog with NONE output mode (past bug)
     res = self.interface.run(app='core',action='phpinfo',isJson=False,params=self.asAdmin()).decode("utf-8"); dblogs += 1
-    self.util.assertStartsWith(res, "phpinfo()")
+    self.util.assertIn("PHP Version", res)
     self.util.assertSame(getLastAction()['action'], 'phpinfo'); dblogs += 1
     self.util.assertSame(self.util.assertOk(self.interface.run(app='core',action='counterrors',params=self.asAdmin())), 0); dblogs += 1
 
