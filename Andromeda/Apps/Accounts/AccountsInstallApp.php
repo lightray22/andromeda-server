@@ -1,8 +1,8 @@
 <?php declare(strict_types=1); namespace Andromeda\Apps\Accounts; if (!defined('Andromeda')) die();
 
 use Andromeda\Core\InstallerApp;
-use Andromeda\Core\Utilities;
 use Andromeda\Core\IOFormat\SafeParams;
+use Andromeda\Core\Utilities;
 
 /**
  * The accounts app installer

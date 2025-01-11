@@ -40,10 +40,10 @@ class Config extends BaseConfig
         parent::CreateFields();
     }
 
-    /** Creates a new config singleton */
-    public static function Create(ObjectDatabase $database) : self 
-    { 
-        return static::BaseCreate($database); 
+    /** Creates a new Config singleton */
+    public static function Create(ObjectDatabase $database) : static
+    {
+        return $database->CreateObject(static::class);
     }
     
     /** Returns the command usage for SetConfig() */
@@ -90,12 +90,15 @@ class Config extends BaseConfig
      */
     public function GetMaxUploadSize() : ?int
     {
-        $a = Utilities::return_bytes(ini_get('post_max_size'));
-        $b = Utilities::return_bytes(ini_get('upload_max_filesize'));
-        $c = $this->upload_maxsize->TryGetValue();
-        
-        return (!$a && !$b && !$c) ? null :
-            min($a ?: PHP_INT_MAX, $b ?: PHP_INT_MAX, $c ?: PHP_INT_MAX);
+        $iniA = ini_get('post_max_size');
+        $iniB = ini_get('upload_max_filesize');
+
+        $maxes = array();
+        $maxes[] = ($iniA !== false) ? Utilities::return_bytes($iniA) : 0;
+        $maxes[] = ($iniA !== false) ? Utilities::return_bytes($iniA) : 0;
+        $maxes[] = $this->upload_maxsize->TryGetValue() ?? 0;
+
+        return min(array_filter($maxes, function(int $a){ return $a > 0; }));
     }
 
     /**

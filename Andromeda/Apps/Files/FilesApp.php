@@ -4,32 +4,39 @@ use Andromeda\Core\{ApiPackage, BaseApp, Emailer, EmailRecipient};
 use Andromeda\Core\IOFormat\{Input, InputPath, IOInterface, Output, OutputHandler, SafeParams};
 use Andromeda\Core\IOFormat\Interfaces\HTTP;
 
-require_once(ROOT."/Core/Exceptions.php"); use Andromeda\Core\UnknownActionException;
+//require_once(ROOT."/Core/Exceptions.php"); use Andromeda\Core\UnknownActionException;
 
-require_once(ROOT."/Apps/Files/ActionLog.php");
-require_once(ROOT."/Apps/Files/Config.php");
-require_once(ROOT."/Apps/Files/Exceptions.php");
-require_once(ROOT."/Apps/Files/ItemAccess.php");
-require_once(ROOT."/Apps/Files/Item.php");
-require_once(ROOT."/Apps/Files/File.php");
-require_once(ROOT."/Apps/Files/Folder.php");
-require_once(ROOT."/Apps/Files/Comment.php");
-require_once(ROOT."/Apps/Files/Tag.php");
-require_once(ROOT."/Apps/Files/Like.php");
-require_once(ROOT."/Apps/Files/Share.php");
-require_once(ROOT."/Apps/Files/FileUtils.php");
+//require_once(ROOT."/Apps/Files/ActionLog.php");
+//require_once(ROOT."/Apps/Files/Config.php");
+//require_once(ROOT."/Apps/Files/Exceptions.php");
+//require_once(ROOT."/Apps/Files/ItemAccess.php");
+//require_once(ROOT."/Apps/Files/Item.php");
+//require_once(ROOT."/Apps/Files/File.php");
+//require_once(ROOT."/Apps/Files/Folder.php");
+//require_once(ROOT."/Apps/Files/Comment.php");
+//require_once(ROOT."/Apps/Files/Tag.php");
+//require_once(ROOT."/Apps/Files/Like.php");
+//require_once(ROOT."/Apps/Files/Share.php");
+//require_once(ROOT."/Apps/Files/FileUtils.php");
 
-require_once(ROOT."/Apps/Files/Limits/Filesystem.php");
-require_once(ROOT."/Apps/Files/Limits/Account.php");
+//require_once(ROOT."/Apps/Files/Limits/Filesystem.php");
+//require_once(ROOT."/Apps/Files/Limits/Account.php");
 
-require_once(ROOT."/Apps/Files/Filesystem/FSManager.php"); use Andromeda\Apps\Files\Filesystem\FSManager;
-require_once(ROOT."/Apps/Files/Storage/Exceptions.php"); use Andromeda\Apps\Files\Storage\{FileReadFailedException, FileWriteFailedException};
-require_once(ROOT."/Apps/Files/Storage/Storage.php"); use Andromeda\Apps\Files\Storage\Storage;
+//require_once(ROOT."/Apps/Files/Filesystem/FSManager.php"); 
+use Andromeda\Apps\Files\Filesystem\FSManager;
+//require_once(ROOT."/Apps/Files/Storage/Exceptions.php");
+use Andromeda\Apps\Files\Storage\{FileReadFailedException, FileWriteFailedException};
+//require_once(ROOT."/Apps/Files/Storage/Storage.php"); 
+use Andromeda\Apps\Files\Storage\Storage;
 
-require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
-require_once(ROOT."/Apps/Accounts/Groups/Group.php"); use Andromeda\Apps\Accounts\Groups\Group;
-require_once(ROOT."/Apps/Accounts/Authenticator.php"); use Andromeda\Apps\Accounts\Authenticator;
-require_once(ROOT."/Apps/Accounts/Exceptions.php"); use Andromeda\Apps\Accounts\{AuthenticationFailedException, UnknownAccountException, UnknownGroupException};
+//require_once(ROOT."/Apps/Accounts/Account.php"); 
+use Andromeda\Apps\Accounts\Account;
+//require_once(ROOT."/Apps/Accounts/Groups/Group.php"); 
+use Andromeda\Apps\Accounts\Groups\Group;
+//require_once(ROOT."/Apps/Accounts/Authenticator.php"); 
+use Andromeda\Apps\Accounts\Authenticator;
+//require_once(ROOT."/Apps/Accounts/Exceptions.php"); 
+use Andromeda\Apps\Accounts\{AuthenticationFailedException, UnknownAccountException, UnknownGroupException};
 
 /**
  * App that provides user-facing filesystem services.
@@ -46,6 +53,8 @@ require_once(ROOT."/Apps/Accounts/Exceptions.php"); use Andromeda\Apps\Accounts\
  */
 class FilesApp extends BaseApp
 {
+    private Config $config;
+
     public function getName() : string { return 'files'; }
 
     public function getVersion() : string { return andromeda_version; }
@@ -55,7 +64,8 @@ class FilesApp extends BaseApp
 
     public function getUsage() : array 
     { 
-        return array(
+        return array('NOT WORKING YET');
+        /*return array(
             'getconfig',
             'setconfig '.Config::GetSetConfigUsage(),
             '- AUTH for shared items: --sid id [--skey randstr] [--spassword raw]',
@@ -118,7 +128,7 @@ class FilesApp extends BaseApp
             "(configtimedlimits) --filesystem id ".Limits\FilesystemTimed::GetConfigUsage(),
             'purgelimits (--account id | --group id | --filesystem id)',
             'purgetimedlimits (--account id | --group id | --filesystem id) --period uint',
-        ); 
+        ); */
     }
     
     public function __construct(ApiPackage $api)
@@ -127,16 +137,16 @@ class FilesApp extends BaseApp
         
         $this->config = Config::GetInstance($this->database);
     }
-    
-    public function commit() : void { Storage::commitAll(); }    
-    public function rollback() : void { Storage::rollbackAll(); }
+
+    //public function commit() : void { Storage::commitAll(); }     // TODO FILES fix me
+    //public function rollback() : void { Storage::rollbackAll(); }
     
     /**
      * {@inheritDoc}
      * @throws UnknownActionException if the given action is not valid
      * @see BaseApp::Run()
      */
-    public function Run(Input $input)
+    public function Run(Input $input) : mixed
     {
         $authenticator = Authenticator::TryAuthenticate(
             $this->database, $input, $this->API->GetInterface());
@@ -154,7 +164,7 @@ class FilesApp extends BaseApp
             case 'setconfig': return $this->RunSetConfig($params, $authenticator);
             
             case 'upload':     return $this->UploadFile($input, $authenticator, $actionlog);  
-            case 'download':   $this->DownloadFile($params, $authenticator, $actionlog); return;
+            case 'download':   $this->DownloadFile($params, $authenticator, $actionlog); return null;
             case 'ftruncate':  return $this->TruncateFile($params, $authenticator, $actionlog);
             case 'writefile':  return $this->WriteToFile($input, $authenticator, $actionlog);
             case 'createfolder':  return $this->CreateFolder($params, $authenticator, $actionlog);
@@ -174,8 +184,8 @@ class FilesApp extends BaseApp
             case 'editfilemeta':   return $this->EditFileMeta($params, $authenticator, $actionlog);
             case 'editfoldermeta': return $this->EditFolderMeta($params, $authenticator, $actionlog);
            
-            case 'deletefile':   $this->DeleteFile($params, $authenticator, $actionlog); return;
-            case 'deletefolder': $this->DeleteFolder($params, $authenticator, $actionlog); return;
+            case 'deletefile':   $this->DeleteFile($params, $authenticator, $actionlog); return null;
+            case 'deletefolder': $this->DeleteFolder($params, $authenticator, $actionlog); return null;
             case 'renamefile':   return $this->RenameFile($params, $authenticator, $actionlog);
             case 'renamefolder': return $this->RenameFolder($params, $authenticator, $actionlog);
             case 'movefile':     return $this->MoveFile($params, $authenticator, $actionlog);
@@ -185,16 +195,16 @@ class FilesApp extends BaseApp
             case 'likefolder':    return $this->LikeFolder($params, $authenticator, $actionlog);
             case 'tagfile':       return $this->TagFile($params, $authenticator, $actionlog);
             case 'tagfolder':     return $this->TagFolder($params, $authenticator, $actionlog);
-            case 'deletetag':     $this->DeleteTag($params, $authenticator, $actionlog); return;
+            case 'deletetag':     $this->DeleteTag($params, $authenticator, $actionlog); return null;
             case 'commentfile':   return $this->CommentFile($params, $authenticator, $actionlog);
             case 'commentfolder': return $this->CommentFolder($params, $authenticator, $actionlog);
             case 'editcomment':   return $this->EditComment($params, $authenticator);
-            case 'deletecomment': $this->DeleteComment($params, $authenticator, $actionlog); return;
+            case 'deletecomment': $this->DeleteComment($params, $authenticator, $actionlog); return null;
             
             case 'sharefile':    return $this->ShareFile($params, $authenticator, $actionlog);
             case 'sharefolder':  return $this->ShareFolder($params, $authenticator, $actionlog);
             case 'editshare':    return $this->EditShare($params, $authenticator, $actionlog);
-            case 'deleteshare':  $this->DeleteShare($params, $authenticator, $actionlog); return;
+            case 'deleteshare':  $this->DeleteShare($params, $authenticator, $actionlog); return null;
             case 'shareinfo':    return $this->ShareInfo($params, $authenticator, $actionlog);
             case 'getshares':   return $this->GetShares($params, $authenticator);
             case 'getadopted':  return $this->GetAdopted($authenticator);
@@ -202,7 +212,7 @@ class FilesApp extends BaseApp
             case 'getfilesystem':  return $this->GetFilesystem($params, $authenticator, $actionlog);
             case 'getfilesystems': return $this->GetFilesystems($params, $authenticator);
             case 'createfilesystem': return $this->CreateFilesystem($input, $authenticator, $actionlog);
-            case 'deletefilesystem': $this->DeleteFilesystem($params, $authenticator, $actionlog); return;
+            case 'deletefilesystem': $this->DeleteFilesystem($params, $authenticator, $actionlog); return null;
             case 'editfilesystem':   return $this->EditFilesystem($input, $authenticator);
             
             case 'getlimits':      return $this->GetLimits($params, $authenticator);
@@ -211,8 +221,8 @@ class FilesApp extends BaseApp
             case 'gettimedstatsat':  return $this->GetTimedStatsAt($params, $authenticator);
             case 'configlimits':      return $this->ConfigLimits($params, $authenticator);
             case 'configtimedlimits': return $this->ConfigTimedLimits($params, $authenticator);
-            case 'purgelimits':      $this->PurgeLimits($params, $authenticator); return;
-            case 'purgetimedlimits': $this->PurgeTimedLimits($params, $authenticator); return;
+            case 'purgelimits':      $this->PurgeLimits($params, $authenticator); return null;
+            case 'purgetimedlimits': $this->PurgeTimedLimits($params, $authenticator); return null;
             
             default: throw new UnknownActionException($input->GetAction());
         }

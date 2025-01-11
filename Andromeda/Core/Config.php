@@ -175,8 +175,6 @@ class Config extends BaseConfig
     {
         $valid = function(string $app)
         {
-            if ($app === "Files") return false; // TODO TEMP allow files app after fixing
-            
             if (in_array($app,array('.','..'),true)) return false;
             return is_file(ROOT."/Apps/$app/$app"."App.php");
         };

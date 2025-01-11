@@ -2,14 +2,7 @@
 
 use Andromeda\Core\Database\{FieldTypes, ObjectDatabase, QueryBuilder, TableTypes};
 use Andromeda\Core\IOFormat\SafeParams;
-
-require_once(ROOT."/Apps/Accounts/AuthActionLog.php"); use Andromeda\Apps\Accounts\AuthActionLog;
-
-require_once(ROOT."/Apps/Files/Exceptions.php");
-require_once(ROOT."/Apps/Files/Item.php");
-require_once(ROOT."/Apps/Files/File.php");
-require_once(ROOT."/Apps/Files/Folder.php");
-require_once(ROOT."/Apps/Files/Share.php");
+use Andromeda\Apps\Accounts\AuthActionLog;
 
 /** Access log for the files app */
 class ActionLog extends AuthActionLog
@@ -75,7 +68,7 @@ class ActionLog extends AuthActionLog
 
     public static function GetAppPropUsage() : string { return "[--file id] [--folder id] [--file_share id] [--folder_share id]"; }
     
-    public static function GetPropCriteria(ObjectDatabase $database, QueryBuilder $q, SafeParams $params) : array
+    public static function GetPropCriteria(ObjectDatabase $database, QueryBuilder $q, SafeParams $params, bool $isCount = false) : array
     {
         $criteria = array();
         

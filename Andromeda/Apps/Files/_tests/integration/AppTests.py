@@ -6,16 +6,19 @@ class AppTests(BaseAppTest):
     def __str__(self):
         return "FILES"
 
-    def getInstallParams(self):
-        assertIn('accounts', self.main.appMap)
+    def requiresInstall(self) -> bool:
+        return True
+    
+    def getInstallParams(self) -> dict:
         return { }
 
-    def install(self):
-        # TODO this is different now, we install THEN enable
-        # TODO check that the server's dependnecy checking with accounts works
-        assertOk(self.interface.run(app='core',action='enableapp',params={'appname':'files'}))
-        assertError(self.interface.run(app='files',action='getconfig'),503,'APP_INSTALL_REQUIRED: files')
-        assertOk(self.interface.run('files','install'))
+    def installSelf(self):
+        return self.util.assertOk(self.interface.run(app='files',action='install',install=True,params=self.getInstallParams()))
 
-    def getAdmin(self):
-        return self.main.appMap['accounts'].admin
+    def checkInstallRetval(self, retval):
+        self.util.assertSame(None, retval)
+
+    def asAdmin(self, params:dict = {}, withUser:bool = False):
+        """ Returns params with admin params added """
+        return self.appTestMap['accounts'].asAdmin(params, withUser)
+    

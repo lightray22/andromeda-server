@@ -35,7 +35,7 @@ class Main():
 
         # process command line args
         shortargs = "hvp:s:f:a:"
-        longargs = ["help","verbose","phproot=","seed=","filter=","apptest="]
+        longargs = ["help","verbose","phproot=","randseed=","filter=","apptest="]
         opts, args = getopt.getopt(sys.argv[1:],shortargs,longargs)
 
         for opt,arg in opts:
@@ -107,7 +107,6 @@ class Main():
 
         # build the app list by scanning
         for appname in os.listdir(self.phproot+'/Apps'): 
-            if appname == "Files": continue # TODO FILES enable me later
             path = self.phproot+'/Apps/'+appname+'/'+appname+'App.php'
             if not os.path.exists(path): continue 
             else: self.appList.append(appname.lower())
@@ -162,6 +161,7 @@ class Main():
         
         appTestList:list = list(appTestMap.values())
         self.random.shuffle(appTestList)
+
         for app in appTestList:
             app.afterInstall()
         for app in appTestList: 
