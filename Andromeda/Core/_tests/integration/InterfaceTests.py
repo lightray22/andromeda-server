@@ -13,10 +13,6 @@ class InterfaceTests(BaseTest):
         self.util.assertSame(rval['params'], {'myparam':'aaa'})
         self.util.assertSame(rval['files'], {'myfile':{'name':'test.txt','data':'contents'}})
 
-    def checkForErrors(self):
-        self.util.assertEmpty(self.util.assertOk(
-            self.interface.run(app='testutil',action='geterrors')))
-
 
 class HTTPTests(InterfaceTests):
     

@@ -119,7 +119,6 @@ class AccountsApp extends BaseApp
         }
         
         $params = $input->GetParams();
-        
         switch($input->GetAction())
         {
             case 'getconfig':           return $this->GetConfig($authenticator);

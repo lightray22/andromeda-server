@@ -22,3 +22,15 @@ class AppTests(BaseAppTest):
         """ Returns params with admin params added """
         return self.appTestMap['accounts'].asAdmin(params, withUser)
     
+    #################################################
+    
+    def testGetConfig(self):
+        """ Tests the getconfig command """
+        res = self.util.assertOk(self.interface.run(app='files',action='getconfig'))
+
+        if not self.interface.isPriv: # normie output
+            self.util.assertNotIn('date_created',res)
+        else: # admin output
+            self.util.assertType(res['date_created'], float)
+            self.util.assertSame(res, self.util.assertOk(
+                self.interface.run(app='files',action='setconfig'))) # setconfig gives admin output

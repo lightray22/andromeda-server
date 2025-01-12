@@ -47,7 +47,7 @@ class AppTests(BaseAppTest):
     #################################################
     
     def testGetConfig(self):
-        """ Tests the core getconfig command """
+        """ Tests the getconfig command """
         res = self.util.assertOk(self.interface.run(app='accounts',action='getconfig'))
         self.util.assertType(res['username_iscontact'], bool)
         self.util.assertType(res['create_account'], str)

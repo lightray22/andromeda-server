@@ -96,7 +96,6 @@ class CoreApp extends BaseApp
         }
         
         $params = $input->GetParams();
-
         switch ($input->GetAction())
         {
             case 'usage':    return $this->GetUsages($params);

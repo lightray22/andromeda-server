@@ -112,7 +112,6 @@ class Main():
             else: self.appList.append(appname.lower())
 
         for appname in self.appList:
-            if self.appMatch is not None and re.search(self.appMatch, appname) is None: continue
             path = self.phproot+'/Apps/'+appname.capitalize()+'/_tests/integration/AppTests.py'
             if not os.path.exists(path): continue
             self.appModules[appname] = self.loadModule('AppTests', path)
@@ -150,28 +149,32 @@ class Main():
 
         printCyanOnBlack("-- BEGIN INSTALLS -- ")
         InstallTests(self.verbose).run(testUtils, interface, database, appTestMap)
+        testCount = 1
 
         # run all test modules
-        printCyanOnBlack("-- BEGIN", interface, "TESTS --")
-        if isinstance(interface, HTTP):
-            ifaceTests = HTTPTests(testUtils, interface, self.verbose)
-        if isinstance(interface, CLI):
-            ifaceTests = CLITests(testUtils, interface, self.verbose)
-        testCount = ifaceTests.runTests(self.testMatch)
-        
+        if self.appMatch is None:
+            printCyanOnBlack("-- BEGIN", interface, "TESTS --")
+            if isinstance(interface, HTTP):
+                ifaceTests = HTTPTests(testUtils, interface, self.verbose)
+            if isinstance(interface, CLI):
+                ifaceTests = CLITests(testUtils, interface, self.verbose)
+            testCount += ifaceTests.runTests(self.testMatch)
+            
         appTestList:list = list(appTestMap.values())
         self.random.shuffle(appTestList)
 
         for app in appTestList:
             app.afterInstall()
         for app in appTestList: 
+            if self.appMatch is not None and re.search(self.appMatch, str(app), re.IGNORECASE) is None: continue
             printCyanOnBlack("-- BEGIN", app, "TESTS --"); 
             testCount += app.runTests(self.testMatch)
 
         if self.verbose >= 1:
             printYellowOnBlack("CHECKING ERROR LOG")
-        ifaceTests.checkForErrors() # LAST
-
+        testUtils.assertEmpty(testUtils.assertOk(
+            interface.run(app='testutil',action='geterrors')))
+        
         database.deinstall()
         self.testCount += testCount
         self.assertCount += testUtils.assertCounter

@@ -150,18 +150,19 @@ class FilesApp extends BaseApp
     {
         $authenticator = Authenticator::TryAuthenticate(
             $this->database, $input, $this->API->GetInterface());
-        
-        $actionlog = null; if (($reqlog = $this->API->GetRequestLog()) !== null)
+
+        $actionlog = null; if ($this->wantActionLog())
         {
-            $actionlog = $reqlog->LogAction($input, self::getLogClass())->SetAuth($authenticator);
+            $actionlog = ActionLog::Create($this->database, $this->API->GetInterface(), $input);
+            $actionlog->SetAuth($authenticator);
+            $this->setActionLog($actionlog);
         }
         
         $params = $input->GetParams();
-
         switch($input->GetAction())
         {
-            case 'getconfig': return $this->RunGetConfig($authenticator);
-            case 'setconfig': return $this->RunSetConfig($params, $authenticator);
+            case 'getconfig': return $this->GetConfig($authenticator);
+            case 'setconfig': return $this->SetConfig($params, $authenticator);
             
             case 'upload':     return $this->UploadFile($input, $authenticator, $actionlog);  
             case 'download':   $this->DownloadFile($params, $authenticator, $actionlog); return null;
@@ -318,7 +319,7 @@ class FilesApp extends BaseApp
     {
         $admin = $authenticator !== null && $authenticator->isAdmin();
         
-        return $this->GetConfig()->GetClientObject($admin);
+        return $this->config->GetClientObject($admin);
     }
     
     /**
@@ -333,7 +334,7 @@ class FilesApp extends BaseApp
         
         $authenticator->RequireAdmin();
 
-        return $this->GetConfig()->SetConfig($params)->GetClientObject(true);
+        return $this->config->SetConfig($params)->GetClientObject(true);
     }
     
     /**

@@ -98,7 +98,8 @@ class Config extends BaseConfig
         $maxes[] = ($iniA !== false) ? Utilities::return_bytes($iniA) : 0;
         $maxes[] = $this->upload_maxsize->TryGetValue() ?? 0;
 
-        return min(array_filter($maxes, function(int $a){ return $a > 0; }));
+        $maxes = array_filter($maxes, function(int $a){ return $a > 0; });
+        return (count($maxes) === 0) ? null : min($maxes);
     }
 
     /**
