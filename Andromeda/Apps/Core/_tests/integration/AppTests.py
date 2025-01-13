@@ -28,10 +28,10 @@ class AppTests(BaseAppTest):
         apps = self.util.assertOk(self.interface.run(app='core',action='getconfig'))['apps']
         self.canAdmin = ('accounts' in apps) or self.interface.isPriv
 
-    def asAdmin(self, params:dict = {}, withUser:bool = False):
+    def asAdmin(self, params:dict = {}):
         """ Returns params with admin params added if not a private interface """
         if ('accounts' in self.appTestMap):
-            return self.appTestMap['accounts'].asAdmin(params, withUser)
+            return self.appTestMap['accounts'].asAdmin(params)
         else:
             assert(self.interface.isPriv)
     

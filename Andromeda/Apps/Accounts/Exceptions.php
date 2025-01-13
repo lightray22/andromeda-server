@@ -210,11 +210,19 @@ class AccountDisabledException extends AuthenticationFailedException
     }
 }
 
-/** Exception indicating that the specified session is invalid */
+/** Exception indicating that the specified session is invalid (used in auth context) */
 class InvalidSessionException extends AuthenticationFailedException
 {
     public function __construct(?string $details = null) {
         parent::__construct("INVALID_SESSION", $details);
+    }
+}
+
+/** Exception indicating that the specified client is invalid (used in auth context) */
+class InvalidClientException extends AuthenticationFailedException
+{
+    public function __construct(?string $details = null) {
+        parent::__construct("INVALID_CLIENT", $details);
     }
 }
 

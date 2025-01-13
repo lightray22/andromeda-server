@@ -47,32 +47,40 @@ class AccountsApp extends BaseApp
             '- GENERAL AUTH: [--auth_sessionid id --auth_sessionkey randstr] [--auth_sudouser alphanum|email | --auth_sudoacct id]',
             'getconfig',
             'setconfig '.Config::GetSetConfigUsage(),
+
             'getaccount [--account id] [--full bool]',
             'setfullname --fullname name',
+
             'enablecrypto --auth_password raw [--auth_twofactor int]',
             'disablecrypto --auth_password raw',
             'changepassword --new_password raw ((--username alphanum|email --auth_password raw) | --auth_recoverykey utf8)',
             'sendrecovery (--username alphanum|email | '.Contact::GetFetchUsage().')',
+
             'createaccount (--username alphanum | '.Contact::GetFetchUsage().') --password raw [--admin bool]',
+            'deleteaccount --auth_password raw --auth_twofactor int',
+            
             'createsession (--username alphanum|email | '.Contact::GetFetchUsage().') --auth_password raw [--authsource id] [--old_password raw] [--new_password raw]',
             '(createsession... create client) [--auth_recoverykey utf8 | --auth_twofactor int] [--name ?name]',
             '(createsession... reuse client) --auth_clientid id --auth_clientkey randstr',
-            'createrecoverykeys --auth_password raw --auth_twofactor int [--replace bool]',
-            'createtwofactor --auth_password raw [--comment ?text]',
-            'verifytwofactor --auth_twofactor int',
-            'createcontact '.Contact::GetFetchUsage(),
-            'verifycontact --authkey utf8',
-            'editcontact --contact id [--usefrom bool] [--public bool]',
-            'deleteaccount --auth_password raw --auth_twofactor int',
             'deletesession [--session id --auth_password raw]',
             'deleteclient [--client id --auth_password raw]',
             'deleteallauth --auth_password raw [--everyone bool]',
+
+            'createrecoverykeys --auth_password raw --auth_twofactor int [--replace bool]',
+            'createtwofactor --auth_password raw [--comment ?text]',
+            'verifytwofactor --auth_twofactor int',
             'deletetwofactor --auth_password raw --twofactor id',
+
+            'createcontact '.Contact::GetFetchUsage(),
+            'verifycontact --authkey utf8',
+            'editcontact --contact id [--usefrom bool] [--public bool]',
             'deletecontact --contact id',
+
             'searchaccounts --name alphanum|email',
             'searchgroups --name name',
             'getaccounts [--limit ?uint] [--offset ?uint]',
             'getgroups [--limit ?uint] [--offset ?uint]',
+
             'creategroup --name name [--priority ?int8]',
             'getgroup --group id',
             'deletegroup --group id',
@@ -81,13 +89,16 @@ class AccountsApp extends BaseApp
             'getmembership --account id --group id',
             'editaccount --account id [--expirepw bool] '.PolicyBase::GetPropUsage(),
             'editgroup --group id  [--name name] [--priority int8] '.PolicyBase::GetPropUsage(),
+
             'sendmessage (--account id | --group id) --subject utf8 --text text [--html raw]',
+
             'getauthsources',
             'createauthsource --auth_password raw '.AuthSource\External::GetPropUsage().' [--test_username text --test_password raw]',
             ...array_map(function($u){ return "(createauthsource...) $u"; }, AuthSource\External::GetPropUsages()),
             'testauthsource --authsrc id [--test_username alphanum|email --test_password raw]',
             'editauthsource --authsrc id --auth_password raw '.AuthSource\External::GetPropUsage().' [--test_username text --test_password raw]',
             'deleteauthsource --authsrc id --auth_password raw',
+
             'addregisterallow '.RegisterAllow::GetUsage(),
             'removeregisterallow '.RegisterAllow::GetUsage(),
             'getregisterallow'
@@ -236,12 +247,14 @@ class AccountsApp extends BaseApp
 
     /**
      * Gets the current account object, or the specified one
+     * @throws Exceptions\AuthenticationFailedException if not logged in
      * @throws Exceptions\UnknownAccountException if the specified account is not valid
      * @return PublicAccountJ|UserAccountJ|AdminAccountJ
      */
     protected function GetAccount(SafeParams $params, ?Authenticator $authenticator) : ?array
     {
-        if ($authenticator === null) return null; // not logged in
+        if ($authenticator === null) 
+            throw new Exceptions\AuthenticationFailedException();
         
         if ($params->HasParam('account'))
         {
@@ -351,7 +364,7 @@ class AccountsApp extends BaseApp
         $subject = "Andromeda Account Recovery Key";
         $body = "Your recovery key is: $key";       
         
-        // TODO CLIENT - HTML - configure a directory where client templates reside
+        // TODO FUTURE - HTML - configure a directory where client templates reside
         
         $account->SendMessage($subject, null, $body);
     }
@@ -488,7 +501,7 @@ class AccountsApp extends BaseApp
      * @throws Exceptions\UnknownAuthSourceException if the given auth source is invalid
      * @throws Exceptions\AuthenticationFailedException if the given username/password are wrong
      * @throws Exceptions\AccountDisabledException if the account is not enabled
-     * @throws Exceptions\UnknownClientException if the given client is invalid
+     * @throws Exceptions\InvalidClientException if the given client is invalid
      * @throws Exceptions\OldPasswordRequiredException if the old password is required to unlock crypto
      * @throws Exceptions\NewPasswordRequiredException if a new password is required to be set
      * @return array{account:UserAccountJ, client:ClientJ}
@@ -562,7 +575,7 @@ class AccountsApp extends BaseApp
             
             $client = Client::TryLoadByID($this->database, $clientid);
             if ($client === null || !$client->CheckKeyMatch($interface, $clientkey)) 
-                throw new Exceptions\UnknownClientException();
+                throw new Exceptions\InvalidClientException();
         } 
         else /* if no clientkey, require either a recoverykey or twofactor, create a client */
         { 
@@ -781,6 +794,7 @@ class AccountsApp extends BaseApp
 
         if ($specify)
         {
+            $authenticator->RequirePassword();
             $sessionid = $params->GetParam("session",SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
             $session = Session::TryLoadByAccountAndID($this->database, $account, $sessionid);
             if ($session === null) throw new Exceptions\UnknownSessionException();
@@ -811,6 +825,7 @@ class AccountsApp extends BaseApp
             
         if ($specify)
         {
+            $authenticator->RequirePassword();
             $clientid = $params->GetParam("client",SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
             $client = Client::TryLoadByAccountAndID($this->database, $account, $clientid);
             if ($client === null) throw new Exceptions\UnknownClientException();

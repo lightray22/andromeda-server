@@ -63,17 +63,16 @@ class Authenticator
         return $this->session;
     }
     
-    private ?Client $client = null;
-    
     /** Returns the client used for the request or null */
-    public function TryGetClient() : ?Client { return $this->client; }
+    public function TryGetClient() : ?Client { 
+        return $this->session?->GetClient(); }
     
     /** Returns the client used for the request (not null) */
     public function GetClient() : Client
     {
-        if ($this->client === null) 
+        if ($this->session === null) 
             throw new Exceptions\SessionRequiredException();
-        return $this->client;
+        return $this->session->GetClient();
     }
     
     /** Returns true if the account used for the request is an admin */
@@ -125,6 +124,7 @@ class Authenticator
                 throw new Exceptions\InvalidSessionException();
             
             $auth->account = $auth->session->GetAccount();
+            $auth->realaccount = $auth->session->GetAccount();
             
             if ($auth->account->isDisabled() !== 0) 
                 throw new Exceptions\AccountDisabledException();

@@ -18,9 +18,9 @@ class AppTests(BaseAppTest):
     def checkInstallRetval(self, retval):
         self.util.assertSame(None, retval)
 
-    def asAdmin(self, params:dict = {}, withUser:bool = False):
+    def asAdmin(self, params:dict = {}):
         """ Returns params with admin params added """
-        return self.appTestMap['accounts'].asAdmin(params, withUser)
+        return self.appTestMap['accounts'].asAdmin(params)
     
     #################################################
     

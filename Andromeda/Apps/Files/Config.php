@@ -122,7 +122,7 @@ class Config extends BaseConfig
             $retval['apiurl'] = $this->apiurl->TryGetValue();
             $retval['rwchunksize'] = $this->rwchunksize->GetValue();
             $retval['crchunksize'] = $this->crchunksize->GetValue();
-            $retval['upload_maxsize'] = $this->upload_maxsize->TryGetValue();
+            $retval['upload_maxbytes_admin'] = $this->upload_maxsize->TryGetValue();
             $retval['timedstats'] = $this->timedstats->GetValue();
         }
         

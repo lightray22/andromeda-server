@@ -131,8 +131,8 @@ def testErrorLogging(self):
     self.util.assertSame(res['debug_dblog'], True) # default
     self.util.assertSame(res['debug_filelog'], False) # default
 
-    def getLastError():
-        return list(self.util.assertOk(self.interface.run(app='core',action='geterrors',params=self.asAdmin())).values())[0]
+    #def getLastError():
+    #    return list(self.util.assertOk(self.interface.run(app='core',action='geterrors',params=self.asAdmin())).values())[0]
 
     # TODO TESTS implement error log tests like above with action log + check debug_http!
 

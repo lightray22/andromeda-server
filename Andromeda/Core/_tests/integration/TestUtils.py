@@ -1,5 +1,6 @@
 
 import colorama
+import numbers
 import string
 from random import Random
 
@@ -39,6 +40,7 @@ class TestUtils():
     def __init__(self, random:Random):
         self.random = random
 
+
     def randBytes(self, len):
         """ Returns random bytes """
         return self.random.randbytes(len)
@@ -50,6 +52,7 @@ class TestUtils():
     def randAlphanum(self, len):
         """ Returns random alphanumeric characters """
         return ''.join(self.random.choice(string.ascii_letters + string.digits) for _ in range(len))
+
 
     def assertAny(self, cond):
         """ Asserts the given condition if true """
@@ -82,6 +85,7 @@ class TestUtils():
         """ Asserts that left is greater than or equal to right (>=) """
         self.assertCounter += 1
         assert (type(left) == type(right)), (left, right)
+        assert (isinstance(left, numbers.Number)), left
         assert (left >= right), (left, right)
 
     def assertIn(self, key, arr):
