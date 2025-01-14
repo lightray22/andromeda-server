@@ -58,6 +58,7 @@ class AccountsApp extends BaseApp
 
             'createaccount (--username alphanum | '.Contact::GetFetchUsage().') --password raw [--admin bool]',
             'deleteaccount --auth_password raw --auth_twofactor int',
+            'createrecoverykeys --auth_password raw --auth_twofactor int [--replace bool]',
             
             'createsession (--username alphanum|email | '.Contact::GetFetchUsage().') --auth_password raw [--authsource id] [--old_password raw] [--new_password raw]',
             '(createsession... create client) [--auth_recoverykey utf8 | --auth_twofactor int] [--name ?name]',
@@ -66,7 +67,6 @@ class AccountsApp extends BaseApp
             'deleteclient [--client id --auth_password raw]',
             'deleteallauth --auth_password raw [--everyone bool]',
 
-            'createrecoverykeys --auth_password raw --auth_twofactor int [--replace bool]',
             'createtwofactor --auth_password raw [--comment ?text]',
             'verifytwofactor --auth_twofactor int',
             'deletetwofactor --auth_password raw --twofactor id',
@@ -89,7 +89,6 @@ class AccountsApp extends BaseApp
             'getmembership --account id --group id',
             'editaccount --account id [--expirepw bool] '.PolicyBase::GetPropUsage(),
             'editgroup --group id  [--name name] [--priority int8] '.PolicyBase::GetPropUsage(),
-
             'sendmessage (--account id | --group id) --subject utf8 --text text [--html raw]',
 
             'getauthsources',
@@ -547,7 +546,7 @@ class AccountsApp extends BaseApp
         else /** create account on the fly if external auth */
         {
             $authsrc = $reqauthsrc ?? $this->config->GetDefaultAuth();
-            if ($authsrc === null) throw new Exceptions\UnknownAuthSourceException();
+            if ($authsrc === null) throw new Exceptions\AuthenticationFailedException();
             
             if ($authsrc->GetEnabled() < AuthSource\ExternalState::FullEnable)
                 throw new Exceptions\AuthenticationFailedException();
