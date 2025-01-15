@@ -127,7 +127,6 @@ def testErrorLogging(self):
 
     res = self.util.assertOk(self.interface.run(app='core',action='getconfig',params=self.asAdmin())) # admin only
     self.util.assertSame(res['debug'], 'errors') # default
-    self.util.assertSame(res['debug_http'], False) # default
     self.util.assertSame(res['debug_dblog'], True) # default
     self.util.assertSame(res['debug_filelog'], False) # default
 

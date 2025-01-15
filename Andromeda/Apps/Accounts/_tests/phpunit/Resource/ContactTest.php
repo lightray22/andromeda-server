@@ -58,7 +58,7 @@ class ContactTest extends \PHPUnit\Framework\TestCase
         $this->assertNull($contact->TryGetFullKey());
     }
 
-    public function testUseAsFrom() : void
+    public function testIsFrom() : void
     {
         $objdb = new ObjectDatabase($db=$this->createMock(PDODatabase::class), false);
         $account = $this->createMock(Account::class);
@@ -70,15 +70,15 @@ class ContactTest extends \PHPUnit\Framework\TestCase
 
         $db->expects($this->exactly(2))->method('read')->willReturn([], [['id'=>$contact1->ID()]]);
 
-        $this->assertFalse($contact1->GetUseAsFrom());
-        $this->assertFalse($contact2->GetUseAsFrom());
+        $this->assertFalse($contact1->GetIsFrom());
+        $this->assertFalse($contact2->GetIsFrom());
 
-        $contact1->SetUseAsFrom(); // loads from - no return
-        $this->assertTrue($contact1->GetUseAsFrom());
-        $this->assertFalse($contact2->GetUseAsFrom());
+        $contact1->SetIsFrom(); // loads from - no return
+        $this->assertTrue($contact1->GetIsFrom());
+        $this->assertFalse($contact2->GetIsFrom());
 
-        $contact2->SetUseAsFrom(); // loads from - returns 1
-        $this->assertTrue($contact2->GetUseAsFrom());
-        $this->assertFalse($contact1->GetUseAsFrom());
+        $contact2->SetIsFrom(); // loads from - returns 1
+        $this->assertTrue($contact2->GetIsFrom());
+        $this->assertFalse($contact1->GetIsFrom());
     }
 }

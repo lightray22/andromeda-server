@@ -25,8 +25,12 @@ class AppTests(BaseAppTest):
     canAdmin:bool = False
 
     def afterInstall(self): # init
-        apps = self.util.assertOk(self.interface.run(app='core',action='getconfig'))['apps']
-        self.canAdmin = ('accounts' in apps) or self.interface.isPriv
+        res = self.util.assertOk(self.interface.run(app='core',action='getconfig'))
+        self.canAdmin = ('accounts' in res['apps']) or self.interface.isPriv
+        if self.canAdmin:
+            res = self.util.assertOk(self.interface.run(app='core',action='getconfig',params=self.asAdmin()))
+            self.util.assertSame(res['debug_http'],False) # default
+            self.util.assertOk(self.interface.run(app='core',action='setconfig',params=self.asAdmin({'debug_http':True})))
 
     def asAdmin(self, params:dict = {}):
         """ Returns params with admin params added if not a private interface """

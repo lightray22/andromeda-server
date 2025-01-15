@@ -8,7 +8,7 @@ use Andromeda\Apps\Accounts\Crypto\AuthObjectFull;
 
 /** 
  * An object describing a contact method for a user account
- * @phpstan-type ContactJ array{id:string, type:key-of<self::TYPES>, address:string, valid:bool, public:bool, asfrom:bool, date_created:float}
+ * @phpstan-type ContactJ array{id:string, type:key-of<self::TYPES>, address:string, valid:bool, public:bool, isfrom:bool, date_created:float}
  */
 abstract class Contact extends BaseObject
 {
@@ -46,7 +46,7 @@ abstract class Contact extends BaseObject
      * True if this contact should be used as a "from" address
      * nullable otherwise UNIQUE would only allow one to be 0
      */
-    private FieldTypes\NullBoolType $asfrom;
+    private FieldTypes\NullBoolType $isfrom;
     /** Timestamp this contact was created */
     private FieldTypes\Timestamp $date_created;
     /** 
@@ -61,7 +61,7 @@ abstract class Contact extends BaseObject
         
         $this->address = $fields[] = new FieldTypes\StringType('address');
         $this->public = $fields[] = new FieldTypes\BoolType('public', default:false);
-        $this->asfrom = $fields[] = new FieldTypes\NullBoolType('from');
+        $this->isfrom = $fields[] = new FieldTypes\NullBoolType('isfrom');
         $this->date_created = $fields[] = new FieldTypes\Timestamp('date_created');
         $this->account = $fields[] = new FieldTypes\ObjectRefT(Account::class, 'account');
         
@@ -91,7 +91,7 @@ abstract class Contact extends BaseObject
      */
     public static function TryLoadFromByAccount(ObjectDatabase $database, Account $account) : ?self
     {
-        $q = new QueryBuilder(); $w = $q->And($q->Equals('account',$account->ID()),$q->IsTrue('asfrom'));
+        $q = new QueryBuilder(); $w = $q->And($q->Equals('account',$account->ID()),$q->IsTrue('isfrom'));
         
         return $database->TryLoadUniqueByQuery(static::class, $q->Where($w));
     }
@@ -181,22 +181,22 @@ abstract class Contact extends BaseObject
     public function SetIsPublic(bool $val) : self { $this->public->SetValue($val); return $this; }
     
     /** Returns true if this contact is the "from" for its type */
-    public function GetUseAsFrom() : bool { return $this->asfrom->TryGetValue() === true; }
+    public function GetIsFrom() : bool { return $this->isfrom->TryGetValue() === true; }
 
     /** 
      * Sets whether this contact should be used as from (can only be one) 
      * @return $this
      */
-    public function SetUseAsFrom(bool $val = true) : self
+    public function SetIsFrom(bool $val = true) : self
     {
         if ($val)
         {
             $old = static::TryLoadFromByAccount($this->database, $this->GetAccount());
-            if ($old !== null) $old->SetUseAsFrom(false);
+            if ($old !== null) $old->SetIsFrom(false);
         }
         else $val = null;
         
-        $this->asfrom->SetValue($val); return $this;
+        $this->isfrom->SetValue($val); return $this;
     }
     
     /** Returns the account that owns the contact */
@@ -336,7 +336,7 @@ abstract class Contact extends BaseObject
             'address' => $this->GetAddress(),
             'valid' => $this->GetIsValid(),
             'public' => $this->GetIsPublic(),
-            'asfrom' => $this->GetUseAsFrom(),
+            'isfrom' => $this->GetIsFrom(),
             'date_created' => $this->date_created->GetValue()
         );
     }

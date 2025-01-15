@@ -127,15 +127,14 @@ CREATE TABLE `a2obj_apps_accounts_resource_contact` (
   `id` char(12) NOT NULL
 ,  `type` integer NOT NULL
 ,  `address` varchar(127) NOT NULL
-,  `valid` integer NOT NULL DEFAULT 0
-,  `usefrom` integer DEFAULT NULL
+,  `isfrom` integer DEFAULT NULL
 ,  `public` integer NOT NULL DEFAULT 0
 ,  `authkey` text DEFAULT NULL
 ,  `date_created` double NOT NULL
 ,  `account` char(12) NOT NULL
 ,  PRIMARY KEY (`id`)
 ,  UNIQUE (`type`,`address`)
-,  UNIQUE (`usefrom`,`account`,`type`)
+,  UNIQUE (`isfrom`,`account`,`type`)
 ,  CONSTRAINT `a2obj_apps_accounts_resource_contact_ibfk_1` FOREIGN KEY (`account`) REFERENCES `a2obj_apps_accounts_account` (`id`)
 );
 CREATE TABLE `a2obj_apps_accounts_resource_recoverykey` (

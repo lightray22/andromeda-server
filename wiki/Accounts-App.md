@@ -42,7 +42,7 @@ Accounts can be deleted permanently using the `accounts deleteaccount` function 
 
 Depending on config, contact information may be stored for accounts.  This enables functions such as password recovery, admin messaging, file sharing etc.  The only supported contact type is currently email.
 
-Additional contacts can be created using `accounts createcontact`, and existing ones can be removed with `accounts deletecontact`.  The contact `usefrom` property determines whether it should be used as the 'from' address when sending a message from this account (e.g. file sharing).  The `public` property determines whether this contact can be used by other users to search for this account.
+Additional contacts can be created using `accounts createcontact`, and existing ones can be removed with `accounts deletecontact`.  The contact `isfrom` property determines whether it should be used as the 'from' address when sending a message from this account (e.g. file sharing).  The `public` property determines whether this contact can be used by other users to search for this account.
 
 Accounts also have an optional `fullname` property. This is the owner's full "real" name and can be used in place of usernames in GUIs if it is populated.  It can also be used to search for the account.
 

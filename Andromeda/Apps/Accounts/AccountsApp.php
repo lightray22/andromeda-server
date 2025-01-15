@@ -73,7 +73,7 @@ class AccountsApp extends BaseApp
 
             'createcontact '.Contact::GetFetchUsage(),
             'verifycontact --authkey utf8',
-            'editcontact --contact id [--usefrom bool] [--public bool]',
+            'editcontact --contact id [--isfrom bool] [--public bool]',
             'deletecontact --contact id',
 
             'searchaccounts --name alphanum|email',
@@ -920,7 +920,7 @@ class AccountsApp extends BaseApp
         $contact = Contact::TryLoadByAccountAndID($this->database, $account, $cid);
         if ($contact === null) throw new Exceptions\UnknownContactException();
         
-        if ($params->HasParam('usefrom')) $contact->SetUseAsFrom($params->GetParam('usefrom')->GetBool());        
+        if ($params->HasParam('isfrom')) $contact->SetIsFrom($params->GetParam('isfrom')->GetBool());        
         if ($params->HasParam('public')) $contact->SetIsPublic($params->GetParam('public')->GetBool());
         
         return $contact->GetClientObject();
