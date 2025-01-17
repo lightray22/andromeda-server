@@ -26,7 +26,7 @@ class AppTests(BaseAppTest):
 
     def afterInstall(self): # init
         res = self.util.assertOk(self.interface.run(app='core',action='getconfig'))
-        self.canAdmin = ('accounts' in res['apps']) or self.interface.isPriv
+        self.canAdmin = ('accounts' in res['apps']) or self.interface.isPriv  # TODO RAY !! turn on metrics
         if self.canAdmin:
             res = self.util.assertOk(self.interface.run(app='core',action='getconfig',params=self.asAdmin()))
             self.util.assertSame(res['debug_http'],False) # default
