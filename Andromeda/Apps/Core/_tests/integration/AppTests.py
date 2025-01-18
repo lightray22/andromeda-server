@@ -1,14 +1,16 @@
 
 import os
+
 from BaseTest import BaseAppTest
 from TestUtils import *
-import LoggingTests
 
-# TODO ACCOUNTS need to enable/disable the accounts app and test both ways? at least for just one command
-    
 class AppTests(BaseAppTest):
     def __str__(self):
         return "CORE"
+
+    def getTestModules(self):
+        import LoggingTests
+        return [self, LoggingTests]
 
     def requiresInstall(self) -> bool:
         return True
@@ -23,14 +25,21 @@ class AppTests(BaseAppTest):
         self.util.assertSame(None, retval)
 
     canAdmin:bool = False
+    metricsOutput:bool = False
 
     def afterInstall(self): # init
         res = self.util.assertOk(self.interface.run(app='core',action='getconfig'))
-        self.canAdmin = ('accounts' in res['apps']) or self.interface.isPriv  # TODO RAY !! turn on metrics
-        if self.canAdmin:
+        self.canAdmin = ('accounts' in res['apps']) or self.interface.isPriv
+        if self.canAdmin: # turn on debug_http for all tests
             res = self.util.assertOk(self.interface.run(app='core',action='getconfig',params=self.asAdmin()))
             self.util.assertSame(res['debug_http'],False) # default
             self.util.assertOk(self.interface.run(app='core',action='setconfig',params=self.asAdmin({'debug_http':True})))
+        if 'metrics' in self.config: # maybe turn on metrics_dblog for all tests
+            self.metricsOutput = (self.config['metrics'] != 'none')
+            res = self.util.assertOk(self.interface.run(app='core',action='getconfig',params=self.asAdmin()))
+            self.util.assertSame(res['metrics'],'none') # default
+            self.util.assertSame(res['metrics_dblog'],False) # default
+            self.util.assertOk(self.interface.run(app='core',action='setconfig',params=self.asAdmin({'metrics':self.config['metrics'],'metrics_dblog':True})))
 
     def asAdmin(self, params:dict = {}):
         """ Returns params with admin params added if not a private interface """
@@ -40,6 +49,8 @@ class AppTests(BaseAppTest):
             assert(self.interface.isPriv)
     
     #################################################
+
+    # TODO TESTS add a test that if interface.isPriv, disables the account app and checks that we handle it for auth properly
         
     def testDatabase(self):
         """ Runs the testutil database unit test command """
@@ -91,7 +102,7 @@ class AppTests(BaseAppTest):
         if not self.interface.isPriv:
             self.util.assertError(self.interface.run(app='core',action='scanapps'), 403, "ADMIN_REQUIRED")
         if not self.canAdmin:
-            if self.verbose >= 1: print("cannot admin, skipping")
+            if self.verbose >= 1: printBlackOnYellow("cannot admin, skipping")
             return False
         
         params = self.asAdmin()
@@ -106,9 +117,12 @@ class AppTests(BaseAppTest):
         """ Tests the core phpinfo command """
         if not self.interface.isPriv:
             res = self.interface.run(app='core',action='phpinfo',isJson=False).decode("utf-8") # plain output
-            self.util.assertSame(res, 'ERROR: ADMIN_REQUIRED')
+            if self.metricsOutput:
+                self.util.assertIn('[message] => ADMIN_REQUIRED',res)
+            else:
+                self.util.assertSame(res, 'ERROR: ADMIN_REQUIRED')
         if not self.canAdmin:
-            if self.verbose >= 1: print("cannot admin, skipping")
+            if self.verbose >= 1: printBlackOnYellow("cannot admin, skipping")
             return False
         
         res = self.interface.run(app='core',action='phpinfo',isJson=False,params=self.asAdmin()).decode("utf-8")
@@ -123,7 +137,7 @@ class AppTests(BaseAppTest):
         if not self.interface.isPriv:
             self.util.assertError(self.interface.run(app='core',action='serverinfo'), 403, "ADMIN_REQUIRED")
         if not self.canAdmin:
-            if self.verbose >= 1: print("cannot admin, skipping")
+            if self.verbose >= 1: printBlackOnYellow("cannot admin, skipping")
             return False
 
         res = self.util.assertOk(self.interface.run(app='core',action='serverinfo',params=self.asAdmin()))
@@ -143,7 +157,7 @@ class AppTests(BaseAppTest):
         if not self.interface.isPriv:
             self.util.assertError(self.interface.run(app='core',action='getdbconfig'), 403, "ADMIN_REQUIRED")
         if not self.canAdmin:
-            if self.verbose >= 1: print("cannot admin, skipping")
+            if self.verbose >= 1: printBlackOnYellow("cannot admin, skipping")
             return False
 
         res = self.util.assertOk(self.interface.run(app='core',action='getdbconfig',params=self.asAdmin()))
@@ -161,7 +175,7 @@ class AppTests(BaseAppTest):
             self.util.assertError(self.interface.run(app='core',action='enableapp'), 403, "ADMIN_REQUIRED")
             self.util.assertError(self.interface.run(app='core',action='disableapp'), 403, "ADMIN_REQUIRED")
         if not self.canAdmin:
-            if self.verbose >= 1: print("cannot admin, skipping")
+            if self.verbose >= 1: printBlackOnYellow("cannot admin, skipping")
             return False
         
         params = self.asAdmin({'appname':'../hackattempt'})
@@ -195,7 +209,7 @@ class AppTests(BaseAppTest):
         if not self.interface.isPriv:
             self.util.assertError(self.interface.run(app='core',action='setconfig'), 403, "ADMIN_REQUIRED")
         if not self.canAdmin:
-            if self.verbose >= 1: print("cannot admin, skipping")
+            if self.verbose >= 1: printBlackOnYellow("cannot admin, skipping")
             return False
         
         params = self.asAdmin({'datadir':'?badpath'})
@@ -204,7 +218,7 @@ class AppTests(BaseAppTest):
         self.util.assertError(self.interface.run(app='core',action='setconfig',params=params), 400, "DATADIR_NOT_WRITEABLE")
         
         if not 'datadir' in self.config:
-            if self.verbose >= 1: print("no datadir configured, skipping")
+            if self.verbose >= 1: printBlackOnYellow("no datadir configured, skipping")
             return False
         params['datadir'] = self.config['datadir']
         res = self.util.assertOk(self.interface.run(app='core',action='setconfig',params=params))
@@ -218,8 +232,11 @@ class AppTests(BaseAppTest):
         """ Tests the core read_only config """
         self.util.assertSame(self.util.assertOk(self.interface.run(app='core',action='getconfig'))['read_only'], False) # default
         if not self.canAdmin:
-            if self.verbose >= 1: print("cannot admin, skipping")
-            return False   
+            if self.verbose >= 1: printBlackOnYellow("cannot admin, skipping")
+            return False
+        if self.metricsOutput:
+            if self.verbose >= 1: printBlackOnYellow("metrics logging prevents read-only usage, skipping")
+            return False
 
         # test read_only with the action log enabled to ensure it too doesn't attempt to write  
         params = self.asAdmin({'read_only':True,'actionlog_db':True})
@@ -240,11 +257,11 @@ class AppTests(BaseAppTest):
         """ Tests the core http enable config """
         self.util.assertSame(self.util.assertOk(self.interface.run(app='core',action='getconfig'))['enabled'], True) # default
         if not self.canAdmin:
-            if self.verbose >= 1: print("cannot admin, skipping")
+            if self.verbose >= 1: printBlackOnYellow("cannot admin, skipping")
             return False
         
         if not self.interface.isPriv:
-            if self.verbose >= 1: print("can't test HTTP disable over HTTP, skipping")
+            if self.verbose >= 1: printBlackOnYellow("can't test HTTP disable over HTTP, skipping")
             return False
         self.util.assertSame(self.util.assertOk(self.interface.run(app='core',action='setconfig',params={'enabled':False}))['enabled'], False)
         self.util.assertSame(self.util.assertOk(self.interface.run(app='core',action='getconfig'))['enabled'], False) # has no effect on CLI
@@ -259,7 +276,7 @@ class AppTests(BaseAppTest):
             self.util.assertError(self.interface.run(app='core',action='createmailer'), 403, "ADMIN_REQUIRED")
             self.util.assertError(self.interface.run(app='core',action='deletemailer'), 403, "ADMIN_REQUIRED")
         if not self.canAdmin:
-            if self.verbose >= 1: print("cannot admin, skipping")
+            if self.verbose >= 1: printBlackOnYellow("cannot admin, skipping")
             return False
         
         self.util.assertSame(self.util.assertOk(self.interface.run(app='core',action='getconfig',params=self.asAdmin()))['email'], True) # default
@@ -267,7 +284,7 @@ class AppTests(BaseAppTest):
         self.util.assertError(self.interface.run(app='core',action='testmail',params=self.asAdmin({'dest':'test@test.com'})), 400, "MAILER_UNAVAILABLE")
 
         if not 'email' in self.config:
-            if self.verbose >= 1: print("no email configured, skipping")
+            if self.verbose >= 1: printBlackOnYellow("no email configured, skipping")
             return False
         
         def checkEmailer(res):
@@ -281,12 +298,12 @@ class AppTests(BaseAppTest):
         res = self.util.assertOk(self.interface.run(app='core',action='getmailers',params=self.asAdmin()))
         checkEmailer(res[emailer['id']]) # indexed by ID
 
-        if not 'test' in self.config['email']:
-            if self.verbose >= 1: print("no email test configured, skipping")
+        if not 'testdest' in self.config['email']:
+            if self.verbose >= 1: printBlackOnYellow("no email testdest configured, skipping")
             return False
         
-        # TODO ACCOUNTS if authenticated, can test without a "dest" here, should send to contact emails
-        params = self.asAdmin({'dest':self.config['email']['test'], 'testkey':self.util.random.randint(0,999999)})
+        # TODO TESTS if authenticated, can test without a "dest" here, should send to contact emails
+        params = self.asAdmin({'dest':self.config['email']['testdest'], 'testkey':self.util.random.randint(0,999999)})
         self.util.assertOk(self.interface.run(app='core',action='testmail',params=params)) # no mailid = use any
         self.util.assertSame(str(params['testkey']), input("Enter testkey sent in email:"))
 
@@ -304,12 +321,3 @@ class AppTests(BaseAppTest):
         self.util.assertError(self.interface.run(app='core',action='deletemailer',params=self.asAdmin({'mailid':'none'})), 404, "UNKNOWN_MAILER")
         self.util.assertOk(self.interface.run(app='core',action='deletemailer',params=self.asAdmin({'mailid':emailer['id']})))
         self.util.assertEmpty(self.util.assertOk(self.interface.run(app='core',action='getmailers',params=self.asAdmin())))
-
-    def testActionLogging(self):
-        return LoggingTests.testActionLogging(self)
-
-    def testErrorLogging(self):
-        return LoggingTests.testErrorLogging(self)
-
-    def testMetricsLogging(self):
-        return LoggingTests.testMetricsLogging(self)

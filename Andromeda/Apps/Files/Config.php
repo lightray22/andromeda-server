@@ -94,11 +94,11 @@ class Config extends BaseConfig
         $iniB = ini_get('upload_max_filesize');
 
         $maxes = array();
-        $maxes[] = ($iniA !== false) ? Utilities::return_bytes($iniA) : 0;
-        $maxes[] = ($iniA !== false) ? Utilities::return_bytes($iniA) : 0;
-        $maxes[] = $this->upload_maxsize->TryGetValue() ?? 0;
+        $maxes[] = ($iniA !== false) ? Utilities::return_bytes($iniA) : null;
+        $maxes[] = ($iniB !== false) ? Utilities::return_bytes($iniB) : null;
+        $maxes[] = $this->upload_maxsize->TryGetValue();
 
-        $maxes = array_filter($maxes, function(int $a){ return $a > 0; });
+        $maxes = array_filter($maxes); // remove nulls
         return (count($maxes) === 0) ? null : min($maxes);
     }
 
@@ -111,18 +111,24 @@ class Config extends BaseConfig
      */
     public function GetClientObject(bool $admin = false) : array
     {
+        $ini = ini_get('max_file_uploads');
         $retval = array(
             'upload_maxbytes' => $this->GetMaxUploadSize(),
-            'upload_maxfiles' => ini_get('max_file_uploads') // TODO this could be false, also cast to int?
+            'upload_maxfiles' => ($ini !== false) ? (int)$ini : null
         );
         
         if ($admin)
         {
-            $retval['date_created'] = $this->date_created->GetValue();
+            $iniA = ini_get('post_max_size');
+            $iniB = ini_get('upload_max_filesize');
+    
             $retval['apiurl'] = $this->apiurl->TryGetValue();
+            $retval['date_created'] = $this->date_created->GetValue();
             $retval['rwchunksize'] = $this->rwchunksize->GetValue();
             $retval['crchunksize'] = $this->crchunksize->GetValue();
             $retval['upload_maxbytes_admin'] = $this->upload_maxsize->TryGetValue();
+            $retval['php_post_max_size'] = ($iniA !== false) ? Utilities::return_bytes($iniA) : null;
+            $retval['php_upload_max_filesize'] = ($iniB !== false) ? Utilities::return_bytes($iniB) : null;
             $retval['timedstats'] = $this->timedstats->GetValue();
         }
         

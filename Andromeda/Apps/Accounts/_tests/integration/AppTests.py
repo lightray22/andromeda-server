@@ -2,13 +2,15 @@
 from BaseTest import BaseAppTest
 from TestUtils import *
 
-import ContactTests
-import SessionTests
-import TwoFactorTests
-
 class AppTests(BaseAppTest):
     def __str__(self):
         return "ACCOUNTS"
+
+    def getTestModules(self):
+        import ContactTests
+        import SessionTests
+        import TwoFactorTests
+        return [self, ContactTests, SessionTests, TwoFactorTests]
 
     def requiresInstall(self) -> bool:
         return True
@@ -165,18 +167,5 @@ class AppTests(BaseAppTest):
 
         self.deleteAccount(session, password)
 
-    def testSessions(self):
-        return SessionTests.testSessions(self)
-
-    def testTwoFactor(self):
-        return TwoFactorTests.testTwoFactor(self)
-
-    def testContactsBasic(self):
-        return ContactTests.testContactsBasic(self)
-
-    def testContactsInvalid(self):
-        return ContactTests.testContactsInvalid(self)
-
-    def testContactsSingleFrom(self):
-        return ContactTests.testContactsSingleFrom(self)
-        
+    # TODO RAY !! crypto/changePW/recovery, create/delete acct + register allow + setfullname, group stuff + account/group search, external auth sources
+    # TODO RAY !! add test for date_active setting even on client error

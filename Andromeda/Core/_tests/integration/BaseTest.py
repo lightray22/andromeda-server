@@ -15,21 +15,31 @@ class BaseTest():
         self.interface = interface
         self.verbose = verbose
 
+    def getTestModules(self):
+        return [self]
+
     def runTests(self, testMatch:str) -> int:
         """ Run all tests for this module and return the test count """
         testCount = 0
 
-        attrs = (getattr(self, name) for name in dir(self))
-        funcs = list(filter(lambda attr: 
-            inspect.ismethod(attr) and attr.__name__.startswith("test"), attrs))
-        funcs = list(filter(lambda func: testMatch is None or
-            re.search(testMatch, func.__name__) is not None, funcs))
+        funcs = []
+        for module in self.getTestModules():
+            attrs = (getattr(module, name) for name in dir(module))
+            # retrieve all functions from the module
+            myfuncs = list(filter(lambda attr: inspect.isfunction(attr) or inspect.ismethod(attr), attrs))
+            # filter functions by test* naming
+            myfuncs = list(filter(lambda func: func.__name__.startswith("test"), myfuncs))
+            # filter functions by testMatch if necessary
+            funcs += list(filter(lambda func: testMatch is None or
+                re.search(testMatch, func.__name__) is not None, myfuncs))
         self.util.random.shuffle(funcs)
 
         for func in funcs:
             if self.verbose >= 1: 
                 printYellowOnBlack('RUN TEST:',func.__name__+'()')
-            rval = func()
+
+            rval = func() if inspect.ismethod(func) else func(self)
+            
             if rval is False: # return False is skipped test
                 if self.verbose >= 1:
                     printYellowOnBlack('... SKIPPED',func.__name__+'()')

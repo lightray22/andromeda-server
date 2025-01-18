@@ -57,8 +57,8 @@ class AccountsApp extends BaseApp
             'sendrecovery (--username alphanum|email | '.Contact::GetFetchUsage().')',
 
             'createaccount (--username alphanum | '.Contact::GetFetchUsage().') --password raw [--admin bool]',
-            'deleteaccount --auth_password raw --auth_twofactor int',
-            'createrecoverykeys --auth_password raw --auth_twofactor int [--replace bool]',
+            'deleteaccount --auth_password raw',
+            'createrecoverykeys --auth_password raw [--auth_twofactor int] [--replace bool]',
             
             'createsession (--username alphanum|email | '.Contact::GetFetchUsage().') --auth_password raw [--authsource id] [--old_password raw] [--new_password raw]',
             '(createsession... create client) [--auth_recoverykey utf8 | --auth_twofactor int] [--name ?name]',
@@ -764,9 +764,6 @@ class AccountsApp extends BaseApp
             throw new Exceptions\AccountDeleteDeniedException();
         
         $authenticator->RequirePassword();
-        
-        if (!$authenticator->isSudoUser()) 
-            $authenticator->TryRequireTwoFactor();
         
         if ($actionlog !== null) $actionlog->LogDetails('account',
             $account->GetAdminClientObject(true), true);

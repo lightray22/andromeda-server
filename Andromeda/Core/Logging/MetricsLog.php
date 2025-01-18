@@ -179,7 +179,9 @@ class MetricsLog extends BaseObject
     public static function Create(int $level, ObjectDatabase $database, DBStats $init, 
                                 RunContext $context, DBStats $total) : static
     {
+        // TODO FUTURE it would be nice if this worked with a read-only database
         $obj = $database->CreateObject(static::class);
+
         $obj->date_created->SetTimeNow();
         $obj->actionlog->SetObject($context->TryGetActionLog());
         

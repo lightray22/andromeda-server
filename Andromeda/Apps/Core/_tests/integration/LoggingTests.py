@@ -1,16 +1,18 @@
 
 import os, json
 
+from TestUtils import *
+
 def testActionLogging(self):
     """ Tests action log config and functionality """
     if not self.interface.isPriv:
         self.util.assertError(self.interface.run(app='core',action='getactions'), 403, "ADMIN_REQUIRED")
         self.util.assertError(self.interface.run(app='core',action='countactions'), 403, "ADMIN_REQUIRED")
     if not self.canAdmin:
-        if self.verbose >= 1: print("cannot admin, skipping")
+        if self.verbose >= 1: printBlackOnYellow("cannot admin, skipping")
         return False
     if not 'datadir' in self.config:
-        if self.verbose >= 1: print("no datadir configured, skipping")
+        if self.verbose >= 1: printBlackOnYellow("no datadir configured, skipping")
         return False
     file = self.config['datadir']+"/actions.log"
     if os.path.exists(file): os.remove(file)
@@ -39,7 +41,7 @@ def testActionLogging(self):
                 self.util.assertNotIn(prop, actions[i])
         self.util.assertNotIn('admin', actions[0]) # testutil
         self.util.assertSame(actions[1]['admin'], self.interface.isPriv) # core
-        # TODO ACCOUNTS check the action log for the account/client/session field too
+        # TODO TESTS check the action log for the account/client/session field too
 
     # test logging to db only and basic getactions/countactions
     self.util.assertSame(self.util.assertOk(self.interface.run(app='core',action='setconfig',params=self.asAdmin({'actionlog_db':True})))['actionlog_db'], True)
@@ -79,6 +81,7 @@ def testActionLogging(self):
     res = self.interface.run(app='core',action='phpinfo',isJson=False,params=self.asAdmin()).decode("utf-8"); dblogs += 1
     self.util.assertIn("PHP Version", res)
     self.util.assertSame(getLastAction()['action'], 'phpinfo'); dblogs += 1
+    self.util.assertOk(self.interface.run(app='core',action='geterrors',params=self.asAdmin())); dblogs += 1 # log in case not 0
     self.util.assertSame(self.util.assertOk(self.interface.run(app='core',action='counterrors',params=self.asAdmin())), 0); dblogs += 1
 
     # check different details levels
@@ -117,10 +120,10 @@ def testErrorLogging(self):
         self.util.assertError(self.interface.run(app='core',action='geterrors'), 403, "ADMIN_REQUIRED")
         self.util.assertError(self.interface.run(app='core',action='counterrors'), 403, "ADMIN_REQUIRED")
     if not self.canAdmin:
-        if self.verbose >= 1: print("cannot admin, skipping")
+        if self.verbose >= 1: printBlackOnYellow("cannot admin, skipping")
         return False
     if not 'datadir' in self.config:
-        if self.verbose >= 1: print("no datadir configured, skipping")
+        if self.verbose >= 1: printBlackOnYellow("no datadir configured, skipping")
         return False
     file = self.config['datadir']+"/errors.log"
     if os.path.exists(file): os.remove(file)
@@ -142,10 +145,13 @@ def testErrorLogging(self):
 def testMetricsLogging(self):
     """ Tests metrics log config and functionality """
     if not self.canAdmin:
-        if self.verbose >= 1: print("cannot admin, skipping")
+        if self.verbose >= 1: printBlackOnYellow("cannot admin, skipping")
         return False
     if not 'datadir' in self.config:
-        if self.verbose >= 1: print("no datadir configured, skipping")
+        if self.verbose >= 1: printBlackOnYellow("no datadir configured, skipping")
+        return False
+    if self.metricsOutput:
+        if self.verbose >= 1: printBlackOnYellow("metrics output already on, skipping")
         return False
     file = self.config['datadir']+"/metrics.log"
     if os.path.exists(file): os.remove(file)

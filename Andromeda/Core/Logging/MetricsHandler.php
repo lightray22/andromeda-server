@@ -52,7 +52,7 @@ class MetricsHandler
             $metrics = MetricsLog::Create($apipack->GetMetricsLevel(), 
                 $database, $this->init_stats, $context, $total_stats);
 
-            if (!$apipack->isCommitRollback()){
+            if (!$apipack->isCommitRollback() && !$database->isReadOnly()){
                 $metrics->Save(); $database->commit(); }
 
             if ($apipack->GetMetricsLevel(true) !== 0)

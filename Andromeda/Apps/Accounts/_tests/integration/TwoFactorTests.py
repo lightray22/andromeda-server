@@ -1,16 +1,10 @@
 
-def testTwoFactor(self):
+def testTwoFactorBasic(self):
     """ Tests creating/deleting/using two factor """
     import pyotp
-    if not self.interface.isPriv:
-        self.util.assertError(self.interface.run(app='accounts',action='createtwofactor'),403,'AUTHENTICATION_FAILED')
-        self.util.assertError(self.interface.run(app='accounts',action='deletetwofactor'),403,'AUTHENTICATION_FAILED')
-        self.util.assertError(self.interface.run(app='accounts',action='verifytwofactor'),403,'AUTHENTICATION_FAILED')
-
     (username, password, account, client, session) = self.tempAccount()
 
-    self.util.assertError(self.interface.run(app='accounts',action='createtwofactor',
-        params=self.withSession(session)),403,'PASSWORD_REQUIRED')
+    # create a couple new two factor objects, test client output
     res = self.util.assertOk(self.interface.run(app='accounts',action='createtwofactor',
         params=self.withSession(session,{'auth_password':password,'comment':'mycomment'})))
     res2 = self.util.assertOk(self.interface.run(app='accounts',action='createtwofactor',
@@ -50,8 +44,6 @@ def testTwoFactor(self):
         params={'username':username,'auth_password':password}),403,'TWOFACTOR_REQUIRED')
 
     # delete the two factor again, no longer required for a session
-    self.util.assertError(self.interface.run(app='accounts',action='deletetwofactor',
-        params=self.withSession(session,{'auth_password':password,'twofactor':'unknown'})),404,'UNKNOWN_TWOFACTOR')
     self.util.assertOk(self.interface.run(app='accounts',action='deletetwofactor',
         params=self.withSession(session,{'auth_password':password,'twofactor':tf['id']})))
     self.util.assertError(self.interface.run(app='accounts',action='deletetwofactor',
@@ -61,6 +53,25 @@ def testTwoFactor(self):
     self.util.assertOk(self.interface.run(app='accounts',action='createsession',
         params={'username':username,'auth_password':password}))
 
+    self.deleteAccount(session, password) 
+
+def testTwoFactorInvalid(self):
+    """ Tests error cases relating to two factor """
+    if not self.interface.isPriv:
+        self.util.assertError(self.interface.run(app='accounts',action='createtwofactor'),403,'AUTHENTICATION_FAILED')
+        self.util.assertError(self.interface.run(app='accounts',action='deletetwofactor'),403,'AUTHENTICATION_FAILED')
+        self.util.assertError(self.interface.run(app='accounts',action='verifytwofactor'),403,'AUTHENTICATION_FAILED')
+
+    (username, password, account, client, session) = self.tempAccount()
+
+    # creating two factor requires the password
+    self.util.assertError(self.interface.run(app='accounts',action='createtwofactor',
+        params=self.withSession(session)),403,'PASSWORD_REQUIRED')
+    
+    # test deletetwofactor with an unknown object ID
+    self.util.assertError(self.interface.run(app='accounts',action='deletetwofactor',
+        params=self.withSession(session,{'auth_password':password,'twofactor':'unknown'})),404,'UNKNOWN_TWOFACTOR')
+    
     # test that you can't delete a two factor for someone else's account
     (username2, password2, account2, client2, session2) = self.tempAccount()
     res = self.util.assertOk(self.interface.run(app='accounts',action='createtwofactor',
@@ -72,5 +83,3 @@ def testTwoFactor(self):
 
     self.deleteAccount(session2, password2)
     self.deleteAccount(session, password) 
-
-# TODO RAY !! try to reorganize the above into several separate tests + better comments

@@ -16,6 +16,7 @@
             "host": "localhost",
             "user": "root", 
             "password": "password",
+            "ssl_disabled": true,
             "persistent": true
         },
         "pgsql":
@@ -29,6 +30,7 @@
     "core":
     {
         "datadir":"../inttest_data",
+        "metrics": "extended",
         "email":
         {
             "type":"smtp",
@@ -37,7 +39,7 @@
             "username":"mytest@test.com",
             "password":"password",
             "use_reply":false,
-            "test":"mytest@test.com"
+            "testdest":"mytest@test.com"
         }
     }
 }

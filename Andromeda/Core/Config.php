@@ -276,9 +276,9 @@ class Config extends BaseConfig
     
     /**
      * Returns the current debug level
-     * @param ?IOInterface $interface interface to check privilege level
+     * @param ?IOInterface $interface interface if given, adjust the result to the interface privilege level
      */
-    public function GetDebugLevel(?IOInterface $interface = null) : int 
+    public function GetDebugLevel(?IOInterface $interface = null) : int
     {
         $debug = $this->debug->GetValue();
         
@@ -314,7 +314,7 @@ class Config extends BaseConfig
     
     /** 
      * Returns the current metrics log level 
-     * @param ?IOInterface $interface interface to check privilege level
+     * @param ?IOInterface $interface interface if given, adjust the result to the interface privilege level
      */
     public function GetMetricsLevel(?IOInterface $interface = null) : int 
     { 
