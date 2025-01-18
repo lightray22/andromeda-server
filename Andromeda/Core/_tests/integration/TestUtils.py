@@ -81,6 +81,13 @@ class TestUtils():
         assert (type(left) == type(right)), (left, right)
         assert (left != right), (left, right)
 
+    def assertGreater(self, left, right):
+        """ Asserts that left is greater than right (>) """
+        self.assertCounter += 1
+        assert (type(left) == type(right)), (left, right)
+        assert (isinstance(left, numbers.Number)), left
+        assert (left > right), (left, right)
+
     def assertGreaterOrEqual(self, left, right):
         """ Asserts that left is greater than or equal to right (>=) """
         self.assertCounter += 1

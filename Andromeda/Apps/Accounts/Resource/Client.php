@@ -104,6 +104,13 @@ class Client extends BaseObject
     /** Gets the account that owns this client */
     public function GetAccount() : Account { return $this->account->GetObject(); }
 
+    /** Sets the timestamp when the client was last active now */
+    public function SetActiveDate() : self 
+    {
+        $this->GetAccount()->SetActiveDate();
+        $this->date_active->SetTimeNow(); return $this; 
+    }
+    
     /** Sets the timestamp when the client last created a session to now */
     public function SetLoggedonDate() : self 
     {
@@ -178,7 +185,7 @@ class Client extends BaseObject
                 
         if (!$this->database->isReadOnly())
         {
-            $this->date_active->SetTimeNow();
+            $this->SetActiveDate();
             $this->useragent->SetValue($interface->getUserAgent());
             $this->lastaddr->SetValue($interface->getAddress());  
         }

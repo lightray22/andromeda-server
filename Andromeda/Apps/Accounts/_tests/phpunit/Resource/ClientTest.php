@@ -38,9 +38,11 @@ class ClientTest extends \PHPUnit\Framework\TestCase
         $iface = $this->createMock(IOInterface::class);
 
         $account->method('GetClientTimeout')->willReturn(0); // impossible to pass
+        $account->expects($this->exactly(2))->method('SetActiveDate');
 
         $client = ClientTest_Client::Create($iface, $objdb, $account);
         $this->assertTrue($client->CheckKeyMatch($iface, $client->pubGetAuthKey())); // no previous date active
         $this->assertFalse($client->CheckKeyMatch($iface, $client->pubGetAuthKey())); // date active was set, now expired*/
+        $client->SetActiveDate(); // forwards to account
     }
 }

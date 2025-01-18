@@ -53,7 +53,9 @@ def testTwoFactorBasic(self):
     self.util.assertOk(self.interface.run(app='accounts',action='createsession',
         params={'username':username,'auth_password':password}))
 
-    self.deleteAccount(session, password) 
+    # TODO RAY !! add test that twofactor is not required when using an existing session (unless config is set)
+
+    self.deleteAccount(account) 
 
 def testTwoFactorInvalid(self):
     """ Tests error cases relating to two factor """
@@ -81,5 +83,5 @@ def testTwoFactorInvalid(self):
     self.util.assertOk(self.interface.run(app='accounts',action='deletetwofactor',
         params=self.withSession(session2,{'auth_password':password2,'twofactor':res['twofactor']['id']})))
 
-    self.deleteAccount(session2, password2)
-    self.deleteAccount(session, password) 
+    self.deleteAccount(account2)
+    self.deleteAccount(account) 

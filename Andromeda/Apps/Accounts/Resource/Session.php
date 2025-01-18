@@ -154,7 +154,7 @@ class Session extends BaseObject implements IKeySource
         if (!$this->database->isReadOnly())
         {
             $this->date_active->SetTimeNow();
-            $this->GetAccount()->SetActiveDate();
+            $this->client->GetObject()->SetActiveDate();
         }
 
         return true;

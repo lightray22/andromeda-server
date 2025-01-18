@@ -32,21 +32,19 @@ class AppTests(BaseAppTest):
         self.util.assertType(retval['username'], str)
         self.accountid = retval['id']
 
-    sessionid:str = None
-    sessionkey:str = None
+    session:dict = None
 
     def afterInstall(self): # init
-        if self.sessionid is not None:
+        if self.session is not None:
             return # already done
         res = self.util.assertOk(self.interface.run(app='accounts',action='createsession',
             params={'username':self.username,'auth_password':self.password}))
         session = res['client']['session']
-        self.sessionid = session['id']
-        self.sessionkey = session['authkey']
+        self.session = session
 
     def asAdmin(self, params:dict = {}):
         """ Returns params with admin params added if not a private interface """
-        if self.sessionid is None:
+        if self.session is None:
             self.afterInstall() # make asAdmin available to other apps in afterInstall()
         params = params.copy()
         if self.interface.isPriv:
@@ -55,8 +53,8 @@ class AppTests(BaseAppTest):
             else:
                 params['auth_sudoacct'] = self.accountid
         else:
-            params['auth_sessionid'] = self.sessionid
-            params['auth_sessionkey'] = self.sessionkey
+            params['auth_sessionid'] = self.session['id']
+            params['auth_sessionkey'] = self.session['authkey']
         return params
     
     def withSession(self, session:dict, params:dict = {}):
@@ -77,10 +75,10 @@ class AppTests(BaseAppTest):
         session = client['session']
         return (username, password, account, client, session)
     
-    def deleteAccount(self, session:dict, password:str):
+    def deleteAccount(self, account:dict):
         """ Deletes an account with the given session and password """
         self.util.assertOk(self.interface.run(app='accounts',action='deleteaccount',
-            params=self.withSession(session, {'auth_password':password})))
+            params=self.withSession(self.session, {'auth_sudoacct':account['id'],'auth_password':self.password})))
 
     #################################################
     
@@ -105,17 +103,16 @@ class AppTests(BaseAppTest):
         """ Tests auth_sudouser and auth_sudoacct overriding a session """
         # note this is different than withSession() because we are using sudouser to *override* a session
         (username, password, account, client, session) = self.tempAccount()
-        adminSession = {'id':self.sessionid, 'authkey':self.sessionkey}
 
-        res = self.util.assertOk(self.interface.run(app='accounts',action='getaccount',params=self.withSession(adminSession)))
+        res = self.util.assertOk(self.interface.run(app='accounts',action='getaccount',params=self.withSession(self.session)))
         self.util.assertSame(res['id'], self.accountid)
         res = self.util.assertOk(self.interface.run(app='accounts',action='getaccount',
-            params=self.withSession(adminSession, {'auth_sudouser':username})))
+            params=self.withSession(self.session, {'auth_sudouser':username})))
         self.util.assertSame(res['id'], account['id'])
         res = self.util.assertOk(self.interface.run(app='accounts',action='getaccount',
-            params=self.withSession(adminSession, {'auth_sudoacct':account['id']})))
+            params=self.withSession(self.session, {'auth_sudoacct':account['id']})))
         self.util.assertSame(res['id'], account['id'])
-        self.deleteAccount(session, password)
+        self.deleteAccount(account)
 
     def testGetAccount(self):
         """ Test the getAccount command """
@@ -165,7 +162,6 @@ class AppTests(BaseAppTest):
         # TODO TESTS test admin output (with --account)
         # TODO TESTS test full admin output (with --account)
 
-        self.deleteAccount(session, password)
+        self.deleteAccount(account)
 
     # TODO RAY !! crypto/changePW/recovery, create/delete acct + register allow + setfullname, group stuff + account/group search, external auth sources
-    # TODO RAY !! add test for date_active setting even on client error

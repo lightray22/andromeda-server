@@ -65,7 +65,7 @@ class AccountsApp extends BaseApp
             '(createsession... reuse client) --auth_clientid id --auth_clientkey randstr',
             'deletesession [--session id --auth_password raw]',
             'deleteclient [--client id --auth_password raw]',
-            'deleteallauth --auth_password raw [--everyone bool]',
+            'deleteallclients --auth_password raw [--everyone bool]',
 
             'createtwofactor --auth_password raw [--comment ?text]',
             'verifytwofactor --auth_twofactor int',
@@ -160,7 +160,7 @@ class AccountsApp extends BaseApp
             case 'deleteaccount':       $this->DeleteAccount($authenticator, $actionlog); return null;
             case 'deletesession':       $this->DeleteSession($params, $authenticator, $actionlog); return null;
             case 'deleteclient':        $this->DeleteClient($params, $authenticator, $actionlog); return null;
-            case 'deleteallauth':       $this->DeleteAllAuth($params, $authenticator); return null;
+            case 'deleteallclients':    $this->DeleteAllClients($params, $authenticator); return null;
             case 'deletetwofactor':     $this->DeleteTwoFactor($params, $authenticator, $actionlog); return null;
             
             case 'deletecontact':       $this->DeleteContact($params, $authenticator, $actionlog); return null;
@@ -837,7 +837,7 @@ class AccountsApp extends BaseApp
      * Deletes all registered clients/sessions for an account
      * @throws Exceptions\AuthenticationFailedException if not signed in
      */
-    protected function DeleteAllAuth(SafeParams $params, ?Authenticator $authenticator) : void
+    protected function DeleteAllClients(SafeParams $params, ?Authenticator $authenticator) : void
     {
         if ($authenticator === null) 
             throw new Exceptions\AuthenticationFailedException();

@@ -41,7 +41,7 @@ def testContactsBasic(self):
         params=self.withSession(session2,{'account':account['id']})))
     self.util.assertCount(res['contacts'], 1) # contact 2 is not public
     self.util.assertSame(res['contacts'][0],email) # NOT indexed by ID
-    self.deleteAccount(session2, password2)
+    self.deleteAccount(account2)
 
     # test deleting contacts, shouldn't show up in getaccount anymore
     self.util.assertOk(self.interface.run(app='accounts',action='deletecontact',
@@ -53,7 +53,7 @@ def testContactsBasic(self):
         params=self.withSession(session,{'full':True})))
     self.util.assertEmpty(res['contacts'])
 
-    self.deleteAccount(session, password)
+    self.deleteAccount(account)
 
 def testContactsInvalid(self):
     """ Tests error cases for contacts """
@@ -86,8 +86,8 @@ def testContactsInvalid(self):
     self.util.assertError(self.interface.run(app='accounts',action='deletecontact',
         params=self.withSession(session2,{'contact':id})),404,'UNKNOWN_CONTACT')
     
-    self.deleteAccount(session2, password2)
-    self.deleteAccount(session, password)
+    self.deleteAccount(account2)
+    self.deleteAccount(account)
 
 def testContactsSingleFrom(self):
     """ Tests that only one contact can be used as from """
@@ -112,5 +112,5 @@ def testContactsSingleFrom(self):
     self.util.assertSame(res['contacts'][id1]['isfrom'],False) # got unset
     self.util.assertSame(res['contacts'][id2]['isfrom'],True)
 
-    self.deleteAccount(session, password)
+    self.deleteAccount(account)
     

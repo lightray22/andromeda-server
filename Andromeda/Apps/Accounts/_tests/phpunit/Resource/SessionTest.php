@@ -59,9 +59,10 @@ class SessionTest extends \PHPUnit\Framework\TestCase
         $account = $this->createMock(Account::class);
 
         $account->method('GetSessionTimeout')->willReturn(0); // impossible to pass
-        $account->expects($this->once())->method('SetActiveDate');
+        $client = $this->createMock(Client::class);
+        $client->expects($this->once())->method('SetActiveDate');
 
-        $session = SessionTest_Session::Create($objdb, $account, $this->createMock(Client::class));
+        $session = SessionTest_Session::Create($objdb, $account, $client);
         $this->assertTrue($session->CheckKeyMatch($session->pubGetAuthKey())); // no previous date active
         $this->assertFalse($session->CheckKeyMatch($session->pubGetAuthKey())); // date active was set, now expired
     }
