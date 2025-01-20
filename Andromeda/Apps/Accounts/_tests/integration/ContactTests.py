@@ -57,10 +57,9 @@ def testContactsBasic(self):
 
 def testContactsInvalid(self):
     """ Tests error cases for contacts """
-    if not self.interface.isPriv:
-        self.util.assertError(self.interface.run(app='accounts',action='createcontact'),403,'AUTHENTICATION_FAILED')
-        self.util.assertError(self.interface.run(app='accounts',action='deletecontact'),403,'AUTHENTICATION_FAILED')
-        self.util.assertError(self.interface.run(app='accounts',action='editcontact'),403,'AUTHENTICATION_FAILED')
+    self.assertAccountRequired(self.interface.run(app='accounts',action='createcontact'))
+    self.assertAccountRequired(self.interface.run(app='accounts',action='deletecontact'))
+    self.assertAccountRequired(self.interface.run(app='accounts',action='editcontact'))
 
     (username, password, account, client, session) = self.tempAccount()
     (username2, password2, account2, client2, session2) = self.tempAccount()

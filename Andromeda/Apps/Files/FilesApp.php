@@ -324,13 +324,13 @@ class FilesApp extends BaseApp
     
     /**
      * Sets config for this app
-     * @throws AuthenticationFailedException if not admin
+     * @throws AdminRequiredException if not admin
      * @return array Config
      * @see Config::GetClientObject()
      */
     protected function SetConfig(SafeParams $params, ?Authenticator $authenticator) : array
     {
-        if ($authenticator === null) throw new AuthenticationFailedException();
+        if ($authenticator === null) throw new AdminRequiredException();
         
         $authenticator->RequireAdmin();
 
@@ -1945,7 +1945,7 @@ class FilesApp extends BaseApp
 
     /**
      * Configures total limits for the given object
-     * @throws AuthenticationFailedException if not admin
+     * @throws AdminRequiredException if not admin
      * @return array Limits
      * @see FilesApp::GetLimitObject()
      * @see Limits\Total::GetClientObject()
@@ -1953,8 +1953,7 @@ class FilesApp extends BaseApp
     protected function ConfigLimits(SafeParams $params, ?Authenticator $authenticator) : array
     {
         if ($authenticator === null)
-            throw new AuthenticationFailedException();
-        
+            throw new AdminRequiredException();
         $authenticator->RequireAdmin();
         
         $lobj = $this->GetLimitObject($params, $authenticator, false, false, false);
@@ -1965,7 +1964,7 @@ class FilesApp extends BaseApp
     
     /**
      * Configures timed limits for the given object
-     * @throws AuthenticationFailedException if not admin
+     * @throws AdminRequiredException if not admin
      * @return array Limits
      * @see FilesApp::GetLimitObject()
      * @see Limits\Timed::GetClientObject()
@@ -1973,8 +1972,7 @@ class FilesApp extends BaseApp
     protected function ConfigTimedLimits(SafeParams $params, ?Authenticator $authenticator) : array
     {
         if ($authenticator === null) 
-            throw new AuthenticationFailedException();
-        
+            throw new AdminRequiredException();
         $authenticator->RequireAdmin();
         
         $lobj = $this->GetLimitObject($params, $authenticator, false, false, true);
@@ -1985,14 +1983,13 @@ class FilesApp extends BaseApp
     
     /**
      * Deletes all total limits for the given object
-     * @throws AuthenticationFailedException if not admin
+     * @throws AdminRequiredException if not admin
      * @see FilesApp::GetLimitObject()
      */
     protected function PurgeLimits(SafeParams $params, ?Authenticator $authenticator) : void
     {
         if ($authenticator === null) 
-            throw new AuthenticationFailedException();
-        
+            throw new AdminRequiredException();
         $authenticator->RequireAdmin();
         
         $lobj = $this->GetLimitObject($params, $authenticator, false, false, false);
@@ -2003,14 +2000,13 @@ class FilesApp extends BaseApp
     
     /**
      * Deletes all timed limits for the given object
-     * @throws AuthenticationFailedException if not admin
+     * @throws AdminRequiredException if not admin
      * @see FilesApp::GetLimitObject()
      */
     protected function PurgeTimedLimits(SafeParams $params, ?Authenticator $authenticator) : void
     {
         if ($authenticator === null) 
-            throw new AuthenticationFailedException();
-        
+            throw new AdminRequiredException();
         $authenticator->RequireAdmin();
         
         $lobj = $this->GetLimitObject($params, $authenticator, false, false, true);

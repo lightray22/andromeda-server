@@ -7,8 +7,8 @@ class AppTests(BaseAppTest):
         return "ACCOUNTS"
 
     def getTestModules(self):
-        import ContactTests, SessionTests, TwoFactorTests, AuthSourceTests
-        return [self, ContactTests, SessionTests, TwoFactorTests, AuthSourceTests]
+        import ContactTests, SessionTests, TwoFactorTests, AuthSourceTests, CryptoTests
+        return [self, ContactTests, SessionTests, TwoFactorTests, AuthSourceTests, CryptoTests]
 
     def requiresInstall(self) -> bool:
         return True
@@ -77,6 +77,12 @@ class AppTests(BaseAppTest):
         """ Deletes an account with the given session and password """
         self.util.assertOk(self.interface.run(app='accounts',action='deleteaccount',
             params=self.withSession(self.session, {'auth_sudoacct':account['id'],'auth_password':self.password})))
+        
+    def assertAccountRequired(self, res):
+        if self.interface.isPriv:
+            self.util.assertError(res, 400, 'ACCOUNT_REQUIRED')
+        else:
+            self.util.assertError(res, 403, 'AUTHENTICATION_FAILED')
 
     #################################################
     
@@ -114,8 +120,7 @@ class AppTests(BaseAppTest):
 
     def testGetAccount(self):
         """ Test the getAccount command """
-        if not self.interface.isPriv:
-            self.util.assertError(self.interface.run(app='accounts',action='getaccount'),403,'AUTHENTICATION_FAILED')
+        self.assertAccountRequired(self.interface.run(app='accounts',action='getaccount'))
 
         (username, password, account, client, session) = self.tempAccount()
         res = self.util.assertOk(self.interface.run(app='accounts',action='getaccount',params=self.withSession(session)))
@@ -162,7 +167,8 @@ class AppTests(BaseAppTest):
 
         self.deleteAccount(account)
 
-    # TODO TESTS !! crypto/changePW/recovery
-    # TODO TESTS !! create/delete acct + register allow + setfullname
-    # TODO TESTS !! group stuff + account/group search
+    # TODO TESTS !! create/delete acct + register allow + setfullname + relevant config
+    # TODO TESTS !! group stuff (create, delete, membership), basic edit account/group
+    # TODO TESTS !! all policies (timeouts, limits)
+    # TODO TESTS !! account/group search and admin get
     # TODO TESTS !! test own app enable/disable and access logging

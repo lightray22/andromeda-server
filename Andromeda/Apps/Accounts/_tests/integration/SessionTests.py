@@ -91,10 +91,9 @@ def testSessionDeleteOther(self):
 
 def testSessionsInvalid(self):
     """ Tests error cases for sessions """
-    if not self.interface.isPriv:
-        self.util.assertError(self.interface.run(app='accounts',action='deletesession'),403,'AUTHENTICATION_FAILED')
-        self.util.assertError(self.interface.run(app='accounts',action='deleteclient'),403,'AUTHENTICATION_FAILED')
-        self.util.assertError(self.interface.run(app='accounts',action='deleteallclients'),403,'AUTHENTICATION_FAILED')
+    self.assertAccountRequired(self.interface.run(app='accounts',action='deletesession'))
+    self.assertAccountRequired(self.interface.run(app='accounts',action='deleteclient'))
+    self.assertAccountRequired(self.interface.run(app='accounts',action='deleteallclients'))
 
     # test creating a session with bad username/password
     self.util.assertError(self.interface.run(app='accounts',action='createsession',

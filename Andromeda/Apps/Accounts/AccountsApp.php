@@ -217,13 +217,13 @@ class AccountsApp extends BaseApp
     
     /**
      * Sets config for this app
-     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @throws Exceptions\AdminRequiredException if not admin
      * @return ConfigJ
      */
     protected function SetConfig(SafeParams $params, ?Authenticator $authenticator) : array
     {
         if ($authenticator === null) 
-            throw new Exceptions\AuthenticationFailedException();        
+            throw new Exceptions\AdminRequiredException();        
         $authenticator->RequireAdmin();
         
         return $this->config->SetConfig($params)->GetClientObject(true);
@@ -289,9 +289,7 @@ class AccountsApp extends BaseApp
      * @throws Exceptions\ChangeExternalPasswordException if the user's account uses an non-local auth source
      */
     protected function ChangePassword(SafeParams $params, ?Authenticator $authenticator) : void
-    {   
-        $new_password = $params->GetParam('new_password', SafeParams::PARAMLOG_NEVER)->GetRawString();
-        
+    {
         $recoverykey = $params->HasParam('auth_recoverykey') ? 
             $params->GetParam('auth_recoverykey',SafeParams::PARAMLOG_NEVER)->GetUTF8String() : null;
         
@@ -309,7 +307,7 @@ class AccountsApp extends BaseApp
         {
             if ($authenticator === null)
                 throw new Exceptions\AuthenticationFailedException();
-            $account = $authenticator->GetAccount();  
+            $account = $authenticator->GetAccount();
 
             if (!$authenticator->isSudoUser()) 
                 $authenticator->RequirePassword();
@@ -317,6 +315,8 @@ class AccountsApp extends BaseApp
         
         if (!$account->GetAuthSource() instanceof AuthSource\Local) 
             throw new Exceptions\ChangeExternalPasswordException();
+
+        $new_password = $params->GetParam('new_password', SafeParams::PARAMLOG_NEVER)->GetRawString();
 
         Authenticator::StaticTryRequireCrypto($params, $account);
         $account->ChangePassword($new_password);
@@ -905,8 +905,8 @@ class AccountsApp extends BaseApp
     
     /**
      * Edits a contact for an account
-     * @throws Exceptions\AuthenticationFailedException
-     * @throws Exceptions\UnknownContactException
+     * @throws Exceptions\AuthenticationFailedException if not signed in
+     * @throws Exceptions\UnknownContactException if the contact ID is invalid
      * @return ContactJ
      */
     protected function EditContact(SafeParams $params, ?Authenticator $authenticator) : array
@@ -979,13 +979,13 @@ class AccountsApp extends BaseApp
     
     /**
      * Returns a list of all registered accounts
-     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @throws Exceptions\AdminRequiredException if not admin
      * @return array<string, AdminAccountJ>
      */
     protected function GetAccounts(SafeParams $params, ?Authenticator $authenticator) : array
     {
         if ($authenticator === null) 
-            throw new Exceptions\AuthenticationFailedException();
+            throw new Exceptions\AdminRequiredException();
         $authenticator->RequireAdmin();
         
         $limit = $params->GetOptParam('limit',null)->GetNullUint();
@@ -1001,13 +1001,13 @@ class AccountsApp extends BaseApp
     
     /**
      * Returns a list of all registered groups
-     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @throws Exceptions\AdminRequiredException if not admin
      * @return array<string,AdminGroupJ>
      */
     protected function GetGroups(SafeParams $params, ?Authenticator $authenticator) : array
     {
         if ($authenticator === null) 
-            throw new Exceptions\AuthenticationFailedException();
+            throw new Exceptions\AdminRequiredException();
         $authenticator->RequireAdmin();
         
         $limit = $params->GetOptParam('limit',null)->GetNullUint();
@@ -1021,14 +1021,14 @@ class AccountsApp extends BaseApp
     
     /**
      * Creates a new account group
-     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @throws Exceptions\AdminRequiredException if not admin
      * @throws Exceptions\GroupExistsException if the group name exists already
      * @return AdminGroupJ
      */
     protected function CreateGroup(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : array
     {
         if ($authenticator === null) 
-            throw new Exceptions\AuthenticationFailedException();
+            throw new Exceptions\AdminRequiredException();
         $authenticator->RequireAdmin();
         
         $name = $params->GetParam("name")->CheckLength(127)->GetName();
@@ -1047,14 +1047,14 @@ class AccountsApp extends BaseApp
     
     /**
      * Returns the requested group object
-     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @throws Exceptions\AdminRequiredException if not admin
      * @throws Exceptions\UnknownGroupException if the group is invalid
      * @return AdminGroupJ
      */
     protected function GetGroup(SafeParams $params, ?Authenticator $authenticator) : array
     {
         if ($authenticator === null) 
-            throw new Exceptions\AuthenticationFailedException();
+            throw new Exceptions\AdminRequiredException();
         $authenticator->RequireAdmin();
         
         $groupid = $params->GetParam("group",SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
@@ -1067,13 +1067,13 @@ class AccountsApp extends BaseApp
 
     /**
      * Deletes an account group
-     * @throws Exceptions\AuthenticationFailedException if not admin 
+     * @throws Exceptions\AdminRequiredException if not admin 
      * @throws Exceptions\UnknownGroupException if the group does not exist
      */
     protected function DeleteGroup(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : void
     {
         if ($authenticator === null) 
-            throw new Exceptions\AuthenticationFailedException();
+            throw new Exceptions\AdminRequiredException();
         $authenticator->RequireAdmin();
         
         $groupid = $params->GetParam("group",SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
@@ -1089,7 +1089,7 @@ class AccountsApp extends BaseApp
     
     /**
      * Adds an account to a group
-     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @throws Exceptions\AdminRequiredException if not admin
      * @throws Exceptions\UnknownAccountException if the account is not found
      * @throws Exceptions\UnknownGroupException if the group is not found
      * @throws Exceptions\DuplicateGroupMembershipException if the membership already exists
@@ -1098,7 +1098,7 @@ class AccountsApp extends BaseApp
     protected function AddGroupMember(SafeParams $params, ?Authenticator $authenticator) : array
     {
         if ($authenticator === null) 
-            throw new Exceptions\AuthenticationFailedException();
+            throw new Exceptions\AdminRequiredException();
         $authenticator->RequireAdmin();
         
         $accountid = $params->GetParam("account",SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
@@ -1120,7 +1120,7 @@ class AccountsApp extends BaseApp
     
     /**
      * Removes an account from a group
-     * @throws Exceptions\AuthenticationFailedException if not admin 
+     * @throws Exceptions\AdminRequiredException if not admin 
      * @throws Exceptions\UnknownAccountException if the account is not found
      * @throws Exceptions\UnknownGroupException if the group is not found
      * @throws Exceptions\UnknownGroupMembershipException if the group membership does not exist
@@ -1129,7 +1129,7 @@ class AccountsApp extends BaseApp
     protected function RemoveGroupMember(SafeParams $params, ?Authenticator $authenticator) : array
     {
         if ($authenticator === null) 
-            throw new Exceptions\AuthenticationFailedException();
+            throw new Exceptions\AdminRequiredException();
         $authenticator->RequireAdmin();
         
         $accountid = $params->GetParam("account",SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
@@ -1150,7 +1150,7 @@ class AccountsApp extends BaseApp
     
     /**
      * Gets metadata for an account group membership
-     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @throws Exceptions\AdminRequiredException if not admin
      * @throws Exceptions\UnknownAccountException if given an invalid account
      * @throws Exceptions\UnknownGroupException if given an invalid group
      * @throws Exceptions\UnknownGroupMembershipException if the account is not in the group
@@ -1159,7 +1159,7 @@ class AccountsApp extends BaseApp
     protected function GetMembership(SafeParams $params, ?Authenticator $authenticator) : ?array
     {
         if ($authenticator === null) 
-            throw new Exceptions\AuthenticationFailedException();
+            throw new Exceptions\AdminRequiredException();
         $authenticator->RequireAdmin();
         
         $accountid = $params->GetParam("account",SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
@@ -1182,13 +1182,13 @@ class AccountsApp extends BaseApp
      * 
      * This authorizes automatically creating an account for anyone
      * that successfully authenticates against the auth source
-     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @throws Exceptions\AdminRequiredException if not admin
      * @return ExternalJ
      */
     protected function CreateAuthSource(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : array
     {
         if ($authenticator === null) 
-            throw new Exceptions\AuthenticationFailedException();
+            throw new Exceptions\AdminRequiredException();
         $authenticator->RequireAdmin()->RequirePassword();
 
         $authsrc = AuthSource\External::TypedCreate($this->database, $params)->Save(); // save now for TestAuthSource
@@ -1207,14 +1207,14 @@ class AccountsApp extends BaseApp
     
     /**
      * Tests an auth source by running an auth query on it
-     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @throws Exceptions\AdminRequiredException if not admin
      * @throws Exceptions\UnknownAuthSourceException if the auth source is not found
      * @throws Exceptions\AuthSourceTestFailException if the test fails
      */
     protected function TestAuthSource(SafeParams $params, ?Authenticator $authenticator) : void
     {
         if ($authenticator === null) 
-            throw new Exceptions\AuthenticationFailedException();
+            throw new Exceptions\AdminRequiredException();
         $authenticator->RequireAdmin();
         
         $authsrc = $params->GetParam('authsrc',SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
@@ -1236,14 +1236,14 @@ class AccountsApp extends BaseApp
     
     /**
      * Edits the properties of an existing auth source, optionally testing it
-     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @throws Exceptions\AdminRequiredException if not admin
      * @throws Exceptions\UnknownAuthSourceException if the auth source is not found
      * @return ExternalJ
      */
     protected function EditAuthSource(SafeParams $params, ?Authenticator $authenticator) : array
     {
         if ($authenticator === null) 
-            throw new Exceptions\AuthenticationFailedException();
+            throw new Exceptions\AdminRequiredException();
         $authenticator->RequireAdmin()->RequirePassword();
         
         $authsrc = $params->GetParam('authsrc',SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
@@ -1259,13 +1259,13 @@ class AccountsApp extends BaseApp
     
     /**
      * Removes an external auth source, deleting accounts associated with it!
-     * @throws Exceptions\AuthenticationFailedException if not an admin
+     * @throws Exceptions\AdminRequiredException if not an admin
      * @throws Exceptions\UnknownAuthSourceException if the auth source does not exist
      */
     protected function DeleteAuthSource(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : void
     {
         if ($authenticator === null) 
-            throw new Exceptions\AuthenticationFailedException();
+            throw new Exceptions\AdminRequiredException();
         $authenticator->RequireAdmin()->RequirePassword()->TryRequireTwoFactor();
         
         $authsrc = $params->GetParam('authsrc',SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
@@ -1281,14 +1281,14 @@ class AccountsApp extends BaseApp
     
     /**
      * Sets config on an account
-     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @throws Exceptions\AdminRequiredException if not admin
      * @throws Exceptions\UnknownAccountException if the account is not found
      * @return AdminAccountJ
      */
     protected function EditAccount(SafeParams $params, ?Authenticator $authenticator) : array
     {
         if ($authenticator === null) 
-            throw new Exceptions\AuthenticationFailedException();
+            throw new Exceptions\AdminRequiredException();
         $authenticator->RequireAdmin();
         
         $acctid = $params->GetParam("account",SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
@@ -1304,14 +1304,14 @@ class AccountsApp extends BaseApp
     
     /**
      * Sets config on a group
-     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @throws Exceptions\AdminRequiredException if not admin
      * @throws Exceptions\UnknownGroupException if the group is not found
      * @return AdminGroupJ
      */
     protected function EditGroup(SafeParams $params, ?Authenticator $authenticator) : array
     {
         if ($authenticator === null) 
-            throw new Exceptions\AuthenticationFailedException();
+            throw new Exceptions\AdminRequiredException();
         $authenticator->RequireAdmin();
         
         $groupid = $params->GetParam("group",SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
@@ -1337,14 +1337,14 @@ class AccountsApp extends BaseApp
     
     /**
      * Sends a message to the given account or group's contacts
-     * @throws Exceptions\AuthenticationFailedException if not admin 
+     * @throws Exceptions\AdminRequiredException if not admin 
      * @throws Exceptions\UnknownGroupException if the given group is not found
      * @throws Exceptions\UnknownAccountException if the given account is not found
      */
     protected function SendMessage(SafeParams $params, ?Authenticator $authenticator) : void
     {
         if ($authenticator === null) 
-            throw new Exceptions\AuthenticationFailedException();
+            throw new Exceptions\AdminRequiredException();
         $authenticator->RequireAdmin();
         
         if ($params->HasParam('group'))
@@ -1373,13 +1373,13 @@ class AccountsApp extends BaseApp
     
     /**
      * Adds a new entry to the account create registerallow
-     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @throws Exceptions\AdminRequiredException if not admin
      * @return RegisterAllowJ
      */
     protected function AddRegisterAllow(SafeParams $params, ?Authenticator $authenticator) : array
     {
         if ($authenticator === null) 
-            throw new Exceptions\AuthenticationFailedException();
+            throw new Exceptions\AdminRequiredException();
         $authenticator->RequireAdmin();
         
         $pair = RegisterAllow::FetchPairFromParams($params);
@@ -1389,12 +1389,12 @@ class AccountsApp extends BaseApp
     
     /**
      * Removes an entry from the account create registerallow
-     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @throws Exceptions\AdminRequiredException if not admin
      */
     protected function RemoveRegisterAllow(SafeParams $params, ?Authenticator $authenticator) : void
     {
         if ($authenticator === null) 
-            throw new Exceptions\AuthenticationFailedException();
+            throw new Exceptions\AdminRequiredException();
         $authenticator->RequireAdmin();
 
         $pair = RegisterAllow::FetchPairFromParams($params);
@@ -1404,13 +1404,13 @@ class AccountsApp extends BaseApp
     
     /**
      * Gets all entries in the account registerallow
-     * @throws Exceptions\AuthenticationFailedException if not admin
+     * @throws Exceptions\AdminRequiredException if not admin
      * @return array<string, RegisterAllowJ>
      */
     protected function GetRegisterAllow(?Authenticator $authenticator) : array
     {
         if ($authenticator === null) 
-            throw new Exceptions\AuthenticationFailedException();
+            throw new Exceptions\AdminRequiredException();
         $authenticator->RequireAdmin();
         
         $list = RegisterAllow::LoadAll($this->database);

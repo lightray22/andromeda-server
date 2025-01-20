@@ -4,10 +4,10 @@ from TestUtils import *
 def testAuthSourceInvalid(self):
     """ Tests error cases for auth sources """
     if not self.interface.isPriv:
-        self.util.assertError(self.interface.run(app='accounts',action='createauthsource'),403,'AUTHENTICATION_FAILED')
-        self.util.assertError(self.interface.run(app='accounts',action='testauthsource'),403,'AUTHENTICATION_FAILED')
-        self.util.assertError(self.interface.run(app='accounts',action='editauthsource'),403,'AUTHENTICATION_FAILED')
-        self.util.assertError(self.interface.run(app='accounts',action='deleteauthsource'),403,'AUTHENTICATION_FAILED')
+        self.util.assertError(self.interface.run(app='accounts',action='createauthsource'),403,'ADMIN_REQUIRED')
+        self.util.assertError(self.interface.run(app='accounts',action='testauthsource'),403,'ADMIN_REQUIRED')
+        self.util.assertError(self.interface.run(app='accounts',action='editauthsource'),403,'ADMIN_REQUIRED')
+        self.util.assertError(self.interface.run(app='accounts',action='deleteauthsource'),403,'ADMIN_REQUIRED')
 
     (username, password, account, client, session) = self.tempAccount()
 
@@ -103,6 +103,7 @@ def checkGeneralOutput(self, res, admin):
 # TODO TESTS should attempt create/edit with a bad hostname, shouldn't cause a server error
 # TODO TESTS !! test create/edit with createdefgroup, test description, test --enabled
 # TODO TESTS !! actually test ldap
+# TODO TESTS !! test config --default_auth
 
 def doTestAuthSource(self, type, checker):
     """ Tests basic create/delete/usage of an auth source type """
@@ -153,6 +154,10 @@ def doTestAuthSource(self, type, checker):
     # check again that the correct password is required, just in case
     self.util.assertError(self.interface.run(app='accounts',action='createsession',
         params={'username':params['test_username'],'auth_password':'wrong'}),403,'AUTHENTICATION_FAILED')
+    
+    # test that password changing is not allowed
+    self.util.assertError(self.interface.run(app='accounts',action='changepassword',
+        params=self.withSession(session,{'auth_password':params['test_password']})),400,'CANNOT_CHANGE_EXTERNAL_PASSWORD')
     
     # delete the auth source, check that it also deleted the new account
     self.util.assertOk(self.interface.run(app='accounts',action='deleteauthsource',
