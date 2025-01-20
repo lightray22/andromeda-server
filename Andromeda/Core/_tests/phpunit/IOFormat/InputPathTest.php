@@ -28,7 +28,7 @@ class InputPathTest extends \PHPUnit\Framework\TestCase
         
         $handle = $fobj->GetHandle();
         $fobj->__destruct();
-        $this->assertFalse(is_resource($handle)); // @phpstan-ignore-line stream is closed
+        $this->assertFalse(is_resource($handle));
         
         $this->assertSame(array('name'=>basename($fpath),'path'=>$fpath,'size'=>0), $fobj->GetClientObject());
     }

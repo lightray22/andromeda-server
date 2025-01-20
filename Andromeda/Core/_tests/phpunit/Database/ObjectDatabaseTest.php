@@ -872,7 +872,7 @@ class ObjectDatabaseTest extends \PHPUnit\Framework\TestCase
             
         $obj = $objdb->TryLoadUniqueByKey(EasyObject::class, 'uniqueKey', 5);
         $this->assertInstanceOf(EasyObject::class, $obj); 
-        $this->assertNotNull($obj);// @phpstan-ignore-line test anyway
+        $this->assertNotNull($obj);
 
         $database->expects($this->once())->method('write')
             ->with("DELETE FROM a2obj_core_database_easyobject WHERE \"id\" = :d0", array('d0'=>$id))
@@ -984,7 +984,7 @@ class ObjectDatabaseTest extends \PHPUnit\Framework\TestCase
             
         $obj = $objdb->TryLoadUniqueByKey(EasyObject::class, 'uniqueKey', 5);
         $this->assertInstanceOf(EasyObject::class, $obj);
-        $this->assertNotNull($obj);// @phpstan-ignore-line test anyway
+        $this->assertNotNull($obj);
         
         $this->assertNull($objdb->TryLoadUniqueByKey(EasyObject::class, 'uniqueKey', 6));
         

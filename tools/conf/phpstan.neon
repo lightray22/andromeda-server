@@ -26,7 +26,7 @@ parameters:
     checkImplicitMixed: true
 ### checkUninitializedProperties: true                 # default is false, does't work with how we do objects
     reportStaticMethodSignatures: false                # strict-rules sets true, objdb has difficult issues with this
-    reportUnmatchedIgnoredErrors: false                # default is true, makes analyzing PHP7+8 impossible
+### reportUnmatchedIgnoredErrors: false                # default is true, makes analyzing PHP7+8 impossible
     rememberPossiblyImpureFunctionValues: false        # default is true, seems like bad behavior?
 services:
     - class: \Lipe\Lib\Phpstan\Services\TypeNodeResolver\Union

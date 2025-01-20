@@ -12,7 +12,7 @@ class InputStreamTest extends \PHPUnit\Framework\TestCase
         $this->assertSame($stream, $strobj->GetHandle());
         $this->assertSame($data, $strobj->GetData());
         $this->assertSame("test.txt",$strobj->GetName());
-        $this->assertFalse(is_resource($stream)); // @phpstan-ignore-line stream is closed
+        $this->assertFalse(is_resource($stream));
         
         $this->expectException(Exceptions\FileReadFailedException::class);
         $strobj->GetHandle(); // should be closed
@@ -27,6 +27,6 @@ class InputStreamTest extends \PHPUnit\Framework\TestCase
         $strobj = new InputStream($stream,"test");
         $strobj->__destruct();
         
-        $this->assertFalse(is_resource($stream)); // @phpstan-ignore-line stream is closed
+        $this->assertFalse(is_resource($stream));
     }
 }

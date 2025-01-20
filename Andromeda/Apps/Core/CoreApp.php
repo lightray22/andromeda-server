@@ -371,7 +371,7 @@ class CoreApp extends BaseApp
         if ($mailer === null) throw new Exceptions\UnknownMailerException();
         
         if ($actionlog !== null) 
-            $actionlog->LogDetails('mailer', $mailer->GetClientObject(), true); // @phpstan-ignore-line no recursive ScalarArray
+            $actionlog->LogDetails('mailer', $mailer->GetClientObject(), true);
         
         $mailer->Delete();
     }
