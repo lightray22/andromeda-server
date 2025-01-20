@@ -14,22 +14,15 @@ parameters:
     excludePaths:
         analyse:
             - ../../Andromeda/Apps/Files/Filesystem
-            - ../../Andromeda/Apps/Files/Limits
+            - ../../Andromeda/Apps/Files/Items
+            - ../../Andromeda/Apps/Files/Limits.bad
             - ../../Andromeda/Apps/Files/Storage
+            - ../../Andromeda/Apps/Files/Social
             - ../../Andromeda/Apps/Files/_tests/phpunit-bad
             - ../../Andromeda/Apps/Files/ActionLog.php
-            - ../../Andromeda/Apps/Files/Comment.php
-            - ../../Andromeda/Apps/Files/File.php
             - ../../Andromeda/Apps/Files/FilesApp.php
             - ../../Andromeda/Apps/Files/FileUtils.php
-            - ../../Andromeda/Apps/Files/Folder.php
-            - ../../Andromeda/Apps/Files/Item.php
             - ../../Andromeda/Apps/Files/ItemAccess.php
-            - ../../Andromeda/Apps/Files/Like.php
-            - ../../Andromeda/Apps/Files/RootFolder.php
-            - ../../Andromeda/Apps/Files/Share.php
-            - ../../Andromeda/Apps/Files/SubFolder.php
-            - ../../Andromeda/Apps/Files/Tag.php
     checkBenevolentUnionTypes: true
     checkImplicitMixed: true
 ### checkUninitializedProperties: true                 # default is false, does't work with how we do objects
