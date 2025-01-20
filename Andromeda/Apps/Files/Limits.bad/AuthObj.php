@@ -3,9 +3,6 @@
 use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase};
 use Andromeda\Core\IOFormat\SafeParams;
 
-require_once(ROOT."/Apps/Files/Limits/Total.php");
-require_once(ROOT."/Apps/Files/Limits/Timed.php");
-
 /** GroupTotal and AccountTotal have some extra common config not applicable to filesystems */
 abstract class AuthEntityTotal extends Total
 {

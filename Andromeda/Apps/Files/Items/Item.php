@@ -1,14 +1,7 @@
 <?php declare(strict_types=1); namespace Andromeda\Apps\Files; if (!defined('Andromeda')) die();
 
 use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, QueryBuilder};
-
-require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
-
-require_once(ROOT."/Apps/Files/Exceptions.php");
-require_once(ROOT."/Apps/Files/Filesystem/FSManager.php"); use Andromeda\Apps\Files\Filesystem\FSManager;
-require_once(ROOT."/Apps/Files/Filesystem/FSImpl.php"); use Andromeda\Apps\Files\Filesystem\FSImpl;
-require_once(ROOT."/Apps/Files/Limits/Filesystem.php");
-require_once(ROOT."/Apps/Files/Limits/Account.php");
+use Andromeda\Apps\Accounts\Account;
 
 /**
  * An abstract class defining a user-created item in a filesystem.
@@ -111,7 +104,7 @@ abstract class Item extends BaseObject // TODO was StandardObject
             {
                 if ($reuse) return $item->SetCreated(); else $item->Delete();
             }
-            else throw new DuplicateItemException();
+            else throw new Exceptions\DuplicateItemException();
         }
         return null;
     }
@@ -128,7 +121,7 @@ abstract class Item extends BaseObject // TODO was StandardObject
     protected function CheckParent(Folder $parent, bool $overwrite, bool $reuse) : ?self
     {
         if ($parent->GetFilesystemID() !== $this->GetFilesystemID())
-            throw new CrossFilesystemException();
+            throw new Exceptions\CrossFilesystemException();
             
         $item = static::TryLoadByParentAndName($this->database, 
             $parent->Refresh(true), $this->GetName());
@@ -139,7 +132,7 @@ abstract class Item extends BaseObject // TODO was StandardObject
             {
                 if ($reuse) return $item->SetCreated(); else $item->Delete();
             }
-            else throw new DuplicateItemException();
+            else throw new Exceptions\DuplicateItemException();
         }
         return null;
     }    
@@ -184,7 +177,7 @@ abstract class Item extends BaseObject // TODO was StandardObject
         if ($requireExist)
         {
             $this->Refresh(); if ($this->isDeleted())
-                throw new DeletedByStorageException();
+                throw new Exceptions\DeletedByStorageException();
         }
         
         return $this->GetFilesystem()->GetFSImpl(); 

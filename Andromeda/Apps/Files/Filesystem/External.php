@@ -1,15 +1,9 @@
 <?php declare(strict_types=1); namespace Andromeda\Apps\Files\Filesystem; if (!defined('Andromeda')) die();
 
 use Andromeda\Core\Database\ObjectDatabase;
-require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
+use Andromeda\Apps\Accounts\Account;
 
-require_once(ROOT."/Apps/Files/Filesystem/Native.php");
-
-require_once(ROOT."/Apps/Files/Item.php"); use Andromeda\Apps\Files\Item;
-require_once(ROOT."/Apps/Files/File.php"); use Andromeda\Apps\Files\File;
-require_once(ROOT."/Apps/Files/Folder.php"); use Andromeda\Apps\Files\Folder;
-require_once(ROOT."/Apps/Files/SubFolder.php"); use Andromeda\Apps\Files\SubFolder;
-require_once(ROOT."/Apps/Files/RootFolder.php"); use Andromeda\Apps\Files\RootFolder;
+use Andromeda\Apps\Files\Items\{Item, File, Folder, SubFolder, RootFolder};
 
 interface FileCreator { function NotifyCreate(ObjectDatabase $database, Folder $parent, ?Account $account, string $name) : File; }
 interface FolderCreator { function NotifyCreate(ObjectDatabase $database, Folder $parent, ?Account $account, string $name) : SubFolder; }

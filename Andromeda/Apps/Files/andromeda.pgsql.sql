@@ -32,17 +32,6 @@ CREATE TABLE public.a2obj_apps_files_actionlog (
 
 
 
-CREATE TABLE public.a2obj_apps_files_comment (
-    id character(16) NOT NULL,
-    owner character(12) NOT NULL,
-    item character(16) NOT NULL,
-    comment text NOT NULL,
-    date_created double precision NOT NULL,
-    date_modified double precision NOT NULL
-);
-
-
-
 CREATE TABLE public.a2obj_apps_files_config (
     id character(1) NOT NULL,
     version character varying(255) NOT NULL,
@@ -56,7 +45,7 @@ CREATE TABLE public.a2obj_apps_files_config (
 
 
 
-CREATE TABLE public.a2obj_apps_files_filesystem_fsmanager (
+CREATE TABLE public.a2obj_apps_files_items_filesystem_fsmanager (
     id character(8) NOT NULL,
     date_created double precision NOT NULL,
     type smallint NOT NULL,
@@ -69,15 +58,7 @@ CREATE TABLE public.a2obj_apps_files_filesystem_fsmanager (
 
 
 
-CREATE TABLE public.a2obj_apps_files_folder (
-    id character(16) NOT NULL,
-    count_subfiles bigint DEFAULT '0'::bigint NOT NULL,
-    count_subfolders bigint DEFAULT '0'::bigint NOT NULL
-);
-
-
-
-CREATE TABLE public.a2obj_apps_files_item (
+CREATE TABLE public.a2obj_apps_files_items_item (
     id character(16) NOT NULL,
     size bigint NOT NULL,
     owner character(12) DEFAULT NULL::bpchar,
@@ -90,12 +71,26 @@ CREATE TABLE public.a2obj_apps_files_item (
 
 
 
-CREATE TABLE public.a2obj_apps_files_like (
-    id character(12) NOT NULL,
-    owner character(12) NOT NULL,
-    item character(16) NOT NULL,
-    date_created double precision NOT NULL,
-    value boolean NOT NULL
+CREATE TABLE public.a2obj_apps_files_items_items_folder (
+    id character(16) NOT NULL,
+    count_subfiles bigint DEFAULT '0'::bigint NOT NULL,
+    count_subfolders bigint DEFAULT '0'::bigint NOT NULL
+);
+
+
+
+CREATE TABLE public.a2obj_apps_files_items_items_rootfolder (
+    id character(16) NOT NULL,
+    owner character(12) DEFAULT NULL::bpchar,
+    filesystem character(12) NOT NULL
+);
+
+
+
+CREATE TABLE public.a2obj_apps_files_items_subitem (
+    id character(16) NOT NULL,
+    name character varying(255) NOT NULL,
+    parent character(16) NOT NULL
 );
 
 
@@ -209,15 +204,28 @@ CREATE TABLE public.a2obj_apps_files_limits_total (
 
 
 
-CREATE TABLE public.a2obj_apps_files_rootfolder (
+CREATE TABLE public.a2obj_apps_files_social_comment (
     id character(16) NOT NULL,
-    owner character(12) DEFAULT NULL::bpchar,
-    filesystem character(12) NOT NULL
+    owner character(12) NOT NULL,
+    item character(16) NOT NULL,
+    comment text NOT NULL,
+    date_created double precision NOT NULL,
+    date_modified double precision NOT NULL
 );
 
 
 
-CREATE TABLE public.a2obj_apps_files_share (
+CREATE TABLE public.a2obj_apps_files_social_like (
+    id character(12) NOT NULL,
+    owner character(12) NOT NULL,
+    item character(16) NOT NULL,
+    date_created double precision NOT NULL,
+    value boolean NOT NULL
+);
+
+
+
+CREATE TABLE public.a2obj_apps_files_social_share (
     id character(16) NOT NULL,
     item character(16) NOT NULL,
     owner character(12) NOT NULL,
@@ -236,6 +244,16 @@ CREATE TABLE public.a2obj_apps_files_share (
     social boolean NOT NULL,
     reshare boolean NOT NULL,
     keepowner boolean NOT NULL
+);
+
+
+
+CREATE TABLE public.a2obj_apps_files_social_tag (
+    id character(16) NOT NULL,
+    owner character(12) NOT NULL,
+    item character(16) NOT NULL,
+    tag character varying(127) NOT NULL,
+    date_created double precision NOT NULL
 );
 
 
@@ -329,300 +347,282 @@ CREATE TABLE public.a2obj_apps_files_storage_webdav (
 
 
 
-CREATE TABLE public.a2obj_apps_files_subitem (
-    id character(16) NOT NULL,
-    name character varying(255) NOT NULL,
-    parent character(16) NOT NULL
-);
-
-
-
-CREATE TABLE public.a2obj_apps_files_tag (
-    id character(16) NOT NULL,
-    owner character(12) NOT NULL,
-    item character(16) NOT NULL,
-    tag character varying(127) NOT NULL,
-    date_created double precision NOT NULL
-);
-
-
-
 ALTER TABLE ONLY public.a2obj_apps_files_actionlog
-    ADD CONSTRAINT idx_44486_primary PRIMARY KEY (id);
-
-
-
-ALTER TABLE ONLY public.a2obj_apps_files_comment
-    ADD CONSTRAINT idx_44498_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_129276_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_config
-    ADD CONSTRAINT idx_44503_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_129288_primary PRIMARY KEY (id);
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_files_filesystem_fsmanager
-    ADD CONSTRAINT idx_44508_primary PRIMARY KEY (id);
+ALTER TABLE ONLY public.a2obj_apps_files_items_filesystem_fsmanager
+    ADD CONSTRAINT idx_129293_primary PRIMARY KEY (id);
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_files_folder
-    ADD CONSTRAINT idx_44516_primary PRIMARY KEY (id);
+ALTER TABLE ONLY public.a2obj_apps_files_items_item
+    ADD CONSTRAINT idx_129301_primary PRIMARY KEY (id);
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_files_item
-    ADD CONSTRAINT idx_44521_primary PRIMARY KEY (id);
+ALTER TABLE ONLY public.a2obj_apps_files_items_items_folder
+    ADD CONSTRAINT idx_129307_primary PRIMARY KEY (id);
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_files_like
-    ADD CONSTRAINT idx_44527_primary PRIMARY KEY (id);
+ALTER TABLE ONLY public.a2obj_apps_files_items_items_rootfolder
+    ADD CONSTRAINT idx_129312_primary PRIMARY KEY (id);
+
+
+
+ALTER TABLE ONLY public.a2obj_apps_files_items_subitem
+    ADD CONSTRAINT idx_129316_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_limits_accounttimed
-    ADD CONSTRAINT idx_44530_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_129319_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_limits_accounttotal
-    ADD CONSTRAINT idx_44533_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_129322_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_limits_filesystemtimed
-    ADD CONSTRAINT idx_44536_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_129325_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_limits_filesystemtotal
-    ADD CONSTRAINT idx_44539_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_129328_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_limits_grouptimed
-    ADD CONSTRAINT idx_44542_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_129331_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_limits_grouptotal
-    ADD CONSTRAINT idx_44545_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_129334_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_limits_timed
-    ADD CONSTRAINT idx_44548_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_129337_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_limits_timedstats
-    ADD CONSTRAINT idx_44551_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_129340_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_limits_total
-    ADD CONSTRAINT idx_44559_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_129348_primary PRIMARY KEY (id);
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_files_rootfolder
-    ADD CONSTRAINT idx_44567_primary PRIMARY KEY (id);
+ALTER TABLE ONLY public.a2obj_apps_files_social_comment
+    ADD CONSTRAINT idx_129356_primary PRIMARY KEY (id);
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_files_share
-    ADD CONSTRAINT idx_44571_primary PRIMARY KEY (id);
+ALTER TABLE ONLY public.a2obj_apps_files_social_like
+    ADD CONSTRAINT idx_129361_primary PRIMARY KEY (id);
+
+
+
+ALTER TABLE ONLY public.a2obj_apps_files_social_share
+    ADD CONSTRAINT idx_129364_primary PRIMARY KEY (id);
+
+
+
+ALTER TABLE ONLY public.a2obj_apps_files_social_tag
+    ADD CONSTRAINT idx_129371_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_storage_ftp
-    ADD CONSTRAINT idx_44578_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_129374_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_storage_local
-    ADD CONSTRAINT idx_44584_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_129380_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_storage_s3
-    ADD CONSTRAINT idx_44589_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_129385_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_storage_sftp
-    ADD CONSTRAINT idx_44596_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_129392_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_storage_smb
-    ADD CONSTRAINT idx_44605_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_129401_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_storage_storage
-    ADD CONSTRAINT idx_44613_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_129409_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_storage_webdav
-    ADD CONSTRAINT idx_44616_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_129412_primary PRIMARY KEY (id);
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_files_subitem
-    ADD CONSTRAINT idx_44623_primary PRIMARY KEY (id);
+CREATE INDEX idx_129276_account ON public.a2obj_apps_files_actionlog USING btree (account);
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_files_tag
-    ADD CONSTRAINT idx_44626_primary PRIMARY KEY (id);
+CREATE INDEX idx_129276_file ON public.a2obj_apps_files_actionlog USING btree (file);
 
 
 
-CREATE INDEX idx_44486_account ON public.a2obj_apps_files_actionlog USING btree (account);
+CREATE INDEX idx_129276_folder ON public.a2obj_apps_files_actionlog USING btree (folder);
 
 
 
-CREATE INDEX idx_44486_file ON public.a2obj_apps_files_actionlog USING btree (file);
+CREATE INDEX idx_129293_name ON public.a2obj_apps_files_items_filesystem_fsmanager USING btree (name);
 
 
 
-CREATE INDEX idx_44486_folder ON public.a2obj_apps_files_actionlog USING btree (folder);
+CREATE INDEX idx_129293_owner ON public.a2obj_apps_files_items_filesystem_fsmanager USING btree (owner);
 
 
 
-CREATE INDEX idx_44498_item ON public.a2obj_apps_files_comment USING btree (item);
+CREATE UNIQUE INDEX idx_129293_owner_name ON public.a2obj_apps_files_items_filesystem_fsmanager USING btree (owner, name);
 
 
 
-CREATE INDEX idx_44498_owner_item ON public.a2obj_apps_files_comment USING btree (owner, item);
+CREATE INDEX idx_129301_filesystem ON public.a2obj_apps_files_items_item USING btree (filesystem);
 
 
 
-CREATE INDEX idx_44508_name ON public.a2obj_apps_files_filesystem_fsmanager USING btree (name);
+CREATE INDEX idx_129301_owner ON public.a2obj_apps_files_items_item USING btree (owner);
 
 
 
-CREATE INDEX idx_44508_owner ON public.a2obj_apps_files_filesystem_fsmanager USING btree (owner);
+CREATE INDEX idx_129312_filesystem ON public.a2obj_apps_files_items_items_rootfolder USING btree (filesystem);
 
 
 
-CREATE UNIQUE INDEX idx_44508_owner_name ON public.a2obj_apps_files_filesystem_fsmanager USING btree (owner, name);
+CREATE INDEX idx_129312_owner ON public.a2obj_apps_files_items_items_rootfolder USING btree (owner);
 
 
 
-CREATE INDEX idx_44521_filesystem ON public.a2obj_apps_files_item USING btree (filesystem);
+CREATE UNIQUE INDEX idx_129312_owner_filesystem ON public.a2obj_apps_files_items_items_rootfolder USING btree (owner, filesystem);
 
 
 
-CREATE INDEX idx_44521_owner ON public.a2obj_apps_files_item USING btree (owner);
+CREATE UNIQUE INDEX idx_129316_name_parent ON public.a2obj_apps_files_items_subitem USING btree (name, parent);
 
 
 
-CREATE INDEX idx_44527_item ON public.a2obj_apps_files_like USING btree (item);
+CREATE INDEX idx_129316_parent ON public.a2obj_apps_files_items_subitem USING btree (parent);
 
 
 
-CREATE UNIQUE INDEX idx_44527_owner_item ON public.a2obj_apps_files_like USING btree (owner, item);
+CREATE INDEX idx_129319_account ON public.a2obj_apps_files_limits_accounttimed USING btree (account);
 
 
 
-CREATE INDEX idx_44530_account ON public.a2obj_apps_files_limits_accounttimed USING btree (account);
+CREATE UNIQUE INDEX idx_129319_account_timeperiod ON public.a2obj_apps_files_limits_accounttimed USING btree (account, timeperiod);
 
 
 
-CREATE UNIQUE INDEX idx_44530_account_timeperiod ON public.a2obj_apps_files_limits_accounttimed USING btree (account, timeperiod);
+CREATE UNIQUE INDEX idx_129322_account ON public.a2obj_apps_files_limits_accounttotal USING btree (account);
 
 
 
-CREATE UNIQUE INDEX idx_44533_account ON public.a2obj_apps_files_limits_accounttotal USING btree (account);
+CREATE INDEX idx_129325_filesystem ON public.a2obj_apps_files_limits_filesystemtimed USING btree (filesystem);
 
 
 
-CREATE INDEX idx_44536_filesystem ON public.a2obj_apps_files_limits_filesystemtimed USING btree (filesystem);
+CREATE UNIQUE INDEX idx_129325_filesystem_timeperiod ON public.a2obj_apps_files_limits_filesystemtimed USING btree (filesystem, timeperiod);
 
 
 
-CREATE UNIQUE INDEX idx_44536_filesystem_timeperiod ON public.a2obj_apps_files_limits_filesystemtimed USING btree (filesystem, timeperiod);
+CREATE UNIQUE INDEX idx_129328_filesystem ON public.a2obj_apps_files_limits_filesystemtotal USING btree (filesystem);
 
 
 
-CREATE UNIQUE INDEX idx_44539_filesystem ON public.a2obj_apps_files_limits_filesystemtotal USING btree (filesystem);
+CREATE INDEX idx_129331_group ON public.a2obj_apps_files_limits_grouptimed USING btree ("group");
 
 
 
-CREATE INDEX idx_44542_group ON public.a2obj_apps_files_limits_grouptimed USING btree ("group");
+CREATE UNIQUE INDEX idx_129331_group_timeperiod ON public.a2obj_apps_files_limits_grouptimed USING btree ("group", timeperiod);
 
 
 
-CREATE UNIQUE INDEX idx_44542_group_timeperiod ON public.a2obj_apps_files_limits_grouptimed USING btree ("group", timeperiod);
+CREATE UNIQUE INDEX idx_129334_group ON public.a2obj_apps_files_limits_grouptotal USING btree ("group");
 
 
 
-CREATE UNIQUE INDEX idx_44545_group ON public.a2obj_apps_files_limits_grouptotal USING btree ("group");
+CREATE UNIQUE INDEX idx_129340_limit_iscurrent ON public.a2obj_apps_files_limits_timedstats USING btree ("limit", iscurrent);
 
 
 
-CREATE UNIQUE INDEX idx_44551_limit_iscurrent ON public.a2obj_apps_files_limits_timedstats USING btree ("limit", iscurrent);
+CREATE UNIQUE INDEX idx_129340_limit_timestart ON public.a2obj_apps_files_limits_timedstats USING btree ("limit", date_timestart);
 
 
 
-CREATE UNIQUE INDEX idx_44551_limit_timestart ON public.a2obj_apps_files_limits_timedstats USING btree ("limit", date_timestart);
+CREATE INDEX idx_129356_item ON public.a2obj_apps_files_social_comment USING btree (item);
 
 
 
-CREATE INDEX idx_44567_filesystem ON public.a2obj_apps_files_rootfolder USING btree (filesystem);
+CREATE INDEX idx_129356_owner_item ON public.a2obj_apps_files_social_comment USING btree (owner, item);
 
 
 
-CREATE INDEX idx_44567_owner ON public.a2obj_apps_files_rootfolder USING btree (owner);
+CREATE INDEX idx_129361_item ON public.a2obj_apps_files_social_like USING btree (item);
 
 
 
-CREATE UNIQUE INDEX idx_44567_owner_filesystem ON public.a2obj_apps_files_rootfolder USING btree (owner, filesystem);
+CREATE UNIQUE INDEX idx_129361_owner_item ON public.a2obj_apps_files_social_like USING btree (owner, item);
 
 
 
-CREATE INDEX idx_44571_dest ON public.a2obj_apps_files_share USING btree (dest);
+CREATE INDEX idx_129364_dest ON public.a2obj_apps_files_social_share USING btree (dest);
 
 
 
-CREATE INDEX idx_44571_item ON public.a2obj_apps_files_share USING btree (item);
+CREATE INDEX idx_129364_item ON public.a2obj_apps_files_social_share USING btree (item);
 
 
 
-CREATE UNIQUE INDEX idx_44571_item_owner_dest ON public.a2obj_apps_files_share USING btree (item, owner, dest);
+CREATE UNIQUE INDEX idx_129364_item_owner_dest ON public.a2obj_apps_files_social_share USING btree (item, owner, dest);
 
 
 
-CREATE INDEX idx_44571_owner ON public.a2obj_apps_files_share USING btree (owner);
+CREATE INDEX idx_129364_owner ON public.a2obj_apps_files_social_share USING btree (owner);
 
 
 
-CREATE UNIQUE INDEX idx_44613_filesystem ON public.a2obj_apps_files_storage_storage USING btree (filesystem);
+CREATE INDEX idx_129371_item ON public.a2obj_apps_files_social_tag USING btree (item);
 
 
 
-CREATE UNIQUE INDEX idx_44623_name_parent ON public.a2obj_apps_files_subitem USING btree (name, parent);
+CREATE UNIQUE INDEX idx_129371_item_tag ON public.a2obj_apps_files_social_tag USING btree (item, tag);
 
 
 
-CREATE INDEX idx_44623_parent ON public.a2obj_apps_files_subitem USING btree (parent);
+CREATE INDEX idx_129371_owner ON public.a2obj_apps_files_social_tag USING btree (owner);
 
 
 
-CREATE INDEX idx_44626_item ON public.a2obj_apps_files_tag USING btree (item);
-
-
-
-CREATE UNIQUE INDEX idx_44626_item_tag ON public.a2obj_apps_files_tag USING btree (item, tag);
-
-
-
-CREATE INDEX idx_44626_owner ON public.a2obj_apps_files_tag USING btree (owner);
+CREATE UNIQUE INDEX idx_129409_filesystem ON public.a2obj_apps_files_storage_storage USING btree (filesystem);
 
 
 
@@ -631,43 +631,38 @@ ALTER TABLE ONLY public.a2obj_apps_files_actionlog
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_files_comment
-    ADD CONSTRAINT a2obj_apps_files_comment_ibfk_1 FOREIGN KEY (owner) REFERENCES public.a2obj_apps_accounts_account(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+ALTER TABLE ONLY public.a2obj_apps_files_items_filesystem_fsmanager
+    ADD CONSTRAINT a2obj_apps_files_items_filesystem_fsmanager_ibfk_1 FOREIGN KEY (owner) REFERENCES public.a2obj_apps_accounts_account(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_files_comment
-    ADD CONSTRAINT a2obj_apps_files_comment_ibfk_2 FOREIGN KEY (item) REFERENCES public.a2obj_apps_files_item(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+ALTER TABLE ONLY public.a2obj_apps_files_items_item
+    ADD CONSTRAINT a2obj_apps_files_items_item_ibfk_1 FOREIGN KEY (owner) REFERENCES public.a2obj_apps_accounts_account(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_files_filesystem_fsmanager
-    ADD CONSTRAINT a2obj_apps_files_filesystem_fsmanager_ibfk_1 FOREIGN KEY (owner) REFERENCES public.a2obj_apps_accounts_account(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+ALTER TABLE ONLY public.a2obj_apps_files_items_item
+    ADD CONSTRAINT a2obj_apps_files_items_item_ibfk_2 FOREIGN KEY (filesystem) REFERENCES public.a2obj_apps_files_items_filesystem_fsmanager(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_files_folder
-    ADD CONSTRAINT a2obj_apps_files_folder_ibfk_1 FOREIGN KEY (id) REFERENCES public.a2obj_apps_files_item(id) ON UPDATE CASCADE ON DELETE CASCADE;
+ALTER TABLE ONLY public.a2obj_apps_files_items_items_folder
+    ADD CONSTRAINT a2obj_apps_files_items_items_folder_ibfk_1 FOREIGN KEY (id) REFERENCES public.a2obj_apps_files_items_item(id) ON UPDATE CASCADE ON DELETE CASCADE;
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_files_item
-    ADD CONSTRAINT a2obj_apps_files_item_ibfk_1 FOREIGN KEY (owner) REFERENCES public.a2obj_apps_accounts_account(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+ALTER TABLE ONLY public.a2obj_apps_files_items_items_rootfolder
+    ADD CONSTRAINT a2obj_apps_files_items_items_rootfolder_ibfk_1 FOREIGN KEY (id) REFERENCES public.a2obj_apps_files_items_items_folder(id) ON UPDATE CASCADE ON DELETE CASCADE;
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_files_item
-    ADD CONSTRAINT a2obj_apps_files_item_ibfk_2 FOREIGN KEY (filesystem) REFERENCES public.a2obj_apps_files_filesystem_fsmanager(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+ALTER TABLE ONLY public.a2obj_apps_files_items_subitem
+    ADD CONSTRAINT a2obj_apps_files_items_subitem_ibfk_1 FOREIGN KEY (id) REFERENCES public.a2obj_apps_files_items_item(id) ON UPDATE CASCADE ON DELETE CASCADE;
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_files_like
-    ADD CONSTRAINT a2obj_apps_files_like_ibfk_1 FOREIGN KEY (owner) REFERENCES public.a2obj_apps_accounts_account(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
-
-
-
-ALTER TABLE ONLY public.a2obj_apps_files_like
-    ADD CONSTRAINT a2obj_apps_files_like_ibfk_2 FOREIGN KEY (item) REFERENCES public.a2obj_apps_files_item(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+ALTER TABLE ONLY public.a2obj_apps_files_items_subitem
+    ADD CONSTRAINT a2obj_apps_files_items_subitem_ibfk_2 FOREIGN KEY (parent) REFERENCES public.a2obj_apps_files_items_items_folder(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 
 
 
@@ -697,7 +692,7 @@ ALTER TABLE ONLY public.a2obj_apps_files_limits_filesystemtimed
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_limits_filesystemtimed
-    ADD CONSTRAINT a2obj_apps_files_limits_filesystemtimed_ibfk_2 FOREIGN KEY (filesystem) REFERENCES public.a2obj_apps_files_filesystem_fsmanager(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+    ADD CONSTRAINT a2obj_apps_files_limits_filesystemtimed_ibfk_2 FOREIGN KEY (filesystem) REFERENCES public.a2obj_apps_files_items_filesystem_fsmanager(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 
 
 
@@ -707,7 +702,7 @@ ALTER TABLE ONLY public.a2obj_apps_files_limits_filesystemtotal
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_limits_filesystemtotal
-    ADD CONSTRAINT a2obj_apps_files_limits_filesystemtotal_ibfk_2 FOREIGN KEY (filesystem) REFERENCES public.a2obj_apps_files_filesystem_fsmanager(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+    ADD CONSTRAINT a2obj_apps_files_limits_filesystemtotal_ibfk_2 FOREIGN KEY (filesystem) REFERENCES public.a2obj_apps_files_items_filesystem_fsmanager(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 
 
 
@@ -736,23 +731,48 @@ ALTER TABLE ONLY public.a2obj_apps_files_limits_timedstats
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_files_rootfolder
-    ADD CONSTRAINT a2obj_apps_files_rootfolder_ibfk_1 FOREIGN KEY (id) REFERENCES public.a2obj_apps_files_folder(id) ON UPDATE CASCADE ON DELETE CASCADE;
+ALTER TABLE ONLY public.a2obj_apps_files_social_comment
+    ADD CONSTRAINT a2obj_apps_files_social_comment_ibfk_1 FOREIGN KEY (owner) REFERENCES public.a2obj_apps_accounts_account(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_files_share
-    ADD CONSTRAINT a2obj_apps_files_share_ibfk_1 FOREIGN KEY (owner) REFERENCES public.a2obj_apps_accounts_account(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+ALTER TABLE ONLY public.a2obj_apps_files_social_comment
+    ADD CONSTRAINT a2obj_apps_files_social_comment_ibfk_2 FOREIGN KEY (item) REFERENCES public.a2obj_apps_files_items_item(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_files_share
-    ADD CONSTRAINT a2obj_apps_files_share_ibfk_2 FOREIGN KEY (item) REFERENCES public.a2obj_apps_files_item(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+ALTER TABLE ONLY public.a2obj_apps_files_social_like
+    ADD CONSTRAINT a2obj_apps_files_social_like_ibfk_1 FOREIGN KEY (owner) REFERENCES public.a2obj_apps_accounts_account(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 
 
 
-ALTER TABLE ONLY public.a2obj_apps_files_share
-    ADD CONSTRAINT a2obj_apps_files_share_ibfk_3 FOREIGN KEY (dest) REFERENCES public.a2obj_apps_accounts_policybase(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+ALTER TABLE ONLY public.a2obj_apps_files_social_like
+    ADD CONSTRAINT a2obj_apps_files_social_like_ibfk_2 FOREIGN KEY (item) REFERENCES public.a2obj_apps_files_items_item(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY public.a2obj_apps_files_social_share
+    ADD CONSTRAINT a2obj_apps_files_social_share_ibfk_1 FOREIGN KEY (owner) REFERENCES public.a2obj_apps_accounts_account(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY public.a2obj_apps_files_social_share
+    ADD CONSTRAINT a2obj_apps_files_social_share_ibfk_2 FOREIGN KEY (item) REFERENCES public.a2obj_apps_files_items_item(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY public.a2obj_apps_files_social_share
+    ADD CONSTRAINT a2obj_apps_files_social_share_ibfk_3 FOREIGN KEY (dest) REFERENCES public.a2obj_apps_accounts_policybase(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY public.a2obj_apps_files_social_tag
+    ADD CONSTRAINT a2obj_apps_files_social_tag_ibfk_1 FOREIGN KEY (owner) REFERENCES public.a2obj_apps_accounts_account(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY public.a2obj_apps_files_social_tag
+    ADD CONSTRAINT a2obj_apps_files_social_tag_ibfk_2 FOREIGN KEY (item) REFERENCES public.a2obj_apps_files_items_item(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 
 
 
@@ -782,32 +802,12 @@ ALTER TABLE ONLY public.a2obj_apps_files_storage_smb
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_storage_storage
-    ADD CONSTRAINT a2obj_apps_files_storage_storage_ibfk_1 FOREIGN KEY (filesystem) REFERENCES public.a2obj_apps_files_filesystem_fsmanager(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+    ADD CONSTRAINT a2obj_apps_files_storage_storage_ibfk_1 FOREIGN KEY (filesystem) REFERENCES public.a2obj_apps_files_items_filesystem_fsmanager(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_storage_webdav
     ADD CONSTRAINT a2obj_apps_files_storage_webdav_ibfk_1 FOREIGN KEY (id) REFERENCES public.a2obj_apps_files_storage_storage(id) ON UPDATE CASCADE ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY public.a2obj_apps_files_subitem
-    ADD CONSTRAINT a2obj_apps_files_subitem_ibfk_1 FOREIGN KEY (id) REFERENCES public.a2obj_apps_files_item(id) ON UPDATE CASCADE ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY public.a2obj_apps_files_subitem
-    ADD CONSTRAINT a2obj_apps_files_subitem_ibfk_2 FOREIGN KEY (parent) REFERENCES public.a2obj_apps_files_folder(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
-
-
-
-ALTER TABLE ONLY public.a2obj_apps_files_tag
-    ADD CONSTRAINT a2obj_apps_files_tag_ibfk_1 FOREIGN KEY (owner) REFERENCES public.a2obj_apps_accounts_account(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
-
-
-
-ALTER TABLE ONLY public.a2obj_apps_files_tag
-    ADD CONSTRAINT a2obj_apps_files_tag_ibfk_2 FOREIGN KEY (item) REFERENCES public.a2obj_apps_files_item(id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 
 
 

@@ -4,18 +4,6 @@ use Andromeda\Core\Utilities;
 use Andromeda\Core\Database\{BaseObject, ObjectDatabase, QueryBuilder};
 use Andromeda\Core\IOFormat\SafeParams;
 
-require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\{Account, GroupInherit};
-require_once(ROOT."/Apps/Accounts/Groups/Group.php"); use Andromeda\Apps\Accounts\Groups\Group;
-require_once(ROOT."/Apps/Accounts/Groups/GroupStuff.php"); use Andromeda\Apps\Accounts\Groups\GroupJoin;
-
-require_once(ROOT."/Apps/Files/File.php"); use Andromeda\Apps\Files\File;
-require_once(ROOT."/Apps/Files/Folder.php"); use Andromeda\Apps\Files\Folder;
-
-require_once(ROOT."/Apps/Files/Limits/Total.php");
-require_once(ROOT."/Apps/Files/Limits/Timed.php");
-require_once(ROOT."/Apps/Files/Limits/AuthObj.php");
-require_once(ROOT."/Apps/Files/Limits/Group.php");
-
 /**
  * Account limits common between total and timed
  * 

@@ -4,38 +4,13 @@ use Andromeda\Core\{ApiPackage, BaseApp, Emailer, EmailRecipient};
 use Andromeda\Core\IOFormat\{Input, InputPath, IOInterface, Output, OutputHandler, SafeParams};
 use Andromeda\Core\IOFormat\Interfaces\HTTP;
 
-//require_once(ROOT."/Core/Exceptions.php"); use Andromeda\Core\UnknownActionException;
-
-//require_once(ROOT."/Apps/Files/ActionLog.php");
-//require_once(ROOT."/Apps/Files/Config.php");
-//require_once(ROOT."/Apps/Files/Exceptions.php");
-//require_once(ROOT."/Apps/Files/ItemAccess.php");
-//require_once(ROOT."/Apps/Files/Item.php");
-//require_once(ROOT."/Apps/Files/File.php");
-//require_once(ROOT."/Apps/Files/Folder.php");
-//require_once(ROOT."/Apps/Files/Comment.php");
-//require_once(ROOT."/Apps/Files/Tag.php");
-//require_once(ROOT."/Apps/Files/Like.php");
-//require_once(ROOT."/Apps/Files/Share.php");
-//require_once(ROOT."/Apps/Files/FileUtils.php");
-
-//require_once(ROOT."/Apps/Files/Limits/Filesystem.php");
-//require_once(ROOT."/Apps/Files/Limits/Account.php");
-
-//require_once(ROOT."/Apps/Files/Filesystem/FSManager.php"); 
 use Andromeda\Apps\Files\Filesystem\FSManager;
-//require_once(ROOT."/Apps/Files/Storage/Exceptions.php");
 use Andromeda\Apps\Files\Storage\{FileReadFailedException, FileWriteFailedException};
-//require_once(ROOT."/Apps/Files/Storage/Storage.php"); 
 use Andromeda\Apps\Files\Storage\Storage;
 
-//require_once(ROOT."/Apps/Accounts/Account.php"); 
 use Andromeda\Apps\Accounts\Account;
-//require_once(ROOT."/Apps/Accounts/Groups/Group.php"); 
 use Andromeda\Apps\Accounts\Groups\Group;
-//require_once(ROOT."/Apps/Accounts/Authenticator.php"); 
 use Andromeda\Apps\Accounts\Authenticator;
-//require_once(ROOT."/Apps/Accounts/Exceptions.php"); 
 use Andromeda\Apps\Accounts\{AuthenticationFailedException, UnknownAccountException, UnknownGroupException};
 
 /**
@@ -225,7 +200,7 @@ class FilesApp extends BaseApp
             case 'purgelimits':      $this->PurgeLimits($params, $authenticator); return null;
             case 'purgetimedlimits': $this->PurgeTimedLimits($params, $authenticator); return null;
             
-            default: throw new UnknownActionException($input->GetAction());
+            default: throw new Exceptions\UnknownActionException($input->GetAction());
         }
     }
     
@@ -255,9 +230,9 @@ class FilesApp extends BaseApp
     {
         switch ($class)
         {
-            case File::class: throw new UnknownFileException();
-            case Folder::class: throw new UnknownFolderException();
-            default: throw new UnknownItemException();
+            case File::class: throw new Exceptions\UnknownFileException();
+            case Folder::class: throw new Exceptions\UnknownFolderException();
+            default: throw new Exceptions\UnknownItemException();
         }
     }
     
@@ -330,7 +305,7 @@ class FilesApp extends BaseApp
      */
     protected function SetConfig(SafeParams $params, ?Authenticator $authenticator) : array
     {
-        if ($authenticator === null) throw new AdminRequiredException();
+        if ($authenticator === null) throw new Exceptions\AdminRequiredException();
         
         $authenticator->RequireAdmin();
 
@@ -355,12 +330,12 @@ class FilesApp extends BaseApp
         $parent = $paccess->GetFolder(); $share = $paccess->GetShare();
         
         if (!$authenticator && !$parent->GetAllowPublicUpload())
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
         
         $overwrite = $params->GetOptParam('overwrite',false)->GetBool();
         
         if ($share !== null && (!$share->CanUpload() || ($overwrite && !$share->CanModify()))) 
-            throw new ItemAccessDeniedException();
+            throw new Exceptions\ItemAccessDeniedException();
         
         $owner = ($share !== null && !$share->KeepOwner()) ? $parent->GetOwner() : $account;
         
@@ -377,7 +352,7 @@ class FilesApp extends BaseApp
             //$name = $params->GetParam('name')->GetFSName();
             $name = $infile->GetName(); // TODO check not null! used to have above
             
-            if (!($handle = $infile->GetHandle())) throw new FileReadFailedException();
+            if (!($handle = $infile->GetHandle())) throw new Exceptions\FileReadFailedException();
             
             $fileobj = File::Create($this->database, $parent, $owner, $name, $overwrite);
             
@@ -409,7 +384,7 @@ class FilesApp extends BaseApp
         $access = $this->AuthenticateFileAccess($params, $authenticator, $actionlog); 
         $file = $access->GetFile(); $share = $access->GetShare();
         
-        if ($share !== null && !$share->CanRead()) throw new ItemAccessDeniedException();
+        if ($share !== null && !$share->CanRead()) throw new Exceptions\ItemAccessDeniedException();
 
         // first determine the byte range to read
         $fsize = $file->GetSize();
@@ -419,11 +394,11 @@ class FilesApp extends BaseApp
         if (isset($_SERVER['HTTP_RANGE']))
         {
             $ranges = explode('=',$_SERVER['HTTP_RANGE']);
-            if (count($ranges) != 2 || trim($ranges[0]) != "bytes")
-                throw new InvalidDLRangeException();
+            if (count($ranges) !== 2 || trim($ranges[0]) !== "bytes")
+                throw new Exceptions\InvalidDLRangeException();
             
             $ranges = explode('-',$ranges[1]);
-            if (count($ranges) != 2) throw new InvalidDLRangeException();
+            if (count($ranges) !== 2) throw new Exceptions\InvalidDLRangeException();
             
             $fstart = (int)$ranges[0]; 
             $flast2 = (int)$ranges[1]; 
@@ -431,7 +406,7 @@ class FilesApp extends BaseApp
         }
 
         if ($fstart < 0 || $flast+1 < $fstart || $flast >= $fsize)
-            throw new InvalidDLRangeException();
+            throw new Exceptions\InvalidDLRangeException();
 
         if ($actionlog) $actionlog->LogDetails('fstart',$fstart)->LogDetails('flast',$flast);
         
@@ -445,7 +420,7 @@ class FilesApp extends BaseApp
         // send necessary headers
         if (!$debugdl)
         {
-            if ($fstart != 0 || $flast != $fsize-1)
+            if ($fstart !== 0 || $flast !== $fsize-1)
             {
                 http_response_code(206);
                 header("Content-Range: bytes $fstart-$flast/$fsize");
@@ -503,32 +478,32 @@ class FilesApp extends BaseApp
         }
         
         if (!$account && !$file->GetAllowPublicModify())
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
             
         if ($share !== null && !$share->CanModify()) 
-            throw new ItemAccessDeniedException();   
+            throw new Exceptions\ItemAccessDeniedException();   
 
         if ($infile instanceof InputPath && !$wstart && $infile->GetSize() >= $file->GetSize())
         {
             // for a full overwrite, we can call SetContents for efficiency
             if ($share !== null && !$share->CanUpload())
-                throw new ItemAccessDeniedException();
+                throw new Exceptions\ItemAccessDeniedException();
             
             return $file->SetContents($infile)->GetClientObject(($share === null));
         }
         else
         {
             // require randomWrite permission if not appending
-            if ($wstart != $file->GetSize() && !$file->GetAllowRandomWrite($account))
-                throw new RandomWriteDisabledException();
+            if ($wstart !== $file->GetSize() && !$file->GetAllowRandomWrite($account))
+                throw new Exceptions\RandomWriteDisabledException();
             
             if (!($handle = $infile->GetHandle())) 
-                throw new FileReadFailedException();
+                throw new Exceptions\FileReadFailedException();
             
             $wlength = FileUtils::ChunkedWrite($this->database, $handle, $file, $wstart); fclose($handle);
             
             if ($infile instanceof InputPath && $wlength !== $infile->GetSize())
-                throw new FileWriteFailedException();
+                throw new Exceptions\FileWriteFailedException();
             
             if ($actionlog) $actionlog->LogDetails('wlength',$wlength);
             
@@ -555,13 +530,13 @@ class FilesApp extends BaseApp
         $account = $authenticator ? $authenticator->GetAccount() : null;
         
         if (!$account && !$file->GetAllowPublicModify())
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
         
         if (!$file->GetAllowRandomWrite($account))
-            throw new RandomWriteDisabledException();
+            throw new Exceptions\RandomWriteDisabledException();
             
         if ($share !== null && !$share->CanModify()) 
-            throw new ItemAccessDeniedException();
+            throw new Exceptions\ItemAccessDeniedException();
 
         $file->SetSize($params->GetParam('size',SafeParams::PARAMLOG_ALWAYS)->GetUint()); 
         // TODO shouldn't really log this ... also remove logging of file write offsets, download offsets, etc. 
@@ -581,7 +556,7 @@ class FilesApp extends BaseApp
         $file = $access->GetFile(); $share = $access->GetShare();
 
         if ($share !== null && !$share->CanRead()) 
-            throw new ItemAccessDeniedException();
+            throw new Exceptions\ItemAccessDeniedException();
         
         $details = $params->GetOptParam('details',false)->GetBool();
         
@@ -606,12 +581,12 @@ class FilesApp extends BaseApp
             $folder = $access->GetFolder(); $share = $access->GetShare();
             
             if ($share !== null && !$share->CanRead()) 
-                throw new ItemAccessDeniedException();
+                throw new Exceptions\ItemAccessDeniedException();
         }
         else
         {
             if ($authenticator === null) 
-                throw new AuthenticationFailedException();
+                throw new Exceptions\AuthenticationFailedException();
             $account = $authenticator->GetAccount();
             
             $filesystem = $params->HasParam('filesystem') ? $params->GetParam('filesystem')->GetRandstr() : null;
@@ -619,7 +594,7 @@ class FilesApp extends BaseApp
             if ($filesystem !== null)
             {
                 $filesystem = FSManager::TryLoadByAccountAndID($this->database, $account, $filesystem, true);  
-                if ($filesystem === null) throw new UnknownFilesystemException();
+                if ($filesystem === null) throw new Exceptions\UnknownFilesystemException();
             }
                 
             $folder = RootFolder::GetRootByAccountAndFS($this->database, $account, $filesystem);
@@ -628,7 +603,7 @@ class FilesApp extends BaseApp
         }
 
         if ($folder === null) 
-            throw new UnknownFolderException();
+            throw new Exceptions\UnknownFolderException();
         
         $files = $params->GetOptParam('files',true)->GetBool();
         $folders = $params->GetOptParam('folders',true)->GetBool();
@@ -665,12 +640,12 @@ class FilesApp extends BaseApp
         {
             $folder = $raccess->GetFolder(); $share = $raccess->GetShare();
             if ($share !== null && !$share->CanRead()) 
-                throw new ItemAccessDeniedException();
+                throw new Exceptions\ItemAccessDeniedException();
         }
         else // no root folder given
         {
             if ($authenticator === null) 
-                throw new AuthenticationFailedException();
+                throw new Exceptions\AuthenticationFailedException();
             $account = $authenticator->GetAccount();
 
             $filesystem = $params->HasParam('filesystem') ? $params->GetParam('filesystem')->GetRandstr() : null;
@@ -678,7 +653,7 @@ class FilesApp extends BaseApp
             if ($filesystem !== null)
             {
                 $filesystem = FSManager::TryLoadByID($this->database, $filesystem);
-                if ($filesystem === null) throw new UnknownFilesystemException();
+                if ($filesystem === null) throw new Exceptions\UnknownFilesystemException();
             }
             
             $folder = RootFolder::GetRootByAccountAndFS($this->database, $account, $filesystem);
@@ -687,7 +662,7 @@ class FilesApp extends BaseApp
         }        
         
         if ($folder === null) 
-            throw new UnknownFolderException();
+            throw new Exceptions\UnknownFolderException();
         
         $path = $params->GetParam('path')->GetFSPath();
         $path = array_filter(explode('/',$path)); $name = array_pop($path);
@@ -697,7 +672,7 @@ class FilesApp extends BaseApp
             $subfolder = Folder::TryLoadByParentAndName($this->database, $folder, $subfolder);
             
             if ($subfolder === null) 
-                throw new UnknownFolderException();
+                throw new Exceptions\UnknownFolderException();
             else $folder = $subfolder;
         }
         
@@ -717,7 +692,7 @@ class FilesApp extends BaseApp
         }
         
         if ($item === null) 
-            throw new UnknownItemException();
+            throw new Exceptions\UnknownItemException();
 
         if ($item instanceof File) 
         {
@@ -762,7 +737,7 @@ class FilesApp extends BaseApp
         $item = $access->GetItem(); $share = $access->GetShare();
         
         if ($share !== null && !$share->CanModify()) 
-            throw new ItemAccessDeniedException();
+            throw new Exceptions\ItemAccessDeniedException();
         
         if ($params->HasParam('description')) 
             $item->SetDescription($params->GetParam('description')->GetNullHTMLText());
@@ -778,16 +753,16 @@ class FilesApp extends BaseApp
     protected function OwnFile(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : array
     {
         if ($authenticator === null) 
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
         $account = $authenticator->GetAccount();
         
         $id = $params->GetParam('file',SafeParams::PARAMLOG_NEVER)->GetRandstr();
         
         $file = File::TryLoadByID($this->database, $id);
-        if ($file === null) throw new UnknownFileException();
+        if ($file === null) throw new Exceptions\UnknownFileException();
         
         if ($file->isWorldAccess() || $file->GetParent()->GetOwner() !== $account)
-            throw new ItemAccessDeniedException();
+            throw new Exceptions\ItemAccessDeniedException();
             
         if ($actionlog) $actionlog->LogAccess($file, null);
             
@@ -802,22 +777,22 @@ class FilesApp extends BaseApp
     protected function OwnFolder(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : array
     {
         if ($authenticator === null) 
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
         $account = $authenticator->GetAccount();
         
         $id = $params->GetParam('folder',SafeParams::PARAMLOG_NEVER)->GetRandstr();
         
         $folder = Folder::TryLoadByID($this->database, $id);
-        if ($folder === null) throw new UnknownFolderException();
+        if ($folder === null) throw new Exceptions\UnknownFolderException();
         
         if ($folder->isWorldAccess()) 
-            throw new ItemAccessDeniedException();
+            throw new Exceptions\ItemAccessDeniedException();
         
         $actionlog->LogAccess($folder, null);
         
         $parent = $folder->GetParent();
         if ($parent === null || $parent->GetOwner() !== $account)
-            throw new ItemAccessDeniedException();
+            throw new Exceptions\ItemAccessDeniedException();
             
         if ($params->GetOptParam('recursive',false)->GetBool())
         {
@@ -844,10 +819,10 @@ class FilesApp extends BaseApp
         $parent = $access->GetFolder(); $share = $access->GetShare();
         
         if (!$authenticator && !$parent->GetAllowPublicUpload())
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
         
         if ($share !== null && !$share->CanUpload()) 
-            throw new ItemAccessDeniedException();
+            throw new Exceptions\ItemAccessDeniedException();
 
         $name = $params->GetParam('name')->GetFSName();
         
@@ -897,10 +872,10 @@ class FilesApp extends BaseApp
         $itemobj = $access->GetItem(); $share = $access->GetShare();
         
         if (!$authenticator && !$itemobj->GetAllowPublicModify())
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
         
         if ($share !== null && !$share->CanModify())
-            throw new ItemAccessDeniedException();
+            throw new Exceptions\ItemAccessDeniedException();
         
         if ($actionlog && $actionlog->isFullDetails()) 
             $actionlog->LogDetails('item', $itemobj->TryGetClientObject());
@@ -948,7 +923,7 @@ class FilesApp extends BaseApp
         $account = ($authenticator === null) ? null : $authenticator->GetAccount();
         
         if ($item instanceof RootFolder && (!$account || !$item->isFSOwnedBy($account)))
-            throw new ItemAccessDeniedException();
+            throw new Exceptions\ItemAccessDeniedException();
         
         $name = $params->GetParam('name')->GetFSName();
         $overwrite = $params->GetOptParam('overwrite',false)->GetBool();
@@ -960,10 +935,10 @@ class FilesApp extends BaseApp
         if ($copy)
         {
             if (!$authenticator && !$parent->GetAllowPublicUpload())
-                throw new AuthenticationFailedException();
+                throw new Exceptions\AuthenticationFailedException();
             
             if ($pshare !== null && !$pshare->CanUpload())
-                throw new ItemAccessDeniedException();
+                throw new Exceptions\ItemAccessDeniedException();
             
             $owner = ($share !== null && !$share->KeepOwner()) ? $parent->GetOwner() : $account;            
             
@@ -972,10 +947,10 @@ class FilesApp extends BaseApp
         else
         {
             if (!$authenticator && !$parent->GetAllowPublicModify())
-                throw new AuthenticationFailedException();
+                throw new Exceptions\AuthenticationFailedException();
             
             if ($share !== null && !$share->CanModify()) 
-                throw new ItemAccessDeniedException();
+                throw new Exceptions\ItemAccessDeniedException();
             
             $retitem = $item->SetName($name, $overwrite);
         }
@@ -1023,10 +998,10 @@ class FilesApp extends BaseApp
         $parent = $paccess->GetFolder(); $pshare = $paccess->GetShare();
         
         if (!$authenticator && !$parent->GetAllowPublicUpload())
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
             
         if ($pshare !== null && !$pshare->CanUpload()) 
-            throw new ItemAccessDeniedException();
+            throw new Exceptions\ItemAccessDeniedException();
         
         $overwrite = $params->GetOptParam('overwrite',false)->GetBool();
         $account = ($authenticator === null) ? null : $authenticator->GetAccount();
@@ -1043,10 +1018,10 @@ class FilesApp extends BaseApp
         else 
         {
             if (!$authenticator && !$item->GetAllowPublicModify())
-                throw new AuthenticationFailedException();
+                throw new Exceptions\AuthenticationFailedException();
             
             if ($share !== null && !$share->CanModify()) 
-                throw new ItemAccessDeniedException();
+                throw new Exceptions\ItemAccessDeniedException();
             
             $owner = $item->GetOwner(); $retobj = $item->SetParent($parent, $overwrite);
         }
@@ -1084,7 +1059,7 @@ class FilesApp extends BaseApp
     private function LikeItem(string $class, string $key, SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : ?array
     {
         if ($authenticator === null) 
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
         $account = $authenticator->GetAccount();
         
         $id = $params->GetParam($key,SafeParams::PARAMLOG_NEVER)->GetRandstr();
@@ -1092,7 +1067,7 @@ class FilesApp extends BaseApp
         $item = $access->GetItem(); $share = $access->GetShare();
         
         if ($share !== null && !$share->CanSocial()) 
-            throw new ItemAccessDeniedException();
+            throw new Exceptions\ItemAccessDeniedException();
         
         $value = $params->GetOptParam('value',true)->GetNullBool();
         
@@ -1131,7 +1106,7 @@ class FilesApp extends BaseApp
     private function TagItem(string $class, string $key, SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : array
     {
         if ($authenticator === null) 
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
         $account = $authenticator->GetAccount();
         
         $tag = $params->GetParam('tag')->CheckLength(127)->GetAlphanum();
@@ -1141,7 +1116,7 @@ class FilesApp extends BaseApp
         $itemobj = $access->GetItem(); $share = $access->GetShare();
         
         if ($share !== null && !$share->CanModify()) 
-            throw new ItemAccessDeniedException();
+            throw new Exceptions\ItemAccessDeniedException();
         
         $tagobj = Tag::Create($this->database, $account, $itemobj, $tag);
         
@@ -1159,18 +1134,18 @@ class FilesApp extends BaseApp
     protected function DeleteTag(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : void
     {
         if ($authenticator === null) 
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
         
         $id = $params->GetParam('tag',SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
         $tag = Tag::TryLoadByID($this->database, $id);
-        if ($tag === null) throw new UnknownItemException();
+        if ($tag === null) throw new Exceptions\UnknownItemException();
 
         $access = $this->AuthenticateItemObjAccess($params, $authenticator, $actionlog, $tag->GetItem());
         
         $share = $access->GetShare();
         
         if ($share !== null && !$share->CanModify()) 
-            throw new ItemAccessDeniedException();
+            throw new Exceptions\ItemAccessDeniedException();
         
         if ($actionlog && $actionlog->isFullDetails()) 
             $actionlog->LogDetails('tag', $tag->GetClientObject());
@@ -1208,7 +1183,7 @@ class FilesApp extends BaseApp
     private function CommentItem(string $class, string $key, SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : array
     {
         if ($authenticator === null) 
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
         $account = $authenticator->GetAccount();
         
         $id = $params->GetParam($key,SafeParams::PARAMLOG_NEVER)->GetRandstr();
@@ -1216,7 +1191,7 @@ class FilesApp extends BaseApp
         $item = $access->GetItem(); $share = $access->GetShare();
         
         if ($share !== null && !$share->CanSocial()) 
-            throw new ItemAccessDeniedException();
+            throw new Exceptions\ItemAccessDeniedException();
         
         $comment = $params->GetParam('comment')->GetHTMLText();
         $cobj = Comment::Create($this->database, $account, $item, $comment);
@@ -1236,13 +1211,13 @@ class FilesApp extends BaseApp
     protected function EditComment(SafeParams $params, ?Authenticator $authenticator) : array
     {
         if ($authenticator === null) 
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
         $account = $authenticator->GetAccount();
                 
         $id = $params->GetParam('commentid',SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
         
         $cobj = Comment::TryLoadByAccountAndID($this->database, $account, $id);
-        if ($cobj === null) throw new UnknownItemException();
+        if ($cobj === null) throw new Exceptions\UnknownItemException();
         
         if ($params->HasParam('comment')) 
             $cobj->SetComment($params->GetParam('comment')->GetHTMLText());
@@ -1258,13 +1233,13 @@ class FilesApp extends BaseApp
     protected function DeleteComment(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : void
     {
         if ($authenticator === null) 
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
         $account = $authenticator->GetAccount();
         
         $id = $params->GetParam('commentid',SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
         
         $cobj = Comment::TryLoadByAccountAndID($this->database, $account, $id);
-        if ($cobj === null) throw new UnknownItemException();
+        if ($cobj === null) throw new Exceptions\UnknownItemException();
         
         if ($actionlog && $actionlog->isFullDetails()) 
             $actionlog->LogDetails('comment', $cobj->GetClientObject());
@@ -1302,7 +1277,7 @@ class FilesApp extends BaseApp
         $item = $access->GetItem(); $share = $access->GetShare();
         
         if ($share !== null && !$share->CanRead()) 
-            throw new ItemAccessDeniedException();
+            throw new Exceptions\ItemAccessDeniedException();
         
         $limit = $params->GetOptParam('limit',null)->GetNullUint();
         $offset = $params->GetOptParam('offset',null)->GetNullUint();
@@ -1342,7 +1317,7 @@ class FilesApp extends BaseApp
         $item = $access->GetItem(); $share = $access->GetShare();
         
         if ($share !== null && !$share->CanRead()) 
-            throw new ItemAccessDeniedException();
+            throw new Exceptions\ItemAccessDeniedException();
         
         $limit = $params->GetOptParam('limit',null)->GetNullUint();
         $offset = $params->GetOptParam('offset',null)->GetNullUint();
@@ -1385,7 +1360,7 @@ class FilesApp extends BaseApp
     private function ShareItem(string $class, string $key, SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : array
     {
         if ($authenticator === null) 
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
         $account = $authenticator->GetAccount();
         
         $item = $params->GetParam($key,SafeParams::PARAMLOG_NEVER)->GetRandstr();
@@ -1393,10 +1368,10 @@ class FilesApp extends BaseApp
         
         $oldshare = $access->GetShare(); $item = $access->GetItem();
         if ($oldshare !== null && !$oldshare->CanReshare())
-            throw new ItemAccessDeniedException();
+            throw new Exceptions\ItemAccessDeniedException();
         
         if (!$item->GetAllowItemSharing($account))
-            throw new ItemSharingDisabledException();
+            throw new Exceptions\ItemSharingDisabledException();
         
         $islink = $params->GetOptParam('link',false)->GetBool();
         
@@ -1408,25 +1383,25 @@ class FilesApp extends BaseApp
                 $acctid = $params->GetParam('account')->GetRandstr();
                 
                 if (($dest = Account::TryLoadByID($this->database, $acctid)) === null)
-                    throw new UnknownAccountException();
+                    throw new Exceptions\UnknownAccountException();
             }
             else if ($params->HasParam('group'))
             {
                 $groupid = $params->GetParam('group')->GetRandstr();
                 
                 if (!$item->GetAllowShareToGroups($account))
-                    throw new ShareTargetDisabledException();
+                    throw new Exceptions\ShareTargetDisabledException();
                     
                 if (($dest = Group::TryLoadByID($this->database, $groupid)) === null)
-                    throw new UnknownGroupException();
+                    throw new Exceptions\UnknownGroupException();
             }
             else if ($params->GetOptParam('everyone',false)->GetBool())
             {
                 if (!$item->GetAllowShareToEveryone($account))
-                    throw new ShareTargetDisabledException();
+                    throw new Exceptions\ShareTargetDisabledException();
                 else $dest = null;
             }
-            else throw new InvalidShareTargetException();
+            else throw new Exceptions\InvalidShareTargetException();
             
             $share = Share::Create($this->database, $account, $item, $dest);
         }
@@ -1440,7 +1415,7 @@ class FilesApp extends BaseApp
         if ($islink && $params->HasParam('email'))
         {
             if (!Limits\AccountTotal::LoadByAccount($this->database, $account, true)->GetAllowEmailShare())
-                throw new EmailShareDisabledException();
+                throw new Exceptions\EmailShareDisabledException();
             
             $email = $params->GetParam('email')->GetEmail();
                 
@@ -1450,7 +1425,7 @@ class FilesApp extends BaseApp
             $body = implode("<br />",array_map(function(Share $share)
             {                
                 $url = $this->GetConfig()->GetAPIUrl();
-                if (!$url) throw new ShareURLGenerateException();
+                if (!$url) throw new Exceptions\ShareURLGenerateException();
                 
                 $cmd = (new Input('files','download'))->AddParam('sid',$share->ID())->AddParam('skey',$share->GetAuthKey());
                 
@@ -1478,17 +1453,17 @@ class FilesApp extends BaseApp
     protected function EditShare(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : array
     {
         if ($authenticator === null) 
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
         $account = $authenticator->GetAccount();
         
         $share = Share::TryLoadByID($this->database, 
             $params->GetParam('share',SafeParams::PARAMLOG_ALWAYS)->GetRandstr());
-        if ($share === null) throw new UnknownItemException();        
+        if ($share === null) throw new Exceptions\UnknownItemException();        
         
         // allowed to edit the share if you have owner level access to the item, or own the share
         $origshare = $this->AuthenticateItemObjAccess($params, $authenticator, $actionlog, $share->GetItem())->GetShare();
         if ($origshare !== null && $share->GetOwner() !== $account)
-            throw new ItemAccessDeniedException();
+            throw new Exceptions\ItemAccessDeniedException();
         
         return $share->SetOptions($params, $origshare)->GetClientObject();
     }
@@ -1502,19 +1477,19 @@ class FilesApp extends BaseApp
     protected function DeleteShare(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : void
     {
         if ($authenticator === null) 
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
         $account = $authenticator->GetAccount();
         
         $share = Share::TryLoadByID($this->database,
             $params->GetParam('share',SafeParams::PARAMLOG_ALWAYS)->GetRandstr());
-        if ($share === null) throw new UnknownItemException();
+        if ($share === null) throw new Exceptions\UnknownItemException();
 
         // if you don't own the share, you must have owner-level access to the item        
         if ($share->GetOwner() !== $account)
         {
             if ($this->AuthenticateItemObjAccess($params, $authenticator, $actionlog,
                     $share->GetItem())->GetShare() !== null)
-                throw new ItemAccessDeniedException();
+                throw new Exceptions\ItemAccessDeniedException();
         }
         
         if ($actionlog && $actionlog->isFullDetails()) 
@@ -1548,7 +1523,7 @@ class FilesApp extends BaseApp
     protected function GetShares(SafeParams $params, ?Authenticator $authenticator) : array
     {
         if ($authenticator === null) 
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
         $account = $authenticator->GetAccount();
         
         $mine = $params->GetOptParam('mine',false)->GetBool();
@@ -1575,7 +1550,7 @@ class FilesApp extends BaseApp
     protected function GetAdopted(?Authenticator $authenticator) : array
     {
         if ($authenticator === null) 
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
         $account = $authenticator->GetAccount();
         
         $files = File::LoadAdoptedByOwner($this->database, $account);
@@ -1597,7 +1572,7 @@ class FilesApp extends BaseApp
     protected function GetFilesystem(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : array
     {
         if ($authenticator === null) 
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
         $account = $authenticator->GetAccount();
         
         if ($params->HasParam('filesystem'))
@@ -1608,7 +1583,7 @@ class FilesApp extends BaseApp
         else $filesystem = FSManager::LoadDefaultByAccount($this->database, $account);
         
         if ($filesystem === null) 
-            throw new UnknownFilesystemException();
+            throw new Exceptions\UnknownFilesystemException();
 
         if ($actionlog) $actionlog->LogDetails('filesystem',$filesystem->ID());
         
@@ -1628,7 +1603,7 @@ class FilesApp extends BaseApp
     protected function GetFilesystems(SafeParams $params, ?Authenticator $authenticator) : array
     {
         if ($authenticator === null) 
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
         $account = $authenticator->GetAccount();
 
         if ($params->GetOptParam('everyone',false)->GetBool())
@@ -1658,14 +1633,14 @@ class FilesApp extends BaseApp
         $params = $input->GetParams();
         
         if ($authenticator === null) 
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
         $account = $authenticator->GetAccount();
         
         $global = $params->GetOptParam('global',false)->GetBool();
         if ($global) $authenticator->RequireAdmin();
 
         if (!Limits\AccountTotal::LoadByAccount($this->database, $account, true)->GetAllowUserStorage() && !$global)
-            throw new UserStorageDisabledException();
+            throw new Exceptions\UserStorageDisabledException();
             
         $filesystem = FSManager::Create($this->database, $input, $global ? null : $account);
         
@@ -1686,7 +1661,7 @@ class FilesApp extends BaseApp
         $params = $input->GetParams();
         
         if ($authenticator === null) 
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
         $account = $authenticator->GetAccount();
         
         $fsid = $params->GetParam('filesystem',SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
@@ -1696,7 +1671,7 @@ class FilesApp extends BaseApp
         else $filesystem = FSManager::TryLoadByAccountAndID($this->database, $account, $fsid);
         
         if ($filesystem === null) 
-            throw new UnknownFilesystemException();
+            throw new Exceptions\UnknownFilesystemException();
 
         return $filesystem->Edit($input)->GetClientObject(true);
     }
@@ -1709,7 +1684,7 @@ class FilesApp extends BaseApp
     protected function DeleteFilesystem(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : void
     {
         if ($authenticator === null) 
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
         
         $authenticator->RequirePassword();
         $account = $authenticator->GetAccount();
@@ -1721,7 +1696,7 @@ class FilesApp extends BaseApp
         else $filesystem = FSManager::TryLoadByAccountAndID($this->database, $account, $fsid);
         
         if ($filesystem === null)
-            throw new UnknownFilesystemException();
+            throw new Exceptions\UnknownFilesystemException();
         
         $unlink = $params->GetOptParam('unlink',false)->GetBool();
         
@@ -1754,32 +1729,32 @@ class FilesApp extends BaseApp
             if (($group = $params->GetParam('group',SafeParams::PARAMLOG_ALWAYS)->GetNullRandstr()) !== null)
             {
                 $obj = Group::TryLoadByID($this->database, $group);
-                if ($obj === null) throw new UnknownGroupException();
+                if ($obj === null) throw new Exceptions\UnknownGroupException();
             }
             
             $class = $timed ? Limits\GroupTimed::class : Limits\GroupTotal::class; 
             
-            $full = true; if (!$admin) throw new UnknownGroupException();
+            $full = true; if (!$admin) throw new Exceptions\UnknownGroupException();
         }
         else if ($params->HasParam('account'))
         {
             if (($account = $params->GetParam('account',SafeParams::PARAMLOG_ALWAYS)->GetNullRandstr()) !== null)
             {
                 $obj = Account::TryLoadByID($this->database, $account);
-                if ($obj === null) throw new UnknownAccountException();
+                if ($obj === null) throw new Exceptions\UnknownAccountException();
             }
             
             $class = $timed ? Limits\AccountTimed::class : Limits\AccountTotal::class;
 
             $full = $admin; if (!$admin && $obj !== $authenticator->GetAccount()) 
-                throw new UnknownAccountException();
+                throw new Exceptions\UnknownAccountException();
         }
         else if ($params->HasParam('filesystem'))
         {
             if (($filesystem = $params->GetParam('filesystem',SafeParams::PARAMLOG_ALWAYS)->GetNullRandstr()) !== null)
             {
                 $obj = FSManager::TryLoadByID($this->database, $filesystem);
-                if ($obj === null) throw new UnknownFilesystemException();
+                if ($obj === null) throw new Exceptions\UnknownFilesystemException();
             }
             
             $class = $timed ? Limits\FilesystemTimed::class : Limits\FilesystemTotal::class;
@@ -1788,7 +1763,7 @@ class FilesApp extends BaseApp
             
             // non-admins can view a subset of total info (feature config) for global filesystems
             if (!$full && ($timed || ($obj->GetOwnerID() !== null))) 
-                throw new UnknownFilesystemException();
+                throw new Exceptions\UnknownFilesystemException();
         }
         else if ($allowAuto) 
         {
@@ -1796,10 +1771,10 @@ class FilesApp extends BaseApp
             
             $class = $timed ? Limits\AccountTimed::class : Limits\AccountTotal::class;
         }
-        else throw new UnknownObjectException();
+        else throw new Exceptions\UnknownObjectException();
         
         // a null flag means admin wants to see all of that category
-        if ($obj === null && (!$allowMany || !$admin)) throw new UnknownObjectException();
+        if ($obj === null && (!$allowMany || !$admin)) throw new Exceptions\UnknownObjectException();
         
         return array('obj'=>$obj, 'class'=>$class, 'full'=>$full);
     }
@@ -1816,7 +1791,7 @@ class FilesApp extends BaseApp
     protected function GetLimits(SafeParams $params, ?Authenticator $authenticator) : ?array
     {
         if ($authenticator === null) 
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
         
         $lobj = $this->GetLimitObject($params, $authenticator, true, true, false);
         $class = $lobj['class']; $obj = $lobj['obj']; $full = $lobj['full'];
@@ -1849,7 +1824,7 @@ class FilesApp extends BaseApp
     protected function GetTimedLimits(SafeParams $params, ?Authenticator $authenticator) : array
     {
         if ($authenticator === null) 
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
         
         $lobj = $this->GetLimitObject($params, $authenticator, true, true, true);
         $class = $lobj['class']; $obj = $lobj['obj']; $full = $lobj['full']; // TODO replace this with a class
@@ -1881,7 +1856,7 @@ class FilesApp extends BaseApp
     protected function GetTimedStatsFor(SafeParams $params, ?Authenticator $authenticator) : ?array
     {
         if ($authenticator === null) 
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
         
         $lobj = $this->GetLimitObject($params, $authenticator, true, false, true);
         $class = $lobj['class']; $obj = $lobj['obj'];
@@ -1910,7 +1885,7 @@ class FilesApp extends BaseApp
     protected function GetTimedStatsAt(SafeParams $params, ?Authenticator $authenticator) : ?array
     {
         if ($authenticator === null) 
-            throw new AuthenticationFailedException();
+            throw new Exceptions\AuthenticationFailedException();
         
         $period = $params->GetParam('timeperiod')->GetUint();
         $attime = $params->GetParam('matchtime')->GetUint();
@@ -1953,7 +1928,7 @@ class FilesApp extends BaseApp
     protected function ConfigLimits(SafeParams $params, ?Authenticator $authenticator) : array
     {
         if ($authenticator === null)
-            throw new AdminRequiredException();
+            throw new Exceptions\AdminRequiredException();
         $authenticator->RequireAdmin();
         
         $lobj = $this->GetLimitObject($params, $authenticator, false, false, false);
@@ -1972,7 +1947,7 @@ class FilesApp extends BaseApp
     protected function ConfigTimedLimits(SafeParams $params, ?Authenticator $authenticator) : array
     {
         if ($authenticator === null) 
-            throw new AdminRequiredException();
+            throw new Exceptions\AdminRequiredException();
         $authenticator->RequireAdmin();
         
         $lobj = $this->GetLimitObject($params, $authenticator, false, false, true);
@@ -1989,7 +1964,7 @@ class FilesApp extends BaseApp
     protected function PurgeLimits(SafeParams $params, ?Authenticator $authenticator) : void
     {
         if ($authenticator === null) 
-            throw new AdminRequiredException();
+            throw new Exceptions\AdminRequiredException();
         $authenticator->RequireAdmin();
         
         $lobj = $this->GetLimitObject($params, $authenticator, false, false, false);
@@ -2006,7 +1981,7 @@ class FilesApp extends BaseApp
     protected function PurgeTimedLimits(SafeParams $params, ?Authenticator $authenticator) : void
     {
         if ($authenticator === null) 
-            throw new AdminRequiredException();
+            throw new Exceptions\AdminRequiredException();
         $authenticator->RequireAdmin();
         
         $lobj = $this->GetLimitObject($params, $authenticator, false, false, true);

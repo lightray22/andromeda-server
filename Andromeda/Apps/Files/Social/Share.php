@@ -4,13 +4,6 @@ use Andromeda\Core\Utilities;
 use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, QueryBuilder};
 use Andromeda\Core\IOFormat\SafeParams;
 
-require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
-require_once(ROOT."/Apps/Accounts/Groups/Group.php"); use Andromeda\Apps\Accounts\Groups\Group;
-require_once(ROOT."/Apps/Accounts/Crypto/AuthObject.php"); use Andromeda\Apps\Accounts\AuthObject;
-require_once(ROOT."/Apps/Accounts/Groups/GroupStuff.php"); use Andromeda\Apps\Accounts\{AuthEntity, GroupJoin};
-
-require_once(ROOT."/Apps/Files/Exceptions.php");
-
 /**
  * A share granting access to an item
  *
@@ -95,7 +88,7 @@ class Share extends BaseObject
     /** Sets the share's access date to now and increments the access counter */
     public function SetAccessed() : self 
     {
-        if ($this->IsExpired()) throw new ShareExpiredException();
+        if ($this->IsExpired()) throw new Exceptions\ShareExpiredException();
         return $this->SetDate('accessed')->DeltaCounter('accessed');
     }
 
@@ -109,14 +102,14 @@ class Share extends BaseObject
      */
     public static function Create(ObjectDatabase $database, Account $owner, Item $item, ?AuthEntity $dest) : self
     {
-        if ($item->isWorldAccess()) throw new SharePublicItemException();
+        if ($item->isWorldAccess()) throw new Exceptions\SharePublicItemException();
         
         $q = new QueryBuilder(); $w = $q->And(
             $q->IsNull('authkey'), $q->Equals('owner',$owner->ID()),
             $q->Equals('item',FieldTypes\ObjectPoly::GetObjectDBValue($item)),
             $q->Equals('dest',FieldTypes\ObjectPoly::GetObjectDBValue($dest)));
             
-        if (static::TryLoadUniqueByQuery($database, $q->Where($w)) !== null) throw new ShareExistsException(); 
+        if (static::TryLoadUniqueByQuery($database, $q->Where($w)) !== null) throw new Exceptions\ShareExistsException(); 
         
         return static::BaseCreate($database,false)->SetObject('owner',$owner)->SetObject('item',$item->CountShare())->SetObject('dest',$dest);
     }

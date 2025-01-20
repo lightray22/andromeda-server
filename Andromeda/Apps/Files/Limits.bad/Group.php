@@ -3,14 +3,6 @@
 use Andromeda\Core\Database\{BaseObject, ObjectDatabase, QueryBuilder};
 use Andromeda\Core\IOFormat\{SafeParam, SafeParams};
 
-require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
-require_once(ROOT."/Apps/Accounts/Groups/Group.php"); use Andromeda\Apps\Accounts\Groups\Group;
-require_once(ROOT."/Apps/Accounts/Groups/GroupStuff.php"); use Andromeda\Apps\Accounts\Groups\GroupJoin;
-
-require_once(ROOT."/Apps/Files/Limits/Total.php");
-require_once(ROOT."/Apps/Files/Limits/Timed.php");
-require_once(ROOT."/Apps/Files/Limits/AuthObj.php");
-
 interface IGroupCommon 
 { 
     /** Track stats for component accounts by inheriting this property */

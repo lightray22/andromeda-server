@@ -3,11 +3,6 @@
 use Andromeda\Core\Database\{FieldTypes, ObjectDatabase, QueryBuilder};
 use Andromeda\Core\IOFormat\InputPath;
 
-require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
-
-require_once(ROOT."/Apps/Files/Item.php");
-require_once(ROOT."/Apps/Files/Folder.php");
-
 /** 
  * Defines a user-stored file 
  * 
@@ -198,7 +193,7 @@ class File extends Item
         $parent->Refresh(true);
         
         $file = static::TryLoadByParentAndName($database, $parent, $name);
-        if ($file !== null && !$overwrite) throw new DuplicateItemException();
+        if ($file !== null && !$overwrite) throw new Exceptions\DuplicateItemException();
         
         return $file ?? static::NotifyCreate($database, $parent, $account, $name);
     }
@@ -328,7 +323,7 @@ class File extends Item
     public function GetClientObject(bool $owner = false, bool $details = false) : array
     {
         $retval = $this->TryGetClientObject($owner,$details);
-        if ($retval === null) throw new DeletedByStorageException();
+        if ($retval === null) throw new Exceptions\DeletedByStorageException();
         else return $retval;
     }
     

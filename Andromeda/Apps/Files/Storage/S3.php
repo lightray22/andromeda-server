@@ -5,14 +5,6 @@ use Andromeda\Core\Database\{FieldTypes, ObjectDatabase};
 use Andromeda\Core\Errors\ErrorManager;
 use Andromeda\Core\IOFormat\{Input, SafeParams};
 
-require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
-require_once(ROOT."/Apps/Accounts/Crypto/FieldCrypt.php"); use Andromeda\Apps\Accounts\Crypto\OptFieldCrypt;
-
-require_once(ROOT."/Apps/Files/Filesystem/FSManager.php"); use Andromeda\Apps\Files\Filesystem\FSManager;
-require_once(ROOT."/Apps/Files/Storage/Exceptions.php");
-require_once(ROOT."/Apps/Files/Storage/FWrapper.php");
-require_once(ROOT."/Apps/Files/Storage/Traits.php");
-
 Account::RegisterCryptoHandler(function(ObjectDatabase $database, Account $account, bool $init){ 
     if (!$init) S3::DecryptAccount($database, $account); });
 
@@ -136,7 +128,7 @@ class S3 extends S3Base
     /** Checks for the SMB client extension */
     public function PostConstruct() : void
     {
-        if (!class_exists('\\Aws\\S3\\S3Client')) throw new S3AwsSdkException();
+        if (!class_exists('\\Aws\\S3\\S3Client')) throw new Exceptions\S3AwsSdkException();
     }
     
     public function Activate() : self
@@ -186,7 +178,7 @@ class S3 extends S3Base
         \Aws\S3\StreamWrapper::Register($this->s3, $this->streamID);
         
         if (!is_readable($this->GetFullURL()))
-            throw new S3ConnectException();
+            throw new Exceptions\S3ConnectException();
         
         return $this;
     }
@@ -239,7 +231,7 @@ class S3 extends S3Base
     protected function SubReadFolder(string $path = "") : array
     {
         if (!$this->isFolder($path))
-            throw new FoldersUnsupportedException();
+            throw new Exceptions\FoldersUnsupportedException();
             
         else return parent::SubReadFolder('');
     } 
@@ -264,7 +256,7 @@ class S3 extends S3Base
             ErrorManager::GetInstance()->LogDebugInfo(array(
                 'read'=>strlen($data), 'wanted'=>$length));
             
-            throw new FileReadFailedException();
+            throw new Exceptions\FileReadFailedException();
         }
         
         return $data;
@@ -273,14 +265,14 @@ class S3 extends S3Base
     protected static function supportsReadWrite() : bool { return false; }
     protected static function supportsSeekReuse() : bool { return false; }
     
-    protected function OpenReadHandle(string $path){ throw new FileOpenFailedException(); }
-    protected function OpenWriteHandle(string $path){  throw new FileOpenFailedException(); }
+    protected function OpenReadHandle(string $path){ throw new Exceptions\FileOpenFailedException(); }
+    protected function OpenWriteHandle(string $path){  throw new Exceptions\FileOpenFailedException(); }
     
     protected function OpenContext(string $path, int $offset, bool $isWrite) : FileContext
     {
-        if (!$isWrite) throw new FileReadFailedException();
+        if (!$isWrite) throw new Exceptions\FileReadFailedException();
         
-        if ($offset) throw new S3ModifyException();
+        if ($offset) throw new Exceptions\S3ModifyException();
         
         $handle = fopen($this->GetFullURL($path),'w');
         
@@ -296,5 +288,5 @@ class S3 extends S3Base
         $this->GetContext($path, 0, true); return $this;
     }
     
-    protected function SubTruncate(string $path, int $length) : self { throw new S3ModifyException(); }    
+    protected function SubTruncate(string $path, int $length) : self { throw new Exceptions\S3ModifyException(); }    
 }

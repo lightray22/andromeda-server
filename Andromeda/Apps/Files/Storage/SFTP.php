@@ -3,11 +3,6 @@
 use Andromeda\Core\Database\{FieldTypes, ObjectDatabase};
 use Andromeda\Core\IOFormat\{Input, SafeParams};
 
-require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
-require_once(ROOT."/Apps/Files/Filesystem/FSManager.php"); use Andromeda\Apps\Files\Filesystem\FSManager;
-require_once(ROOT."/Apps/Files/Storage/Exceptions.php");
-require_once(ROOT."/Apps/Files/Storage/FWrapper.php");
-
 Account::RegisterCryptoHandler(function(ObjectDatabase $database, Account $account, bool $init){ 
     if (!$init) SFTP::DecryptAccount($database, $account); });
 
@@ -129,7 +124,7 @@ class SFTP extends SFTPBase2
             
             $cached = $this->TryGetHostKey();
             if ($cached === null) $this->SetHostKey($hostkey);
-            else if ($cached !== $hostkey) throw new HostKeyMismatchException();            
+            else if ($cached !== $hostkey) throw new Exceptions\HostKeyMismatchException();            
         }
         catch (BaseExceptions\PHPError $e) { throw SSHConnectionFailure::Append($e); }
 
@@ -148,7 +143,7 @@ class SFTP extends SFTPBase2
                 $sftp->login($username, $privkey);
             }
     
-            if (!$sftp->isAuthenticated()) throw new SSHAuthenticationFailure();
+            if (!$sftp->isAuthenticated()) throw new Exceptions\SSHAuthenticationFailure();
         }
         catch (\RuntimeException $e) { throw SSHAuthenticationFailure::Copy($e); }
         
@@ -168,7 +163,7 @@ class SFTP extends SFTPBase2
         $mode = \phpseclib3\Net\SFTP::SOURCE_LOCAL_FILE;
         
         if (!$this->sftp->put($this->GetPath($dest), $src, $mode))   
-            throw new FileCreateFailedException();
+            throw new Exceptions\FileCreateFailedException();
             
         return $this;
     }

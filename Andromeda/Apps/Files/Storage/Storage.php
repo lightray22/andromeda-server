@@ -5,11 +5,6 @@ use Andromeda\Core\Errors\ErrorManager;
 use Andromeda\Core\IOFormat\Input;
 use Andromeda\Core\Utilities;
 
-require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
-
-require_once(ROOT."/Apps/Files/Filesystem/FSManager.php"); use Andromeda\Apps\Files\Filesystem\FSManager;
-require_once(ROOT."/Apps/Files/Storage/Exceptions.php");
-
 /** Class representing a stat result */
 class ItemStat
 {
@@ -122,7 +117,7 @@ abstract class Storage extends BaseObject // TODO was StandardObject
     public function canGetFreeSpace() : bool { return false; }
     
     /** Returns the available space in bytes on the storage */
-    public function GetFreeSpace() : int { throw new FreeSpaceFailedException(); }
+    public function GetFreeSpace() : int { throw new Exceptions\FreeSpaceFailedException(); }
 
     /** Activates the storage by making any required connections */
     public abstract function Activate() : self;
@@ -155,10 +150,10 @@ abstract class Storage extends BaseObject // TODO was StandardObject
     protected function AssertNotReadOnly() : self
     {
         if ($this->GetFilesystem()->isReadOnly())
-            throw new ReadOnlyException();
+            throw new Exceptions\ReadOnlyException();
         
         if ($this->GetApiPackage()->GetConfig()->isReadOnly())
-            throw new ReadOnlyException();
+            throw new Exceptions\ReadOnlyException();
         
         return $this;
     }

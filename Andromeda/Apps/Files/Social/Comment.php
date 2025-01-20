@@ -2,8 +2,6 @@
 
 use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, QueryBuilder};
 
-require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
-
 /** A user comment on an item */
 class Comment extends BaseObject // TODO was StandardObject
 {

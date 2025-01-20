@@ -1,9 +1,7 @@
 <?php declare(strict_types=1); namespace Andromeda\Apps\Files; if (!defined('Andromeda')) die();
 
 use Andromeda\Core\Database\ObjectDatabase;
-
-require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
-require_once(ROOT."/Apps/Files/Folder.php");
+use Andromeda\Apps\Accounts\Account;
 
 /** A subfolder has a parent */
 class SubFolder extends Folder
@@ -98,7 +96,7 @@ class SubFolder extends Folder
     public static function Create(ObjectDatabase $database, Folder $parent, ?Account $account, string $name) : self
     {
         $folder = static::TryLoadByParentAndName($database, $parent, $name);
-        if ($folder !== null) throw new DuplicateItemException();
+        if ($folder !== null) throw new Exceptions\DuplicateItemException();
 
         $folder = static::NotifyCreate($database, $parent, $account, $name);
         

@@ -4,11 +4,9 @@ use Andromeda\Core\Database\ObjectDatabase;
 use Andromeda\Core\Errors\BaseExceptions;
 use Andromeda\Core\IOFormat\SafeParams;
 
-require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
-require_once(ROOT."/Apps/Accounts/Authenticator.php"); use Andromeda\Apps\Accounts\Authenticator;
-require_once(ROOT."/Apps/Accounts/Exceptions.php"); use Andromeda\Apps\Accounts\AuthenticationFailedException;
-
-require_once(ROOT."/Apps/Files/Exceptions.php");
+use Andromeda\Apps\Accounts\Account;
+use Andromeda\Apps\Accounts\Authenticator;
+use Andromeda\Apps\Accounts\AuthenticationFailedException;
 
 /** 
  * Authenticator class that implements item access rules 
@@ -36,7 +34,7 @@ class ItemAccess
     public function GetFile() : File 
     {
         if (!is_a($this->item, File::class))
-            throw new UnknownItemException();
+            throw new Exceptions\UnknownItemException();
         return $this->item; 
     }
     
@@ -44,7 +42,7 @@ class ItemAccess
     public function GetFolder() : Folder 
     { 
         if (!is_a($this->item, Folder::class))
-            throw new UnknownItemException();
+            throw new Exceptions\UnknownItemException();
         return $this->item; 
     }
         
@@ -75,7 +73,7 @@ class ItemAccess
             $shareid = $params->GetParam('sid',SafeParams::PARAMLOG_NEVER)->GetRandstr();
             
             $share = Share::TryLoadByID($database, $shareid);
-            if ($share === null) throw new UnknownItemException();
+            if ($share === null) throw new Exceptions\UnknownItemException();
             
             $item ??= $share->GetItem();
             
@@ -84,33 +82,33 @@ class ItemAccess
                 $sharekey = $params->GetParam('skey',SafeParams::PARAMLOG_NEVER)->GetRandstr();
                 
                 if (!$share->AuthenticateByLink($sharekey, $item)) 
-                    throw new ItemAccessDeniedException();            
+                    throw new Exceptions\ItemAccessDeniedException();            
             }
             else 
             {
-                if ($authenticator === null) throw new AuthenticationFailedException();
+                if ($authenticator === null) throw new Exceptions\AuthenticationFailedException();
                 $account = $authenticator->GetAccount();
                 
                 if (!$share->Authenticate($account, $item))
-                    throw new ItemAccessDeniedException();
+                    throw new Exceptions\ItemAccessDeniedException();
             }
 
             if ($share->NeedsPassword() && !$share->CheckPassword($params->GetParam(
                     'spassword',SafeParams::PARAMLOG_NEVER)->GetRawString()))
-                throw new InvalidSharePasswordException();
+                throw new Exceptions\InvalidSharePasswordException();
         }
         else if ($item !== null)
         {
-            if ($authenticator === null) throw new AuthenticationFailedException();
+            if ($authenticator === null) throw new Exceptions\AuthenticationFailedException();
             $account = $authenticator->GetAccount();
             
             if ($item->GetOwner() !== $account && !static::ItemOwnerAccess($item, $account))
             {
-                throw new ItemAccessDeniedException();
+                throw new Exceptions\ItemAccessDeniedException();
             }
             else $share = null; // owner-access
         }
-        else throw new UnknownItemException();       
+        else throw new Exceptions\UnknownItemException();       
         
         if ($share) $share->SetAccessed();
 

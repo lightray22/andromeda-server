@@ -2,8 +2,6 @@
 
 use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, QueryBuilder};
 
-require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
-
 /** A category tag placed on an item */
 class Tag extends BaseObject // TODO was StandardObject
 {

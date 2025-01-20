@@ -3,10 +3,6 @@
 use Andromeda\Core\Database\ObjectDatabase;
 use Andromeda\Core\IOFormat\Input;
 
-require_once(ROOT."/Apps/Files/Filesystem/FSManager.php"); use Andromeda\Apps\Files\Filesystem\FSManager;
-require_once(ROOT."/Apps/Files/Storage/Exceptions.php");
-require_once(ROOT."/Apps/Files/Storage/FWrapper.php");
-
 abstract class LocalBase extends FWrapper { use BasePath; }
 
 /** 
@@ -22,7 +18,7 @@ class Local extends LocalBase
     {
         $account = $filesystem->GetOwner();
         if ($account && !$account->isAdmin()) 
-            throw new LocalNonAdminException();
+            throw new Exceptions\LocalNonAdminException();
         
         else return parent::Create($database, $input, $filesystem);
     }
@@ -34,7 +30,7 @@ class Local extends LocalBase
     public function GetFreeSpace() : int
     {
         $space = disk_free_space($this->GetPath());
-        if ($space === false) throw new FreeSpaceFailedException();
+        if ($space === false) throw new Exceptions\FreeSpaceFailedException();
         else return (int)$space;
     }
 
@@ -52,7 +48,7 @@ class Local extends LocalBase
         if (!$istemp) return parent::SubImportFile($src, $dest, $istemp);
         
         if (!rename($src, $this->GetFullURL($dest)))
-            throw new FileCreateFailedException();
+            throw new Exceptions\FileCreateFailedException();
         return $this;
     }
 }

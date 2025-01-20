@@ -3,13 +3,8 @@
 use Andromeda\Core\Database\{FieldTypes, ObjectDatabase};
 use Andromeda\Core\IOFormat\Input;
 
-require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
-require_once(ROOT."/Apps/Files/Filesystem/FSManager.php"); use Andromeda\Apps\Files\Filesystem\FSManager;
-require_once(ROOT."/Apps/Files/Storage/Exceptions.php");
-require_once(ROOT."/Apps/Files/Storage/FWrapper.php");
-
 Account::RegisterCryptoHandler(function(ObjectDatabase $database, Account $account, bool $init){ 
-    if (!$init) FTP::DecryptAccount($database, $account); });
+    if (!$init) FTP::DecryptAccount($database, $account); }); // TODO RAY !! move all these to FilesApp main
 
 abstract class FTPBase1 extends FWrapper { use BasePath; }
 abstract class FTPBase2 extends FTPBase1 { use UserPass; }
@@ -75,7 +70,7 @@ class FTP extends FTPBase2
     /** Check for the FTP extension */
     public function PostConstruct() : void
     {
-        if (!function_exists('ftp_connect')) throw new FTPExtensionException();
+        if (!function_exists('ftp_connect')) throw new Exceptions\FTPExtensionException();
     }
     
     /** The FTP connection resource */ private $ftp;
@@ -93,9 +88,9 @@ class FTP extends FTPBase2
             $ftp = ftp_ssl_connect($host, $port);
         else $ftp = ftp_connect($host, $port);
         
-        if (!$ftp) throw new FTPConnectionFailure();
+        if (!$ftp) throw new Exceptions\FTPConnectionFailure();
         
-        if (!ftp_login($ftp, $user, $pass)) throw new FTPAuthenticationFailure();
+        if (!ftp_login($ftp, $user, $pass)) throw new Exceptions\FTPAuthenticationFailure();
         
         ftp_pasv($ftp, true);
         
@@ -146,14 +141,14 @@ class FTP extends FTPBase2
     {        
         $list = ftp_nlist($this->ftp, $this->GetPath($path));
         // TODO PHP Note that this parameter isn't escaped so there may be some issues with filenames containing spaces and other characters. 
-        if ($list === false) throw new FolderReadFailedException();
+        if ($list === false) throw new Exceptions\FolderReadFailedException();
         return array_map(function($item){ return basename($item); }, $list); // TODO why is basename needed? check on . and .. behavior
     }    
     
     protected function SubCreateFolder(string $path) : self
     {
         if (!ftp_mkdir($this->ftp, $this->GetPath($path))) 
-            throw new FolderCreateFailedException();
+            throw new Exceptions\FolderCreateFailedException();
         else return $this;
     }
     
@@ -164,9 +159,9 @@ class FTP extends FTPBase2
         if ($this->isFile($path)) $this->SubDeleteFile($path);
         
         if (!($handle = fopen($this->GetFullURL($path),'w'))) 
-            throw new FileCreateFailedException();
+            throw new Exceptions\FileCreateFailedException();
         
-        if (!fclose($handle)) throw new FileCreateFailedException(); 
+        if (!fclose($handle)) throw new Exceptions\FileCreateFailedException(); 
         
         return $this;
     }
@@ -176,7 +171,7 @@ class FTP extends FTPBase2
         $this->ClosePath($dest);
         
         if (!ftp_put($this->ftp, $this->GetPath($dest), $src, FTP_BINARY))
-            throw new FileCreateFailedException();
+            throw new Exceptions\FileCreateFailedException();
         
         return $this;
     }
@@ -184,8 +179,8 @@ class FTP extends FTPBase2
     protected static function supportsReadWrite() : bool { return false; }
     protected static function supportsSeekReuse() : bool { return false; }
     
-    protected function OpenReadHandle(string $path){ throw new FileOpenFailedException(); }
-    protected function OpenWriteHandle(string $path){  throw new FileOpenFailedException(); }
+    protected function OpenReadHandle(string $path){ throw new Exceptions\FileOpenFailedException(); }
+    protected function OpenWriteHandle(string $path){  throw new Exceptions\FileOpenFailedException(); }
     
     protected function OpenContext(string $path, int $offset, bool $isWrite) : FileContext
     {
@@ -193,7 +188,7 @@ class FTP extends FTPBase2
         {
             $fsize = ftp_size($this->ftp, $this->GetPath($path));
             
-            if ($offset !== $fsize) throw new FTPAppendOnlyException();
+            if ($offset !== $fsize) throw new Exceptions\FTPAppendOnlyException();
             
             $handle = fopen($this->GetFullURL($path), 'a');
         }
@@ -204,7 +199,7 @@ class FTP extends FTPBase2
             $handle = fopen($this->GetFullURL($path), 'rb', false, $stropt);
         }
         
-        if (!$handle) throw new FileOpenFailedException();
+        if (!$handle) throw new Exceptions\FileOpenFailedException();
         
         return new FileContext($handle, $offset, $isWrite);
     }
@@ -214,7 +209,7 @@ class FTP extends FTPBase2
     {
         if (!$length) $this->DeleteFile($path)->CreateFile($path);
         else if (ftp_size($this->ftp, $this->GetPath($path)) !== $length)
-            throw new FTPAppendOnlyException();
+            throw new Exceptions\FTPAppendOnlyException();
         return $this;
     }    
     
@@ -223,14 +218,14 @@ class FTP extends FTPBase2
         $this->ClosePath($path);
         
         if (!ftp_delete($this->ftp, $this->GetPath($path)))
-            throw new FileDeleteFailedException();
+            throw new Exceptions\FileDeleteFailedException();
             else return $this;
     }
     
     protected function SubDeleteFolder(string $path) : self
     {
         if (!ftp_rmdir($this->ftp, $this->GetPath($path))) 
-            throw new FolderDeleteFailedException();
+            throw new Exceptions\FolderDeleteFailedException();
         else return $this;
     }
 
@@ -239,14 +234,14 @@ class FTP extends FTPBase2
         $this->ClosePath($old); $this->ClosePath($new);
         
         if (!ftp_rename($this->ftp, $this->GetPath($old), $this->GetPath($new)))
-            throw new FileRenameFailedException();
+            throw new Exceptions\FileRenameFailedException();
         return $this;
     }
     
     protected function SubRenameFolder(string $old, string $new) : self
     {
         if (!ftp_rename($this->ftp, $this->GetPath($old), $this->GetPath($new)))
-            throw new FolderRenameFailedException();
+            throw new Exceptions\FolderRenameFailedException();
         return $this;
     }
         
@@ -255,19 +250,19 @@ class FTP extends FTPBase2
         $this->ClosePath($old); $this->ClosePath($new);
         
         if (!ftp_rename($this->ftp, $this->GetPath($old), $this->GetPath($new)))
-            throw new FileMoveFailedException();
+            throw new Exceptions\FileMoveFailedException();
         return $this;
     }
     
     protected function SubMoveFolder(string $old, string $new) : self
     {
         if (!ftp_rename($this->ftp, $this->GetPath($old), $this->GetPath($new)))
-            throw new FolderMoveFailedException();
+            throw new Exceptions\FolderMoveFailedException();
         return $this;
     }
     
     protected function SubCopyFile(string $old, string $new) : self
     {
-        throw new FTPCopyFileException();
+        throw new Exceptions\FTPCopyFileException();
     }
 }

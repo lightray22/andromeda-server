@@ -3,12 +3,6 @@
 use Andromeda\Core\Database\{FieldTypes, ObjectDatabase};
 use Andromeda\Core\IOFormat\Input;
 
-require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
-
-require_once(ROOT."/Apps/Files/Filesystem/FSManager.php"); use Andromeda\Apps\Files\Filesystem\FSManager;
-require_once(ROOT."/Apps/Files/Storage/Exceptions.php");
-require_once(ROOT."/Apps/Files/Storage/FWrapper.php");
-
 Account::RegisterCryptoHandler(function(ObjectDatabase $database, Account $account, bool $init){ 
     if (!$init) SMB::DecryptAccount($database, $account); });
 
@@ -75,7 +69,7 @@ class SMB extends SMBBase2
     /** Checks for the SMB client extension */
     public function PostConstruct() : void
     {
-        if (!function_exists('smbclient_version')) throw new SMBExtensionException();
+        if (!function_exists('smbclient_version')) throw new Exceptions\SMBExtensionException();
     }
     
     private $state;
@@ -87,15 +81,15 @@ class SMB extends SMBBase2
         $state = smbclient_state_new();
         
         if (!is_resource($state) || smbclient_state_init($state) !== true)
-            throw new SMBStateInitException();
+            throw new Exceptions\SMBStateInitException();
         
         if (!smbclient_option_set($state, 
             SMBCLIENT_OPT_ENCRYPT_LEVEL, 
             SMBCLIENT_ENCRYPTLEVEL_REQUEST))
-            throw new SMBStateInitException();
+            throw new Exceptions\SMBStateInitException();
         
         if (!is_readable($this->GetFullURL()))
-            throw new SMBConnectException();
+            throw new Exceptions\SMBConnectException();
         
         $this->state = $state;
         
@@ -129,13 +123,13 @@ class SMB extends SMBBase2
         $this->ClosePath($path); // close existing handles
         
         $handle = smbclient_open($this->state, $this->GetFullURL($path), 'r+');
-        if (!$handle) throw new FileWriteFailedException();
+        if (!$handle) throw new Exceptions\FileWriteFailedException();
             
         if (!smbclient_ftruncate($this->state, $handle, $length))
-            throw new FileWriteFailedException();
+            throw new Exceptions\FileWriteFailedException();
         
         if (!smbclient_close($this->state, $handle))
-            throw new FileWriteFailedException();
+            throw new Exceptions\FileWriteFailedException();
 
         return $this;
     }
@@ -146,7 +140,7 @@ class SMB extends SMBBase2
     {        
         $data = smbclient_statvfs($this->state, $this->GetFullURL());
         
-        if ($data === false) throw new FreeSpaceFailedException();
+        if ($data === false) throw new Exceptions\FreeSpaceFailedException();
         
         return $data['frsize'] * $data['bsize'] * $data['bavail'];
     }

@@ -3,14 +3,6 @@
 use Andromeda\Core\Crypto;
 use Andromeda\Core\IOFormat\InputPath;
 
-require_once(ROOT."/Apps/Files/Filesystem/Native.php");
-
-require_once(ROOT."/Apps/Files/File.php"); use Andromeda\Apps\Files\File;
-require_once(ROOT."/Apps/Files/FileUtils.php"); use Andromeda\Apps\Files\FileUtils;
-
-require_once(ROOT."/Apps/Files/Storage/Exceptions.php"); 
-use Andromeda\Apps\Files\Storage\FileReadFailedException;
-
 /**
  * Implements an encryption layer on top of the native filesystem.
  * 
@@ -47,7 +39,7 @@ class NativeCrypt extends Native
     public function ImportFile(File $file, InputPath $infile) : self
     {
         if (!($handle = $infile->GetHandle()))
-            throw new FileReadFailedException();
+            throw new Exceptions\FileReadFailedException();
         
         $newpath = static::GetFilePath($file);
         $this->GetStorage()->CreateFile($newpath);
@@ -108,7 +100,7 @@ class NativeCrypt extends Native
         $retval = implode($output);
         
         if (strlen($retval) !== $length)
-            throw new FileReadFailedException();
+            throw new Exceptions\FileReadFailedException();
         
         return $retval;
     }
@@ -220,8 +212,8 @@ class NativeCrypt extends Native
         $nonce = parent::ReadBytes($file, $nonceoffset, $noncesize);
         $data = parent::ReadBytes($file, $dataoffset, $datasize);
         
-        if (strlen($nonce) != $noncesize || strlen($data) != $datasize) 
-            throw new FileReadFailedException();
+        if (strlen($nonce) !== $noncesize || strlen($data) !== $datasize) 
+            throw new Exceptions\FileReadFailedException();
         
         $auth = $this->GetAuthString($file, $index);
         

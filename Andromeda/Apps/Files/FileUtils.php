@@ -1,9 +1,8 @@
 <?php declare(strict_types=1); namespace Andromeda\Apps\Files; if (!defined('Andromeda')) die();
 
-use Andromeda\Core\Errors\ErrorManager;
 use Andromeda\Core\Database\ObjectDatabase;
 
-require_once(ROOT."/Apps/Files/Storage/Exceptions.php"); use Andromeda\Apps\Files\Storage\{FileReadFailedException, FileWriteFailedException};
+use Andromeda\Apps\Files\Storage\Exceptions\{FileReadFailedException, FileWriteFailedException};
 
 /** Helper class for reading/writing streams and files via chunks */
 class FileUtils
@@ -11,7 +10,7 @@ class FileUtils
     /**
      * Reads from the given stream (since fread may only return 8K)
      * @param resource $stream stream to read from
-     * @param int $bytes number of bytes to read
+     * @param non-negative-int $bytes number of bytes to read
      * @param bool $strict if true, want exactly $bytes, else up to
      * @throws FileReadFailedException if reading the stream fails
      * @return string read data
@@ -22,23 +21,20 @@ class FileUtils
         
         while (!feof($stream) && $byte < $bytes)
         {
+            assert($bytes-$byte > 0); // guaranteed by while condition
             $read = fread($stream, $bytes-$byte);
             
             if (!is_string($read))
                 throw new FileReadFailedException();
                 
-            $data[] = $read; $byte += strlen($read);
+            $data[] = $read;
+            $byte += strlen($read);
         }
         
         $data = implode($data);
         
         if ($strict && strlen($data) !== $bytes)
-        {
-            ErrorManager::GetInstance()->LogDebugInfo(array(
-                'read'=>strlen($data), 'wanted'=>$bytes));
-            
-            throw new FileReadFailedException();
-        }
+            throw new FileReadFailedException("read ".strlen($data).", wanted bytes");
         
         return $data;
     }
@@ -53,7 +49,7 @@ class FileUtils
     {
         $written = 0; while ($written < strlen($data))
         {
-            $piece = $written ? substr($data, $written) : $data;
+            $piece = ($written > 0) ? substr($data, $written) : $data;
             
             $bytes = fwrite($stream, $piece);
             
@@ -64,19 +60,14 @@ class FileUtils
         }
         
         if ($written !== strlen($data))
-        {
-            ErrorManager::GetInstance()->LogDebugInfo(array(
-                'wrote'=>$written, 'wanted'=>strlen($data)));
-            
-            throw new FileWriteFailedException();
-        }
+            throw new FileWriteFailedException("wrote $written, wanted ".strlen($data));
     }
 
     /**
      * Performs a chunked File read, echoing output and counting bandwidth
      * @param File $file file to read from
-     * @param int $fstart first byte to read
-     * @param int $flast last byte to read (inclusive!)
+     * @param non-negative-int $fstart first byte to read
+     * @param non-negative-int $flast last byte to read (inclusive!)
      * @param int $chunksize read chunk size
      * @param bool $align if true, align reads to chunk size multiples
      * @param bool $debugdl if true, don't actually echo anything
@@ -86,7 +77,7 @@ class FileUtils
     {
         for ($byte = $fstart; $byte <= $flast; )
         {
-            if (connection_aborted()) break;
+            if (connection_aborted() !== 0) break;
             
             // the next read should begin on a chunk boundary if aligned
             if (!$align) $nbyte = $byte + $chunksize;
@@ -96,10 +87,11 @@ class FileUtils
             
             $data = $file->ReadBytes($byte, $rlen);
             
-            if (strlen($data) != $rlen)
+            if (strlen($data) !== $rlen)
                 throw new FileReadFailedException();
                 
-            $file->CountBandwidth($rlen); $byte += $rlen;
+            $file->CountBandwidth($rlen);
+            $byte += $rlen;
             
             if (!$debugdl) { echo $data; flush(); }
         }
@@ -109,11 +101,11 @@ class FileUtils
      * Perform a chunked write to a file
      * @param resource $handle input data handle
      * @param File $file write destination
-     * @param int $wstart write offset
+     * @param non-negative-int $wstart write offset
      * @param int $chunksize write chunksize
      * @param bool $align if true, align to chunksize multiples
      * @throws FileReadFailedException if reading input fails
-     * @return int number of bytes written
+     * @return non-negative-int number of bytes written
      */
     public static function DoChunkedWrite($handle, File $file, int $wstart, int $chunksize, bool $align) : int
     {
@@ -123,13 +115,16 @@ class FileUtils
             if (!$align) $nbyte = $wbyte + $chunksize;
             else $nbyte = (intdiv($wbyte, $chunksize) + 1) * $chunksize;
             
+            assert($nbyte-$wbyte >= 0); // guaranteed by intdiv math
             $data = self::ReadStream($handle, $nbyte-$wbyte, false);
             
-            if (!strlen($data)) continue; // stream could be 0 bytes
+            if (strlen($data) === 0) continue; // stream could be 0 bytes
             
-            $file->WriteBytes($wbyte, $data); $wbyte += strlen($data);
+            $file->WriteBytes($wbyte, $data);
+            $wbyte += strlen($data);
         }
         
+        assert($wbyte-$wstart >= 0); // wbyte only gets incremented
         return $wbyte-$wstart;
     }    
     
@@ -148,21 +143,22 @@ class FileUtils
         // transfer chunk size must be an integer multiple of the FS chunk size
         if ($align) $chunksize = ceil($chunksize/$fschunksize)*$fschunksize;
         
-        return $chunksize;
+        return (int)$chunksize; // ceil math ensures int
     }
     
     /**
      * Peform a chunked file read to stdout
      * @param ObjectDatabase $database database reference
      * @param File $file file to read
-     * @param int $fstart byte offset to start reading
-     * @param int $flast last byte to read (inclusive)
+     * @param non-negative-int $fstart byte offset to start reading
+     * @param non-negative-int $flast last byte to read (inclusive)
      * @see self::DoChunkedRead()
      */
     public static function ChunkedRead(ObjectDatabase $database, File $file, int $fstart, int $flast, bool $debugdl = false) : void
     {
         $rwsize = Config::GetInstance($database)->GetRWChunkSize();
-        $fcsize = $file->GetChunkSize(); $align = ($fcsize !== null);
+        $fcsize = $file->GetChunkSize();
+        $align = ($fcsize !== null);
         $chunksize = self::GetChunkSize($rwsize, $fcsize);
         
         self::DoChunkedRead($file, $fstart, $flast, $chunksize, $align, $debugdl);
@@ -173,14 +169,15 @@ class FileUtils
      * @param ObjectDatabase $database reference
      * @param resource $handle input data handle
      * @param File $file write destination
-     * @param int $wstart write offset
-     * @return int number of bytes written
+     * @param non-negative-int $wstart write offset
+     * @return non-negative-int number of bytes written
      * @see self::DoChunkedWrite()
      */
     public static function ChunkedWrite(ObjectDatabase $database, $handle, File $file, int $wstart) : int
     {
         $rwsize = Config::GetInstance($database)->GetRWChunkSize();
-        $fcsize = $file->GetChunkSize(); $align = ($fcsize !== null);
+        $fcsize = $file->GetChunkSize();
+        $align = ($fcsize !== null);
         $chunksize = self::GetChunkSize($rwsize, $fcsize);
         
         return self::DoChunkedWrite($handle, $file, $wstart, $chunksize, $align);

@@ -4,9 +4,6 @@ use Andromeda\Core\Utilities;
 use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, QueryBuilder};
 use Andromeda\Core\IOFormat\SafeParams;
 
-require_once(ROOT."/Apps/Files/Limits/Base.php");
-require_once(ROOT."/Apps/Files/Limits/TimedStats.php");
-
 /**
  * Stores limits whose statistics are specific to a given time period.
  * 

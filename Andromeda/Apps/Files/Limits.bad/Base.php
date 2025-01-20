@@ -3,9 +3,6 @@
 use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, QueryBuilder};
 use Andromeda\Core\IOFormat\SafeParams;
 
-require_once(ROOT."/Apps/Files/File.php"); use Andromeda\Apps\Files\File;
-require_once(ROOT."/Apps/Files/Folder.php"); use Andromeda\Apps\Files\Folder;
-
 /**
  * The base type that all limits inherit from.
  * 

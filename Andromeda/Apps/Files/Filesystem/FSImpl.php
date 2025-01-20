@@ -3,12 +3,6 @@
 use Andromeda\Core\Database\ObjectDatabase;
 use Andromeda\Core\IOFormat\InputPath;
 
-require_once(ROOT."/Apps/Files/Filesystem/FSManager.php");
-require_once(ROOT."/Apps/Files/Storage/Storage.php"); use Andromeda\Apps\Files\Storage\Storage;
-
-require_once(ROOT."/Apps/Files/File.php"); use Andromeda\Apps\Files\File;
-require_once(ROOT."/Apps/Files/Folder.php"); use Andromeda\Apps\Files\Folder;
-
 /**
  * Abstract class for a filesystem implementation, with the actual disk functions.
  * 

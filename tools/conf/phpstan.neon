@@ -21,7 +21,6 @@ parameters:
             - ../../Andromeda/Apps/Files/_tests/phpunit-bad
             - ../../Andromeda/Apps/Files/ActionLog.php
             - ../../Andromeda/Apps/Files/FilesApp.php
-            - ../../Andromeda/Apps/Files/FileUtils.php
             - ../../Andromeda/Apps/Files/ItemAccess.php
     checkBenevolentUnionTypes: true
     checkImplicitMixed: true

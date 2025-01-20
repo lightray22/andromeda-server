@@ -48,7 +48,7 @@ class ActionLog extends AuthActionLog
         else if ($item instanceof File) 
         {
             if ($this->file->TryGetObjectID() !== null) 
-                throw new ItemLogFullException();
+                throw new Exceptions\ItemLogFullException();
             
             $this->file->SetObject($item);
             $this->file_share->SetObject($share);
@@ -56,12 +56,12 @@ class ActionLog extends AuthActionLog
         else if ($item instanceof Folder) 
         {
             if ($this->folder->TryGetObjectID() !== null) 
-                throw new ItemLogFullException();
+                throw new Exceptions\ItemLogFullException();
             
             $this->folder->SetObject($item);
             $this->folder_share->SetObject($share);
         }
-        else throw new BadItemTypeException();
+        else throw new Exceptions\BadItemTypeException();
         
         return $this;
     }

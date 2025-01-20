@@ -2,7 +2,6 @@
 
 use Andromeda\Core\Utilities;
 use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, QueryBuilder};
-require_once(ROOT."/Core/Database/Exceptions.php"); use Andromeda\Core\Database\DatabaseException;
 
 /**
  * Stores an entry of statistics for a Timed limit

@@ -4,22 +4,6 @@ use Andromeda\Core\{Crypto, Utilities};
 use Andromeda\Core\IOFormat\Input;
 use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, QueryBuilder};
 
-require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
-
-require_once(ROOT."/Apps/Files/Exceptions.php"); use Andromeda\Apps\Files\RandomWriteDisabledException;
-require_once(ROOT."/Apps/Files/Storage/Storage.php"); use Andromeda\Apps\Files\Storage\Storage;
-require_once(ROOT."/Apps/Files/Storage/Exceptions.php"); use Andromeda\Apps\Files\Storage\ActivateException;
-
-require_once(ROOT."/Apps/Files/Filesystem/Exceptions.php");
-require_once(ROOT."/Apps/Files/Filesystem/External.php");
-require_once(ROOT."/Apps/Files/Filesystem/Native.php");
-require_once(ROOT."/Apps/Files/Filesystem/NativeCrypt.php");
-
-require_once(ROOT."/Apps/Files/Config.php"); use Andromeda\Apps\Files\Config;
-require_once(ROOT."/Apps/Files/RootFolder.php"); use Andromeda\Apps\Files\RootFolder;
-
-require_once(ROOT."/Apps/Files/Limits/Account.php"); use Andromeda\Apps\Files\Limits;
-
 /**
  * An object that manages and points to a filesystem manager
  *
@@ -77,7 +61,7 @@ class FSManager extends BaseObject // TODO was StandardObject
         if ($name === self::DEFAULT_NAME) $name = null;
 
         if (static::TryLoadByAccountAndName($this->database, $this->GetOwner(), $name) !== null)
-            throw new InvalidNameException();
+            throw new Exceptions\InvalidNameException();
         
         return $this->SetScalar('name',$name); 
     }
@@ -144,7 +128,7 @@ class FSManager extends BaseObject // TODO was StandardObject
             {
                 $this->interface = new External($this);
             }
-            else throw new InvalidFSTypeException();
+            else throw new Exceptions\InvalidFSTypeException();
         }
         
         return $this->interface; 
@@ -210,7 +194,7 @@ class FSManager extends BaseObject // TODO was StandardObject
             $chunksize = null; if ($params->HasParam('chunksize'))
             {
                 if (!Limits\AccountTotal::LoadByAccount($database, $owner, true)->GetAllowRandomWrite())
-                    throw new RandomWriteDisabledException();
+                    throw new Exceptions\RandomWriteDisabledException();
                 
                 $checkSize = function(string $v){ $v = (int)$v; 
                     return $v >= 4*1024 && $v <= 1*1024*1024; }; // check in range [4K,1M]
@@ -372,10 +356,3 @@ Account::RegisterDeleteHandler(function(ObjectDatabase $database, Account $accou
     FSManager::DeleteByAccount($database, $account);
     RootFolder::DeleteRootsByAccount($database, $account);
 });
-
-// Load the registered storage types 
-require_once(ROOT."/Apps/Files/Storage/Local.php");
-require_once(ROOT."/Apps/Files/Storage/FTP.php");
-require_once(ROOT."/Apps/Files/Storage/SFTP.php");
-require_once(ROOT."/Apps/Files/Storage/SMB.php");
-require_once(ROOT."/Apps/Files/Storage/S3.php");

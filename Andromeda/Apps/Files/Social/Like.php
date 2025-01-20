@@ -2,8 +2,6 @@
 
 use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, QueryBuilder};
 
-require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
-
 /** 
  * A user-like (or dislike) on an item 
  * 

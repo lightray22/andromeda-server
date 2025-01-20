@@ -2,9 +2,6 @@
 
 use Andromeda\Core\Utilities;
 
-require_once(ROOT."/Apps/Files/FileUtils.php");
-require_once(ROOT."/Apps/Files/File.php");
-
 class FileUtilsTest extends \PHPUnit\Framework\TestCase
 {
     public function testChunkSize() : void

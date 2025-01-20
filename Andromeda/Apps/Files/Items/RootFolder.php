@@ -1,12 +1,7 @@
 <?php declare(strict_types=1); namespace Andromeda\Apps\Files; if (!defined('Andromeda')) die();
 
 use Andromeda\Core\Database\{ObjectDatabase, QueryBuilder};
-
-require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
-
-require_once(ROOT."/Apps/Files/Exceptions.php");
-require_once(ROOT."/Apps/Files/Folder.php");
-
+use Andromeda\Apps\Accounts\Account;
 use Andromeda\Apps\Files\Filesystem\FSManager;
 
 /** A root folder has no parent or name */
@@ -34,11 +29,11 @@ class RootFolder extends Folder
     public function GetParent() : ?Folder { return null; }
     public function GetParentID() : ?string { return null; }
     
-    public function SetParent(Folder $folder, bool $overwrite = false) : self                     { throw new InvalidRootOpException(); }
-    public function CopyToName(?Account $owner, string $name, bool $overwrite = false) : self     { throw new InvalidRootOpException(); }
-    public function CopyToParent(?Account $owner, Folder $folder, bool $overwrite = false) : self { throw new InvalidRootOpException(); }
+    public function SetParent(Folder $folder, bool $overwrite = false) : self                     { throw new Exceptions\InvalidRootOpException(); }
+    public function CopyToName(?Account $owner, string $name, bool $overwrite = false) : self     { throw new Exceptions\InvalidRootOpException(); }
+    public function CopyToParent(?Account $owner, Folder $folder, bool $overwrite = false) : self { throw new Exceptions\InvalidRootOpException(); }
     
-    public static function NotifyCreate(ObjectDatabase $database, Folder $parent, ?Account $account, string $name) : self { throw new InvalidRootOpException(); }
+    public static function NotifyCreate(ObjectDatabase $database, Folder $parent, ?Account $account, string $name) : self { throw new Exceptions\InvalidRootOpException(); }
 
     /**
      * Loads the root folder for given account and FS, creating it if it doesn't exist

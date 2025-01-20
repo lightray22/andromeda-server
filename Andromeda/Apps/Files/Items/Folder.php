@@ -3,11 +3,6 @@
  use Andromeda\Core\Utilities;
  use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, QueryBuilder};
 
-require_once(ROOT."/Apps/Accounts/Account.php"); use Andromeda\Apps\Accounts\Account;
-
-require_once(ROOT."/Apps/Files/Exceptions.php");
-require_once(ROOT."/Apps/Files/Item.php");
-
 /** 
  * Defines a user-stored folder which groups other items 
  *
@@ -103,7 +98,7 @@ abstract class Folder extends Item
     protected function CheckIsNotChildOrSelf(Folder $folder) : void
     {
         do { if ($folder === $this)
-                throw new InvalidDestinationException(); }
+                throw new Exceptions\InvalidDestinationException(); }
         while (($folder = $folder->GetParent()) !== null);
     }
     
@@ -264,7 +259,7 @@ abstract class Folder extends Item
         ?int $limit = null, ?int $offset = null) : array
     {
         $retval = $this->TryGetClientObject($owner,$details,$files,$folders,$recursive,$limit,$offset);
-        if ($retval === null) throw new DeletedByStorageException(); else return $retval;
+        if ($retval === null) throw new Exceptions\DeletedByStorageException(); else return $retval;
     }
     
     /**

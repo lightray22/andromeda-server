@@ -3,10 +3,6 @@
 use Andromeda\Core\Database\{FieldTypes, ObjectDatabase};
 use Andromeda\Core\IOFormat\{Input, SafeParams};
 
-require_once(ROOT."/Apps/Files/Filesystem/FSManager.php"); use Andromeda\Apps\Files\Filesystem\FSManager;
-
-require_once(ROOT."/Apps/Accounts/Crypto/FieldCrypt.php"); use Andromeda\Apps\Accounts\Crypto\OptFieldCrypt;
-
 /** Trait for storage classes that store a possibly-encrypted username and password */
 trait UserPass
 {
@@ -97,15 +93,15 @@ trait NoFolders
         return !count(array_filter(explode('/',$path)));
     }
     
-    protected function SubCreateFolder(string $path) : Storage { throw new FoldersUnsupportedException(); }
+    protected function SubCreateFolder(string $path) : Storage { throw new Exceptions\FoldersUnsupportedException(); }
     
-    protected function SubDeleteFolder(string $path) : Storage { throw new FoldersUnsupportedException(); }
+    protected function SubDeleteFolder(string $path) : Storage { throw new Exceptions\FoldersUnsupportedException(); }
     
-    protected function SubRenameFolder(string $old, string $new) : Storage { throw new FoldersUnsupportedException(); }
+    protected function SubRenameFolder(string $old, string $new) : Storage { throw new Exceptions\FoldersUnsupportedException(); }
     
-    protected function SubMoveFile(string $old, string $new) : Storage { throw new FoldersUnsupportedException(); }
+    protected function SubMoveFile(string $old, string $new) : Storage { throw new Exceptions\FoldersUnsupportedException(); }
     
-    protected function SubMoveFolder(string $old, string $new) : Storage { throw new FoldersUnsupportedException(); }
+    protected function SubMoveFolder(string $old, string $new) : Storage { throw new Exceptions\FoldersUnsupportedException(); }
 }
 
 /** A storage that has a base path */
