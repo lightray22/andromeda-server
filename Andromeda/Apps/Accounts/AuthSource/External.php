@@ -27,6 +27,8 @@ enum ExternalState: int
  */
 abstract class External extends BaseObject implements IAuthSource
 {
+    protected const IDLength = 8;
+
     use TableTypes\TableLinkedChildren;
     
     /** 
@@ -75,19 +77,34 @@ abstract class External extends BaseObject implements IAuthSource
     }
 
     /** Returns basic command usage for Create() and Edit() */
-    public static function GetPropUsage() : string { return "--type ".implode('|',array_keys(self::getAuthClasses())).
+    public static function GetCreateUsage() : string { return "--type ".implode('|',array_keys(self::getAuthClasses())).
                                                             " [--enabled ".implode('|',array_keys(self::ENABLED_TYPES))."]".
                                                             " [--description ?text] [--createdefgroup bool]"; }
+    
+    /** Returns basic command usage for Create() and Edit() */
+    public static function GetEditUsage() : string { return static::GetCreateUsage(); } // same
+
+    /** 
+     * Gets command usage specific to external authentication backends
+     * @return list<string>
+     */
+    final public static function GetCreateUsages() : array
+    {
+        $retval = array();
+        foreach (self::getAuthClasses() as $name=>$class)
+            $retval[] = "--type $name ".$class::GetCreateUsage();
+        return $retval;
+    }
     
     /** 
      * Gets command usage specific to external authentication backends
      * @return list<string>
      */
-    final public static function GetPropUsages() : array
+    final public static function GetEditUsages() : array
     {
         $retval = array();
         foreach (self::getAuthClasses() as $name=>$class)
-            $retval[] = "--type $name ".$class::GetPropUsage();
+            $retval[] = "--type $name ".$class::GetEditUsage();
         return $retval;
     }
     
@@ -98,9 +115,7 @@ abstract class External extends BaseObject implements IAuthSource
         
         $type = $params->GetParam('type')->FromAllowlist(array_keys($classes));
         
-        try { return $classes[$type]::Create($database, $params)->Activate(); }
-        catch (BaseExceptions\ServerException $e){ 
-            throw new Exceptions\InvalidAuthSourceException($e); }
+        return $classes[$type]::Create($database, $params);
     }
 
     /** Creates a new external authentication backend, and optionally a default group for it */
@@ -121,7 +136,7 @@ abstract class External extends BaseObject implements IAuthSource
             $obj->description->SetValue($descr);
         }
 
-        if ($params->GetOptParam('createdefgroup',true)->GetBool()) 
+        if ($params->GetOptParam('createdefgroup',false)->GetBool())
         {
             $obj->CreateDefaultGroup();
         }
@@ -169,9 +184,12 @@ abstract class External extends BaseObject implements IAuthSource
      * Verify the password given
      * @param string $username the username to check
      * @param string $password the password to check
+     * @param bool $throw allow throwing if the check fails (allow, not guarantee)
      * @return bool true if the password check is valid
+     * @throws BaseExceptions\PHPError if $throw and the check fails
+     * @throws BaseExceptions\BaseException always if a connection fails, or other errors
      */
-    abstract public function VerifyUsernamePassword(string $username, string $password) : bool;
+    abstract public function VerifyUsernamePassword(string $username, string $password, bool $throw = false) : bool;
 
     public function VerifyAccountPassword(Account $account, string $password): bool
     {
@@ -190,7 +208,7 @@ abstract class External extends BaseObject implements IAuthSource
         if ($this->default_group->TryGetObjectID() !== null) return $this;
         
         $name = $this->GetTypeName(); $id = $this->ID();
-        $group = Group::Create($this->database, "$name Accounts ($id)");
+        $group = Group::Create($this->database, "$name Accounts ($id)")->Save(); // save now since the AuthSource gets inserted first
         
         $this->default_group->SetObject($group);
         $group->PostDefaultCreateInitialize(); // init AFTER set default
@@ -213,9 +231,6 @@ abstract class External extends BaseObject implements IAuthSource
         return $this->description->TryGetValue() ?? $this->GetTypeName();
     }
     
-    /** Activate the auth source to prepare it for use */
-    public function Activate() : self { return $this; }
-
     /**
      * Returns a printable client object for this manager and auth source
      * 

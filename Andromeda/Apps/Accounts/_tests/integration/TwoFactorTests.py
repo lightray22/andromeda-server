@@ -53,7 +53,7 @@ def testTwoFactorBasic(self):
     self.util.assertOk(self.interface.run(app='accounts',action='createsession',
         params={'username':username,'auth_password':password}))
 
-    # TODO RAY !! add test that twofactor is not required when using an existing session (unless config is set)
+    # TODO TESTS !! add test that twofactor is not required when using an existing session (unless config is set)
 
     self.deleteAccount(account) 
 

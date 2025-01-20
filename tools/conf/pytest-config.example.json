@@ -42,4 +42,22 @@
             "testdest":"mytest@test.com"
         }
     }
+    "accounts":
+    {
+        "authsources":
+        {
+            "ftp":
+            {
+                "hostname":"localhost",
+                "test_username":"andromeda",
+                "test_password":"password"
+            },
+            "imap":
+            {
+                "hostname":"localhost",
+                "test_username":"andromeda@example.com",
+                "test_password":"password"
+            }
+        }
+    }
 }

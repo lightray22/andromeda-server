@@ -29,7 +29,7 @@ CREATE TABLE `a2obj_core_config` (
 ,  PRIMARY KEY (`id`)
 );
 CREATE TABLE `a2obj_core_emailer` (
-  `id` char(4) NOT NULL
+  `id` char(8) NOT NULL
 ,  `type` integer NOT NULL
 ,  `hosts` text DEFAULT NULL
 ,  `username` varchar(255) DEFAULT NULL

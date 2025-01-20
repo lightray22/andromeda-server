@@ -50,7 +50,7 @@ CREATE TABLE public.a2obj_core_config (
 
 
 CREATE TABLE public.a2obj_core_emailer (
-    id character(4) NOT NULL,
+    id character(8) NOT NULL,
     type smallint NOT NULL,
     hosts text,
     username character varying(255) DEFAULT NULL::character varying,
@@ -148,72 +148,72 @@ CREATE TABLE public.a2obj_core_logging_metricslog (
 
 
 ALTER TABLE ONLY public.a2obj_apps_core_actionlog
-    ADD CONSTRAINT idx_78782_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_121380_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_core_config
-    ADD CONSTRAINT idx_78788_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_121529_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_core_emailer
-    ADD CONSTRAINT idx_78793_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_121534_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_core_errors_errorlog
-    ADD CONSTRAINT idx_78800_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_121541_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_core_logging_actionlog
-    ADD CONSTRAINT idx_78807_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_121548_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_core_logging_metricslog
-    ADD CONSTRAINT idx_78813_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_121554_primary PRIMARY KEY (id);
 
 
 
-CREATE INDEX idx_78800_action ON public.a2obj_core_errors_errorlog USING btree (action);
+CREATE INDEX idx_121541_action ON public.a2obj_core_errors_errorlog USING btree (action);
 
 
 
-CREATE INDEX idx_78800_addr ON public.a2obj_core_errors_errorlog USING btree (addr);
+CREATE INDEX idx_121541_addr ON public.a2obj_core_errors_errorlog USING btree (addr);
 
 
 
-CREATE INDEX idx_78800_app ON public.a2obj_core_errors_errorlog USING btree (app);
+CREATE INDEX idx_121541_app ON public.a2obj_core_errors_errorlog USING btree (app);
 
 
 
-CREATE INDEX idx_78800_code ON public.a2obj_core_errors_errorlog USING btree (code);
+CREATE INDEX idx_121541_code ON public.a2obj_core_errors_errorlog USING btree (code);
 
 
 
-CREATE INDEX idx_78800_time ON public.a2obj_core_errors_errorlog USING btree ("time");
+CREATE INDEX idx_121541_time ON public.a2obj_core_errors_errorlog USING btree ("time");
 
 
 
-CREATE INDEX idx_78807_addr ON public.a2obj_core_logging_actionlog USING btree (addr);
+CREATE INDEX idx_121548_addr ON public.a2obj_core_logging_actionlog USING btree (addr);
 
 
 
-CREATE INDEX idx_78807_app_action ON public.a2obj_core_logging_actionlog USING btree (app, action);
+CREATE INDEX idx_121548_app_action ON public.a2obj_core_logging_actionlog USING btree (app, action);
 
 
 
-CREATE INDEX idx_78807_time ON public.a2obj_core_logging_actionlog USING btree ("time");
+CREATE INDEX idx_121548_time ON public.a2obj_core_logging_actionlog USING btree ("time");
 
 
 
-CREATE UNIQUE INDEX idx_78813_actionlog ON public.a2obj_core_logging_metricslog USING btree (actionlog);
+CREATE UNIQUE INDEX idx_121554_actionlog ON public.a2obj_core_logging_metricslog USING btree (actionlog);
 
 
 
-CREATE INDEX idx_78813_app_action ON public.a2obj_core_logging_metricslog USING btree (app, action);
+CREATE INDEX idx_121554_app_action ON public.a2obj_core_logging_metricslog USING btree (app, action);
 
 
 

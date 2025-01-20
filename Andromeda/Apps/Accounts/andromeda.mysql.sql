@@ -77,6 +77,7 @@ CREATE TABLE `a2obj_apps_accounts_authsource_imap` (
   `hostname` varchar(255) NOT NULL,
   `port` smallint(6) DEFAULT NULL,
   `implssl` tinyint(1) NOT NULL,
+  `anycert` tinyint(1) NOT NULL,
   `secauth` tinyint(1) NOT NULL,
   PRIMARY KEY (`id`),
   CONSTRAINT `a2obj_apps_accounts_authsource_imap_ibfk_1` FOREIGN KEY (`id`) REFERENCES `a2obj_apps_accounts_authsource_external` (`id`) ON DELETE CASCADE ON UPDATE CASCADE

@@ -34,7 +34,8 @@ class FTP extends External
         parent::CreateFields();
     }
     
-    public static function GetPropUsage() : string { return "--hostname hostname [--port ?uint16] [--implssl bool]"; }
+    public static function GetCreateUsage() : string { return "--hostname hostname [--port ?uint16] [--implssl bool]"; }
+    public static function GetEditUsage() : string { return "[--hostname hostname] [--port ?uint16] [--implssl bool]"; }
     
     public static function Create(ObjectDatabase $database, SafeParams $params) : static
     {
@@ -49,6 +50,8 @@ class FTP extends External
     
     public function Edit(SafeParams $params) : self
     {
+        parent::Edit($params);
+        
         if ($params->HasParam('hostname'))
             $this->hostname->SetValue($params->GetParam('hostname')->GetHostname());
         
@@ -81,7 +84,7 @@ class FTP extends External
             throw new Exceptions\FTPExtensionException();
     }
     
-    public function VerifyUsernamePassword(string $username, string $password) : bool
+    public function VerifyUsernamePassword(string $username, string $password, bool $throw = false) : bool
     {
         $host = $this->hostname->GetValue(); 
         $port = $this->port->TryGetValue() ?? 0; // 0 to use default
@@ -97,12 +100,13 @@ class FTP extends External
             $success = ftp_login($ftpConn, $username, $password);
 
             ftp_close($ftpConn);
-            return $success;
+            return $success; // not normally used, PHPError happens on failure
         }
         catch (BaseExceptions\PHPError $e) 
         { 
             $errman = $this->GetApiPackage()->GetErrorManager();
-            $errman->LogException($e);
+            $errman->LogDebugHint($e->getMessage());
+            if ($throw) throw $e;
             return false; 
         }
     }

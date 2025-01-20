@@ -125,8 +125,9 @@ class ContactRequiredException extends BaseExceptions\ClientDeniedException
 /** Exception indicating that the test on the authentication source failed */
 class AuthSourceTestFailException extends BaseExceptions\ClientErrorException
 {
-    public function __construct(?string $details = null) {
-        parent::__construct("AUTH_SOURCE_TEST_FAIL", $details);
+    public function __construct(?BaseExceptions\BaseException $ex = null) {
+        parent::__construct("AUTHSOURCE_TEST_FAILED");
+        if ($ex !== null) $this->AppendException($ex,true);
     }
 }
 

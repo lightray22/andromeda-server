@@ -2,6 +2,7 @@
 
 use Andromeda\Core\{ApiPackage, BaseApp, Utilities};
 use Andromeda\Core\Database\QueryBuilder;
+use Andromeda\Core\Errors\BaseExceptions;
 use Andromeda\Core\Exceptions\{UnknownActionException, DecryptionFailedException};
 use Andromeda\Core\IOFormat\{Input, SafeParam, SafeParams};
 use Andromeda\Core\IOFormat\Exceptions\SafeParamInvalidException;
@@ -60,7 +61,7 @@ class AccountsApp extends BaseApp
             'deleteaccount --auth_password raw',
             'createrecoverykeys --auth_password raw [--auth_twofactor int] [--replace bool]',
             
-            'createsession (--username alphanum|email | '.Contact::GetFetchUsage().') --auth_password raw [--authsource id] [--old_password raw] [--new_password raw]',
+            'createsession (--username alphanum|email | '.Contact::GetFetchUsage().') --auth_password raw [--authsrc id] [--old_password raw] [--new_password raw]',
             '(createsession... create client) [--auth_recoverykey utf8 | --auth_twofactor int] [--name ?name]',
             '(createsession... reuse client) --auth_clientid id --auth_clientkey randstr',
             'deletesession [--session id --auth_password raw]',
@@ -92,10 +93,11 @@ class AccountsApp extends BaseApp
             'sendmessage (--account id | --group id) --subject utf8 --text text [--html raw]',
 
             'getauthsources',
-            'createauthsource --auth_password raw '.AuthSource\External::GetPropUsage().' [--test_username text --test_password raw]',
-            ...array_map(function($u){ return "(createauthsource...) $u"; }, AuthSource\External::GetPropUsages()),
+            'createauthsource --auth_password raw '.AuthSource\External::GetCreateUsage().' [--test_username text --test_password raw]',
+            ...array_map(function($u){ return "(createauthsource...) $u"; }, AuthSource\External::GetCreateUsages()),
             'testauthsource --authsrc id [--test_username alphanum|email --test_password raw]',
-            'editauthsource --authsrc id --auth_password raw '.AuthSource\External::GetPropUsage().' [--test_username text --test_password raw]',
+            'editauthsource --authsrc id --auth_password raw '.AuthSource\External::GetEditUsage().' [--test_username text --test_password raw]',
+            ...array_map(function($u){ return "(editauthsource...) $u"; }, AuthSource\External::GetEditUsages()),
             'deleteauthsource --authsrc id --auth_password raw',
 
             'addregisterallow '.RegisterAllow::GetUsage(),
@@ -136,7 +138,7 @@ class AccountsApp extends BaseApp
             
             case 'getauthsources':      return $this->GetAuthSources($authenticator);
             case 'createauthsource':    return $this->CreateAuthSource($params, $authenticator, $actionlog);
-            case 'testauthsource':      return $this->TestAuthSource($params, $authenticator);
+            case 'testauthsource':      $this->TestAuthSource($params, $authenticator); return null;
             case 'editauthsource':      return $this->EditAuthSource($params, $authenticator);
             case 'deleteauthsource':    $this->DeleteAuthSource($params, $authenticator, $actionlog); return null;
             
@@ -524,9 +526,9 @@ class AccountsApp extends BaseApp
         
         $password = $params->GetParam("auth_password", SafeParams::PARAMLOG_NEVER)->GetRawString();
         
-        $reqauthsrc = null; if ($params->HasParam('authsource'))
+        $reqauthsrc = null; if ($params->HasParam('authsrc'))
         {
-            $srcid = $params->GetParam('authsource', SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
+            $srcid = $params->GetParam('authsrc', SafeParams::PARAMLOG_ALWAYS)->GetRandstr();
             $reqauthsrc = AuthSource\External::TryLoadByID($this->database,$srcid);
             if ($reqauthsrc === null) throw new Exceptions\UnknownAuthSourceException();
         }
@@ -553,7 +555,7 @@ class AccountsApp extends BaseApp
             if (!$authsrc->VerifyUsernamePassword($username, $password))
                 throw new Exceptions\AuthenticationFailedException();
             
-            $account = Account::CreateExternal($this->database, $username, $authsrc);
+            $account = Account::CreateExternal($this->database, $username, $authsrc)->Save(); // save now
         }
         
         if ($account->isDisabled() !== 0) 
@@ -588,7 +590,7 @@ class AccountsApp extends BaseApp
             else Authenticator::StaticTryRequireTwoFactor($params, $account);
             
             $cname = $params->GetOptParam('name',null)->GetNullName();
-            $client = Client::Create($interface, $this->database, $account, $cname)->Save();
+            $client = Client::Create($interface, $this->database, $account, $cname)->Save(); // save now for Account GetClientObject
         }
         
         if ($actionlog !== null) $actionlog->LogDetails('client',$client->ID()); 
@@ -621,7 +623,7 @@ class AccountsApp extends BaseApp
         
         /* delete old session associated with this client, create a new one */
         Session::DeleteByClient($this->database, $client);
-        $session = Session::Create($this->database, $account, $client)->Save();
+        $session = Session::Create($this->database, $account, $client)->Save(); // save now for Client GetClientObject
         
         if ($actionlog !== null) $actionlog->LogDetails('session',$session->ID()); 
         
@@ -1189,7 +1191,7 @@ class AccountsApp extends BaseApp
             throw new Exceptions\AuthenticationFailedException();
         $authenticator->RequireAdmin()->RequirePassword();
 
-        $authsrc = AuthSource\External::Create($this->database, $params);
+        $authsrc = AuthSource\External::TypedCreate($this->database, $params)->Save(); // save now for TestAuthSource
         
         if ($params->HasParam('test_username'))
         {
@@ -1208,9 +1210,8 @@ class AccountsApp extends BaseApp
      * @throws Exceptions\AuthenticationFailedException if not admin
      * @throws Exceptions\UnknownAuthSourceException if the auth source is not found
      * @throws Exceptions\AuthSourceTestFailException if the test fails
-     * @return ExternalJ
      */
-    protected function TestAuthSource(SafeParams $params, ?Authenticator $authenticator) : array
+    protected function TestAuthSource(SafeParams $params, ?Authenticator $authenticator) : void
     {
         if ($authenticator === null) 
             throw new Exceptions\AuthenticationFailedException();
@@ -1224,10 +1225,13 @@ class AccountsApp extends BaseApp
         $testuser = self::getUsername($params->GetParam('test_username'));
         $testpass = $params->GetParam('test_password',SafeParams::PARAMLOG_NEVER)->GetRawString();
         
-        if (!$authsrc->VerifyUsernamePassword($testuser, $testpass))
-            throw new Exceptions\AuthSourceTestFailException();        
-           
-        return $authsrc->GetClientObject(true);
+        try
+        {
+            if (!$authsrc->VerifyUsernamePassword($testuser, $testpass, true))
+                throw new Exceptions\AuthSourceTestFailException();
+        }
+        catch (BaseExceptions\BaseException $e){ 
+            throw new Exceptions\AuthSourceTestFailException($e); }
     }
     
     /**

@@ -8,7 +8,7 @@ use Andromeda\Core\IOFormat\SafeParams;
  * Uses an IMAP server for authentication
  * @phpstan-import-type ExternalJ from External
  * @phpstan-import-type AdminExternalJ from External
- * @phpstan-type IMAPJ array{protocol:key-of<self::PROTOCOLS>, hostname:string, port:?int, implssl:bool, secauth:bool}
+ * @phpstan-type IMAPJ array{protocol:key-of<self::PROTOCOLS>, hostname:string, port:?int, implssl:bool, anycert:bool, secauth:bool}
  */
 class IMAP extends External
 {
@@ -22,6 +22,8 @@ class IMAP extends External
     private FieldTypes\NullIntType $port;
     /** True if implicit SSL should be used (not STARTTLS) */
     private FieldTypes\BoolType $implssl;
+    /** True if the SSL certificate should not be checked */
+    private FieldTypes\BoolType $anycert;
     /** True to use IMAP secure authentication */
     private FieldTypes\BoolType $secauth;
     
@@ -33,6 +35,7 @@ class IMAP extends External
         $this->hostname = $fields[] = new FieldTypes\StringType('hostname');
         $this->port =     $fields[] = new FieldTypes\NullIntType('port');
         $this->implssl =  $fields[] = new FieldTypes\BoolType('implssl');
+        $this->anycert =  $fields[] = new FieldTypes\BoolType('anycert');
         $this->secauth =  $fields[] = new FieldTypes\BoolType('secauth');
         
         $this->RegisterFields($fields, self::class);
@@ -49,19 +52,21 @@ class IMAP extends External
         'pop3'=>self::PROTOCOL_POP3,
         'nntp'=>self::PROTOCOL_NNTP);
     
-    public static function GetPropUsage() : string { return "--protocol imap|pop3|nntp --hostname hostname [--port ?uint16] [--implssl bool] [--secauth bool]"; }
+    public static function GetCreateUsage() : string { return "--hostname hostname [--protocol imap|pop3|nntp] [--port ?uint16] [--implssl bool] [--anycert bool] [--secauth bool]"; }
+    public static function GetEditUsage() : string { return "[--hostname hostname] [--port ?uint16] [--implssl bool] [--anycert bool] [--secauth bool]"; }
     
     public static function Create(ObjectDatabase $database, SafeParams $params) : static
     {
         $obj = parent::Create($database, $params);
         
-        $protocol = self::PROTOCOLS[$params->GetParam('protocol')
+        $protocol = self::PROTOCOLS[$params->GetOptParam('protocol','imap')
             ->FromAllowlist(array_keys(self::PROTOCOLS))];
         $obj->protocol->SetValue($protocol);
         
         $obj->hostname->SetValue($params->GetParam('hostname')->GetHostname());
         $obj->port->SetValue($params->GetOptParam('port',null)->GetNullUint16());
         $obj->implssl->SetValue($params->GetOptParam('implssl',false)->GetBool());
+        $obj->anycert->SetValue($params->GetOptParam('anycert',false)->GetBool());
         $obj->secauth->SetValue($params->GetOptParam('secauth',false)->GetBool());
         
         return $obj;
@@ -69,6 +74,8 @@ class IMAP extends External
     
     public function Edit(SafeParams $params) : self
     {
+        parent::Edit($params);
+
         if ($params->HasParam('hostname')) 
             $this->hostname->SetValue($params->GetParam('hostname')->GetHostname());
         
@@ -77,6 +84,9 @@ class IMAP extends External
         
         if ($params->HasParam('implssl')) 
             $this->implssl->SetValue($params->GetParam('implssl')->GetBool());
+    
+        if ($params->HasParam('anycert')) 
+            $this->anycert->SetValue($params->GetParam('anycert')->GetBool());
         
         if ($params->HasParam('secauth')) 
             $this->secauth->SetValue($params->GetParam('secauth')->GetBool());
@@ -98,6 +108,7 @@ class IMAP extends External
             'hostname' => $this->hostname->GetValue(),
             'port' => $this->port->TryGetValue(),
             'implssl' => $this->implssl->GetValue(),
+            'anycert' => $this->anycert->GetValue(),
             'secauth' => $this->secauth->GetValue()
         ));
     }
@@ -109,17 +120,21 @@ class IMAP extends External
             throw new Exceptions\IMAPExtensionException();
     }
     
-    public function VerifyUsernamePassword(string $username, string $password) : bool
+    public function VerifyUsernamePassword(string $username, string $password, bool $throw = false) : bool
     {
         $hostname = $this->hostname->GetValue(); 
         
         $port = $this->port->TryGetValue();
         if ($port !== null) $hostname .= ":$port";
+
+        $options = array($hostname);
+        $options[] = $this->GetProtocol();
         
-        $implssl = $this->implssl->GetValue() ? 'ssl' : null;
-        $secauth = $this->secauth->GetValue() ? 'secure' : null;
+        $options[] = $this->implssl->GetValue() ? 'ssl' : null;
+        $options[] = $this->anycert->GetValue() ? 'novalidate-cert' : null;
+        $options[] = $this->secauth->GetValue() ? 'secure' : null;
         
-        $connectstr = implode("/",array_filter(array($hostname, $this->GetProtocol(), $implssl, $secauth)));
+        $connectstr = implode("/",array_filter($options));
 
         try 
         { 
@@ -127,20 +142,21 @@ class IMAP extends External
             
             $success = ($imap !== false);
             if ($success) imap_close($imap);
-            return $success;
+            return $success; // not normally used, PHPError happens on failure
         }
         catch (BaseExceptions\PHPError $e) 
         {
             $errman = $this->GetApiPackage()->GetErrorManager();
-            $errman->LogException($e);
+            $errman->LogDebugHint($e->getMessage());
 
-            if (($errs = imap_errors()) !== false) 
+            if (($errs = imap_errors()) !== false)
                 foreach ($errs as $err)
             {
                 assert(is_string($err)); // imap_errors returns strings
-                $errman->LogException(new Exceptions\IMAPErrorException($err)); 
+                $errman->LogDebugHint($err);
             }
 
+            if ($throw) throw $e;
             return false; 
         }
     }

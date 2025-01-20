@@ -18,7 +18,7 @@ class Emailer extends BaseObject
 {
     use TableTypes\TableNoChildren;
     
-    protected const IDLength = 4;
+    protected const IDLength = 8;
     
     private PHPMailer\PHPMailer $mailer;
     

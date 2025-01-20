@@ -169,8 +169,8 @@ class AppRunner extends BaseRunner
                 if ($this->context !== null && ($actlog = $this->context->TryGetActionLog()) !== null)
                     $actlog->SetError($e); // gets saved on client errors!
                     
-                $db->SaveObjects(true); // any "always" DB fields
-                $this->doCommit(false);
+                $db->SaveObjects(onlyAlways:true); // any "always" DB fields
+                $this->doCommit(apps:false);
                 
                 if ($this->context !== null && ($actlog = $this->context->TryGetActionLog()) !== null)
                     $actlog->WriteFile(); // after everything else is saved successfully
@@ -187,7 +187,7 @@ class AppRunner extends BaseRunner
         $this->commit();
 
         $commitStats->stopTiming();
-        $stats->Add($commitStats, true);
+        $stats->Add($commitStats, total:true);
     }
     
     /**
@@ -202,7 +202,7 @@ class AppRunner extends BaseRunner
         {
             $db = $this->apipack->GetDatabase();
             $db->SaveObjects();
-            $this->doCommit(true);
+            $this->doCommit(apps:true);
             
             if ($this->context !== null && ($actlog = $this->context->TryGetActionLog()) !== null)
                 $actlog->WriteFile(); // after everything else is saved successfully

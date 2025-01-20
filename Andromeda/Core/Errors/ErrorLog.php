@@ -14,8 +14,8 @@ use Andromeda\Core\Logging\BaseLog;
  */
 class ErrorLog extends BaseLog
 {
-    protected const IDLength = 12;
-    
+    protected const IDLength = 12; // BaseLog is 20
+
     use TableTypes\TableNoChildren;
     
     /** time of the error */

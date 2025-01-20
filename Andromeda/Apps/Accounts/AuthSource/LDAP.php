@@ -34,7 +34,8 @@ class LDAP extends External
         parent::CreateFields();
     }
 
-    public static function GetPropUsage() : string { return "--hostname hostname [--secure bool] [--userprefix ?utf8]"; }
+    public static function GetCreateUsage() : string { return "--hostname hostname [--secure bool] [--userprefix ?utf8]"; }
+    public static function GetEditUsage() : string { return "[--hostname hostname] [--secure bool] [--userprefix ?utf8]"; }
     
     public static function Create(ObjectDatabase $database, SafeParams $params) : static
     {
@@ -48,7 +49,9 @@ class LDAP extends External
     }
     
     public function Edit(SafeParams $params) : self
-    {
+    {   
+        parent::Edit($params);
+
         if ($params->HasParam('hostname')) 
             $this->hostname->SetValue($params->GetParam('hostname')->GetHostname());
         
@@ -81,7 +84,7 @@ class LDAP extends External
             throw new Exceptions\LDAPExtensionException();
     }
     
-    public function VerifyUsernamePassword(string $username, string $password) : bool
+    public function VerifyUsernamePassword(string $username, string $password, bool $throw = false) : bool
     {
         $protocol = $this->secure->GetValue() ? "ldaps" : "ldap";
         
@@ -104,16 +107,16 @@ class LDAP extends External
         catch (BaseExceptions\PHPError $e) 
         {
             $errman = $this->GetApiPackage()->GetErrorManager();
-            $errman->LogException($e);
+            $errman->LogDebugHint($e->getMessage());
             
             if (($lerr = ldap_error($ldapConn)) !== "")
             {
                 ldap_get_option($ldapConn, LDAP_OPT_DIAGNOSTIC_MESSAGE, $lerr2);
                 assert(is_string($lerr2)); // this ldap option returns a string
-
-                $errman->LogException(new Exceptions\LDAPErrorException("$lerr: $lerr2"));
+                $errman->LogDebugHint($lerr2);
             }
             
+            if ($throw) throw $e;
             return false; 
         } 
     }

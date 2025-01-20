@@ -7,15 +7,13 @@ class AppTests(BaseAppTest):
         return "ACCOUNTS"
 
     def getTestModules(self):
-        import ContactTests
-        import SessionTests
-        import TwoFactorTests
-        return [self, ContactTests, SessionTests, TwoFactorTests]
+        import ContactTests, SessionTests, TwoFactorTests, AuthSourceTests
+        return [self, ContactTests, SessionTests, TwoFactorTests, AuthSourceTests]
 
     def requiresInstall(self) -> bool:
         return True
     
-    accountid:str = None
+    account:str = None
     username:str = None
     password:str = None
 
@@ -30,7 +28,7 @@ class AppTests(BaseAppTest):
     def checkInstallRetval(self, retval):
         self.util.assertType(retval['id'], str)
         self.util.assertType(retval['username'], str)
-        self.accountid = retval['id']
+        self.account = retval
 
     session:dict = None
 
@@ -51,7 +49,7 @@ class AppTests(BaseAppTest):
             if self.util.random.choice([True,False]):
                 params['auth_sudouser'] = self.username
             else:
-                params['auth_sudoacct'] = self.accountid
+                params['auth_sudoacct'] = self.account['id']
         else:
             params['auth_sessionid'] = self.session['id']
             params['auth_sessionkey'] = self.session['authkey']
@@ -105,7 +103,7 @@ class AppTests(BaseAppTest):
         (username, password, account, client, session) = self.tempAccount()
 
         res = self.util.assertOk(self.interface.run(app='accounts',action='getaccount',params=self.withSession(self.session)))
-        self.util.assertSame(res['id'], self.accountid)
+        self.util.assertSame(res['id'], self.account['id'])
         res = self.util.assertOk(self.interface.run(app='accounts',action='getaccount',
             params=self.withSession(self.session, {'auth_sudouser':username})))
         self.util.assertSame(res['id'], account['id'])
@@ -153,8 +151,8 @@ class AppTests(BaseAppTest):
         self.util.assertError(self.interface.run(app='accounts',action='getaccount',
             params=self.withSession(session, {'account':"badID"})),404,'UNKNOWN_ACCOUNT')
         res = self.util.assertOk(self.interface.run(app='accounts',action='getaccount',
-            params=self.withSession(session, {'account':self.accountid})))
-        self.util.assertSame(res['id'], self.accountid)
+            params=self.withSession(session, {'account':self.account['id']})))
+        self.util.assertSame(res['id'], self.account['id'])
         self.util.assertSame(res['username'], self.username)
         self.util.assertSame(res['dispname'], None)
         self.util.assertIn('contacts',res)
@@ -164,4 +162,7 @@ class AppTests(BaseAppTest):
 
         self.deleteAccount(account)
 
-    # TODO RAY !! crypto/changePW/recovery, create/delete acct + register allow + setfullname, group stuff + account/group search, external auth sources
+    # TODO TESTS !! crypto/changePW/recovery
+    # TODO TESTS !! create/delete acct + register allow + setfullname
+    # TODO TESTS !! group stuff + account/group search
+    # TODO TESTS !! test own app enable/disable and access logging

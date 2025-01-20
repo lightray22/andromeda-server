@@ -2,15 +2,6 @@
 
 use Andromeda\Core\Errors\BaseExceptions;
 
-/** Exception indicating that the created auth source is invalid */
-class InvalidAuthSourceException extends BaseExceptions\ClientErrorException
-{
-    public function __construct(BaseExceptions\ServerException $ex){
-        parent::__construct("AUTHSOURCE_FAILED");
-        $this->CopyException($ex,true);
-    }
-}
-
 /** Exception indicating the PHP FTP extension is missing */
 class FTPExtensionException extends BaseExceptions\ServerException
 {
@@ -35,14 +26,6 @@ class IMAPExtensionException extends BaseExceptions\ServerException
     }
 }
 
-/** Exception indicating IMAP encountered an error */
-class IMAPErrorException extends BaseExceptions\ServerException
-{
-    public function __construct(?string $details = null) {
-        parent::__construct("IMAP_EXTENSION_ERROR", $details);
-    }
-}
-
 /** Exception indicating that the LDAP extension does not exist */
 class LDAPExtensionException extends BaseExceptions\ServerException
 {
@@ -56,13 +39,5 @@ class LDAPConnectionFailure extends BaseExceptions\ServerException
 {
     public function __construct(?string $details = null) {
         parent::__construct("LDAP_CONNECTION_FAILURE", $details);
-    }
-}
-
-/** Exception indicating that LDAP encountered an error */
-class LDAPErrorException extends BaseExceptions\ServerException
-{
-    public function __construct(?string $details = null) {
-        parent::__construct("LDAP_EXTENSION_ERROR", $details);
     }
 }

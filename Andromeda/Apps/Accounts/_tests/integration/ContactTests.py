@@ -21,7 +21,7 @@ def testContactsBasic(self):
     self.util.assertSame(res['public'],True)
     self.util.assertSame(res['isfrom'],True)
 
-    # TODO RAY !! test contact validation via email + make sure authkey isn't in the client object lol
+    # TODO TESTS !! test contact validation via email + make sure authkey isn't in the client object lol
 
     # create another contact
     email2 = "mytest2@test.com"
