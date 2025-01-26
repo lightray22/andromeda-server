@@ -1299,7 +1299,7 @@ class AccountsApp extends BaseApp
         if ($params->GetOptParam("expirepw",false)->GetBool()) 
             $account->ResetPasswordDate();
         
-        return $account->SetProperties($params)->GetAdminClientObject();
+        return $account->SetPolicies($params)->GetAdminClientObject();
     }
     
     /**
@@ -1332,7 +1332,7 @@ class AccountsApp extends BaseApp
         if ($params->HasParam('priority'))
             $group->SetPriority($params->GetParam("priority")->GetInt8());
         
-        return $group->SetProperties($params)->GetAdminClientObject(true);
+        return $group->SetPolicies($params)->GetAdminClientObject(true);
     }
     
     /**

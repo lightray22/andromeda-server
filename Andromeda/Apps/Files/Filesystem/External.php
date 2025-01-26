@@ -1,12 +1,8 @@
 <?php declare(strict_types=1); namespace Andromeda\Apps\Files\Filesystem; if (!defined('Andromeda')) die();
 
-use Andromeda\Core\Database\ObjectDatabase;
-use Andromeda\Apps\Accounts\Account;
+use Andromeda\Core\IOFormat\InputPath;
 
 use Andromeda\Apps\Files\Items\{Item, File, Folder, SubFolder, RootFolder};
-
-interface FileCreator { function NotifyCreate(ObjectDatabase $database, Folder $parent, ?Account $account, string $name) : File; }
-interface FolderCreator { function NotifyCreate(ObjectDatabase $database, Folder $parent, ?Account $account, string $name) : SubFolder; }
 
 /**
  * An External Andromeda filesystem is accessible outside Andromeda
@@ -19,7 +15,7 @@ interface FolderCreator { function NotifyCreate(ObjectDatabase $database, Folder
  * The files and folder on-disk are considered the authoritative
  * record of what exists, and the database is merely a metadata cache.
  */
-class External extends BaseFileFS
+class External extends Filesystem
 {
     /**
      * Returns the root-relative path of the given item
@@ -33,6 +29,7 @@ class External extends BaseFileFS
         
         $path = ($parent === null) ? "" :
             $this->GetItemPath($parent, $item->GetName());
+            // TODO should do validation here in case the DB gets an invalid value (no . .. /)
         
         return $path.($child !== null ? '/'.$child :"");
     }
@@ -50,13 +47,14 @@ class External extends BaseFileFS
         $storage = $this->GetStorage();        
         $path = $this->GetItemPath($file);
         
-        if (!$storage->isFile($path)) { $file->NotifyFSDeleted(); return $this; }
+        if (!$storage->isFile($path)) { 
+            $file->NotifyFSDeleted(); return $this; }
 
         $stat = $storage->ItemStat($path); 
         $file->SetSize($stat->size,true);
-        if ($stat->atime) $file->SetAccessed($stat->atime);
-        if ($stat->ctime) $file->SetCreated($stat->ctime);
-        if ($stat->mtime) $file->SetModified($stat->mtime); 
+        if ($stat->atime !== 0.0) $file->SetAccessed($stat->atime);
+        if ($stat->ctime !== 0.0) $file->SetCreated($stat->ctime);
+        if ($stat->mtime !== 0.0) $file->SetModified($stat->mtime); 
         
         return $this;
     }
@@ -67,11 +65,8 @@ class External extends BaseFileFS
      * Checks that it exists, then updates stat metadata.
      * Also scans for new items and creates objects for them.
      * @param bool $doContents if true, recurse, else just this folder
-     * @param ?FileCreator $fileCr MUST BE NULL (unit testing only)
-     * @param ?FolderCreator $folderCr MUST BE NULL (unit testing only)
      */
-    public function RefreshFolder(Folder $folder, bool $doContents = true, 
-        string $fileClass = File::class, string $folderClass = Folder::class) : self
+    public function RefreshFolder(Folder $folder, bool $doContents = true) : self
     {
         $storage = $this->GetStorage();
         $path = $this->GetItemPath($folder);
@@ -85,16 +80,18 @@ class External extends BaseFileFS
         }
                 
         $stat = $storage->ItemStat($path);
-        if ($stat->atime) $folder->SetAccessed($stat->atime);
-        if ($stat->ctime) $folder->SetCreated($stat->ctime);
-        if ($stat->mtime) $folder->SetModified($stat->mtime);
+        if ($stat->atime !== 0.0) $folder->SetAccessed($stat->atime);
+        if ($stat->ctime !== 0.0) $folder->SetCreated($stat->ctime);
+        if ($stat->mtime !== 0.0) $folder->SetModified($stat->mtime);
 
         if ($doContents) 
         {
             $dbitems = array();
             
-            foreach ($folder->GetFiles() as $file) $dbitems[$file->GetName()] = $file;
-            foreach ($folder->GetFolders() as $folder) $dbitems[$folder->GetName()] = $folder;
+            foreach ($folder->GetFiles() as $subfile)
+                $dbitems[$subfile->GetName()] = $subfile;
+            foreach ($folder->GetFolders() as $subfolder)
+                $dbitems[$subfolder->GetName()] = $subfolder;
             
             foreach ($storage->ReadFolder($path) as $fsname)
             {
@@ -106,10 +103,10 @@ class External extends BaseFileFS
                     unset($dbitems[$fsname]);
                 else
                 {
-                    $database = $this->GetDatabase();
-                    $owner = $this->GetFSManager()->GetOwner();
+                    $database = $this->GetStorage()->GetDatabase();
+                    $owner = $this->GetStorage()->GetOwner();
                     
-                    $class = $isfile ? $fileClass : $folderClass;
+                    $class = $isfile ? File::class : Folder::class;
                     $dbitem = $class::NotifyCreate($database, $folder, $owner, $fsname);
                     
                     $dbitem->Refresh()->Save(); // update metadata, and insert to the DB immediately
@@ -137,6 +134,41 @@ class External extends BaseFileFS
         return $this;
     }    
     
+    public function ImportFile(File $file, InputPath $infile) : self
+    {
+        $this->GetStorage()->ImportFile($infile->GetPath(), $this->GetFilePath($file), $infile->isTemp()); return $this;
+    }
+    
+    public function CreateFile(File $file) : self
+    {
+        $this->GetStorage()->CreateFile($this->GetFilePath($file)); return $this;
+    }
+    
+    public function DeleteFile(File $file) : self
+    {
+        $this->GetStorage()->DeleteFile($this->GetFilePath($file)); return $this;
+    }
+
+    public function ReadBytes(File $file, int $start, int $length) : string
+    {
+        return $this->GetStorage()->ReadBytes($this->GetFilePath($file), $start, $length);
+    }
+    
+    public function WriteBytes(File $file, int $start, string $data) : self
+    {
+        $this->GetStorage()->WriteBytes($this->GetFilePath($file), $start, $data); return $this;
+    }
+    
+    public function Truncate(File $file, int $length) : self
+    {
+        $this->GetStorage()->Truncate($this->GetFilePath($file), $length); return $this;
+    }
+    
+    public function CopyFile(File $file, File $dest) : self 
+    {
+        $this->GetStorage()->CopyFile($this->GetFilePath($file), $this->GetFilePath($dest)); return $this; 
+    }
+    
     public function RenameFile(File $file, string $name) : self
     { 
         $oldpath = $this->GetItemPath($file);
@@ -148,7 +180,7 @@ class External extends BaseFileFS
     public function RenameFolder(Folder $folder, string $name) : self
     { 
         $oldpath = $this->GetItemPath($folder);
-        $newpath = $this->GetItemPath($folder->GetParent(),$name);
+        $newpath = $this->GetItemPath($folder->GetParent(),$name); // @phpstan-ignore-line TODO parent can be null, only allow this with subfolders
         $this->GetStorage()->RenameFolder($oldpath, $newpath);
         return $this;
     }

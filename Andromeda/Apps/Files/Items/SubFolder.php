@@ -1,4 +1,4 @@
-<?php declare(strict_types=1); namespace Andromeda\Apps\Files; if (!defined('Andromeda')) die();
+<?php declare(strict_types=1); namespace Andromeda\Apps\Files\Items; if (!defined('Andromeda')) die();
 
 use Andromeda\Core\Database\ObjectDatabase;
 use Andromeda\Apps\Accounts\Account;
@@ -17,7 +17,7 @@ class SubFolder extends Folder
     {
         static::CheckName($name, $overwrite, false);
         
-        $this->GetFSImpl()->RenameFolder($this, $name);
+        $this->GetFilesystem()->RenameFolder($this, $name);
         return $this->SetScalar('name', $name);
     }
     
@@ -26,7 +26,7 @@ class SubFolder extends Folder
         $this->CheckIsNotChildOrSelf($parent);
         static::CheckParent($parent, $overwrite, false); 
         
-        $this->GetFSImpl()->MoveFolder($this, $parent);
+        $this->GetFilesystem()->MoveFolder($this, $parent);
         return $this->SetObject('parent', $parent);
     }
 
@@ -53,7 +53,7 @@ class SubFolder extends Folder
 
         $folder ??= static::NotifyCreate($this->database, $this->GetParent(), $owner, $name);
         
-        $this->GetFSImpl(false)->CreateFolder($folder); 
+        $this->GetFilesystem(false)->CreateFolder($folder); 
         
         return $this->CopyToFolder($folder);
     }
@@ -67,7 +67,7 @@ class SubFolder extends Folder
     
         $folder ??= static::NotifyCreate($this->database, $parent, $owner, $this->GetName());
         
-        $this->GetFSImpl(false)->CreateFolder($folder);
+        $this->GetFilesystem(false)->CreateFolder($folder);
         
         return $this->CopyToFolder($folder);
     }
@@ -100,7 +100,7 @@ class SubFolder extends Folder
 
         $folder = static::NotifyCreate($database, $parent, $account, $name);
         
-        $folder->GetFSImpl(false)->CreateFolder($folder); return $folder;
+        $folder->GetFilesystem(false)->CreateFolder($folder); return $folder;
     }
     
     /** Deletes the folder and its contents from DB and disk */
@@ -116,7 +116,7 @@ class SubFolder extends Folder
             
             if (!$this->isDeleted())
             {
-                $this->GetFSImpl(false)->DeleteFolder($this);
+                $this->GetFilesystem(false)->DeleteFolder($this);
             }
         }
 

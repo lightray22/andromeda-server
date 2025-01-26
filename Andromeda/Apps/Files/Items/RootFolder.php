@@ -1,4 +1,4 @@
-<?php declare(strict_types=1); namespace Andromeda\Apps\Files; if (!defined('Andromeda')) die();
+<?php declare(strict_types=1); namespace Andromeda\Apps\Files\Items; if (!defined('Andromeda')) die();
 
 use Andromeda\Core\Database\{ObjectDatabase, QueryBuilder};
 use Andromeda\Apps\Accounts\Account;

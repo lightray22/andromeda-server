@@ -32,23 +32,17 @@ abstract class External extends BaseObject implements IAuthSource
     use TableTypes\TableLinkedChildren;
     
     /** 
-     * Returns a map of all external Auth classes as $name=>$class 
-     * @return array<string, class-string<self>>
+     * A map of all external Auth classes as $name=>$class 
+     * @var array<string, class-string<self>>
      */
-    private static function getAuthClasses() : array
-    {
-        return array(
-            'ftp' => FTP::class, 
-            'imap' => IMAP::class, 
-            'ldap' => LDAP::class
-        );
-    }
+    public const TYPES = array(
+        'ftp' => FTP::class, 
+        'imap' => IMAP::class, 
+        'ldap' => LDAP::class
+    );
     
     /** @return array<string, class-string<self>> */
-    public static function GetChildMap(ObjectDatabase $database) : array
-    {
-        return self::getAuthClasses();
-    }
+    public static function GetChildMap(ObjectDatabase $database) : array { return self::TYPES; }
     
     /** The timestamp this auth source was created */
     private FieldTypes\Timestamp $date_created;
@@ -77,7 +71,7 @@ abstract class External extends BaseObject implements IAuthSource
     }
 
     /** Returns basic command usage for Create() and Edit() */
-    public static function GetCreateUsage() : string { return "--type ".implode('|',array_keys(self::getAuthClasses())).
+    public static function GetCreateUsage() : string { return "--type ".implode('|',array_keys(self::TYPES)).
                                                             " [--enabled ".implode('|',array_keys(self::ENABLED_TYPES))."]".
                                                             " [--description ?text] [--createdefgroup bool]"; }
     
@@ -91,7 +85,7 @@ abstract class External extends BaseObject implements IAuthSource
     final public static function GetCreateUsages() : array
     {
         $retval = array();
-        foreach (self::getAuthClasses() as $name=>$class)
+        foreach (self::TYPES as $name=>$class)
             $retval[] = "--type $name ".$class::GetCreateUsage();
         return $retval;
     }
@@ -103,7 +97,7 @@ abstract class External extends BaseObject implements IAuthSource
     final public static function GetEditUsages() : array
     {
         $retval = array();
-        foreach (self::getAuthClasses() as $name=>$class)
+        foreach (self::TYPES as $name=>$class)
             $retval[] = "--type $name ".$class::GetEditUsage();
         return $retval;
     }
@@ -111,11 +105,9 @@ abstract class External extends BaseObject implements IAuthSource
     /** Creates and tests a new external auth backend based on the user input */
     public static function TypedCreate(ObjectDatabase $database, SafeParams $params) : self
     {
-        $classes = self::getAuthClasses();
+        $type = $params->GetParam('type')->FromAllowlist(array_keys(self::TYPES));
         
-        $type = $params->GetParam('type')->FromAllowlist(array_keys($classes));
-        
-        return $classes[$type]::Create($database, $params);
+        return self::TYPES[$type]::Create($database, $params);
     }
 
     /** Creates a new external authentication backend, and optionally a default group for it */

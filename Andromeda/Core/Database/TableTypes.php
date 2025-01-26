@@ -12,14 +12,6 @@ trait HasTable
     }
 }
 
-/** A trait for classes with no children */
-trait NoChildren
-{
-    use NoTypedChildren;
-    
-    public static function GetChildMap(ObjectDatabase $database) : array { return array(); }
-}
-
 /** A trait for classes with no typed children (may have linked children) */
 trait NoTypedChildren
 {
@@ -35,6 +27,14 @@ trait NoTypedChildren
     {
         throw new Exceptions\NotMultiTableException(self::class);
     }
+}
+
+/** A trait for classes with no children */
+trait NoChildren
+{
+    use NoTypedChildren;
+    
+    public static function GetChildMap(ObjectDatabase $database) : array { return array(); }
 }
 
 /** A trait for classes with a table and no children */

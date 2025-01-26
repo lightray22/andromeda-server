@@ -2,9 +2,7 @@
 
 use Andromeda\Core\Database\{FieldTypes, ObjectDatabase};
 use Andromeda\Core\IOFormat\{Input, SafeParams};
-
-Account::RegisterCryptoHandler(function(ObjectDatabase $database, Account $account, bool $init){ 
-    if (!$init) SFTP::DecryptAccount($database, $account); });
+use Andromeda\Apps\Accounts\Account;
 
 abstract class SFTPBase1 extends FWrapper { use BasePath; }
 abstract class SFTPBase2 extends SFTPBase1 { use UserPass; }
@@ -74,7 +72,7 @@ class SFTP extends SFTPBase2
     
     public static function GetCreateUsage() : string { return parent::GetCreateUsage()." --hostname alphanum [--port ?uint16] [--privkey% path | --privkey-] [--keypass ?raw]"; }
     
-    public static function Create(ObjectDatabase $database, Input $input, FSManager $filesystem) : self
+    public static function Create(ObjectDatabase $database, Input $input, ?Account $owner) : self
     { 
         $params = $input->GetParams();
         

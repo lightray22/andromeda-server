@@ -47,20 +47,12 @@ CREATE TABLE `a2obj_apps_files_config` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `a2obj_apps_files_items_filesystem_fsmanager` (
-  `id` char(8) NOT NULL,
-  `date_created` double NOT NULL,
-  `type` tinyint(2) NOT NULL,
-  `readonly` tinyint(1) NOT NULL,
-  `owner` char(12) DEFAULT NULL,
-  `name` varchar(127) DEFAULT NULL,
-  `crypto_masterkey` binary(32) DEFAULT NULL,
-  `crypto_chunksize` int(11) DEFAULT NULL,
+CREATE TABLE `a2obj_apps_files_items_folder` (
+  `id` char(16) NOT NULL,
+  `count_subfiles` int(11) NOT NULL DEFAULT 0,
+  `count_subfolders` int(11) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `owner_name` (`owner`,`name`),
-  KEY `owner` (`owner`),
-  KEY `name` (`name`),
-  CONSTRAINT `a2obj_apps_files_items_filesystem_fsmanager_ibfk_1` FOREIGN KEY (`owner`) REFERENCES `a2obj_apps_accounts_account` (`id`)
+  CONSTRAINT `a2obj_apps_files_items_folder_ibfk_1` FOREIGN KEY (`id`) REFERENCES `a2obj_apps_files_items_item` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -69,39 +61,29 @@ CREATE TABLE `a2obj_apps_files_items_item` (
   `id` char(16) NOT NULL,
   `size` bigint(20) NOT NULL,
   `owner` char(12) DEFAULT NULL,
-  `filesystem` char(8) NOT NULL,
+  `storage` char(8) NOT NULL,
   `date_created` double NOT NULL,
   `date_modified` double DEFAULT NULL,
   `date_accessed` double DEFAULT NULL,
   `description` text DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `owner` (`owner`),
-  KEY `filesystem` (`filesystem`),
+  KEY `storage` (`storage`),
   CONSTRAINT `a2obj_apps_files_items_item_ibfk_1` FOREIGN KEY (`owner`) REFERENCES `a2obj_apps_accounts_account` (`id`),
-  CONSTRAINT `a2obj_apps_files_items_item_ibfk_2` FOREIGN KEY (`filesystem`) REFERENCES `a2obj_apps_files_items_filesystem_fsmanager` (`id`)
+  CONSTRAINT `a2obj_apps_files_items_item_ibfk_2` FOREIGN KEY (`storage`) REFERENCES `a2obj_apps_files_storage_storage` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `a2obj_apps_files_items_items_folder` (
-  `id` char(16) NOT NULL,
-  `count_subfiles` int(11) NOT NULL DEFAULT 0,
-  `count_subfolders` int(11) NOT NULL DEFAULT 0,
-  PRIMARY KEY (`id`),
-  CONSTRAINT `a2obj_apps_files_items_items_folder_ibfk_1` FOREIGN KEY (`id`) REFERENCES `a2obj_apps_files_items_item` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `a2obj_apps_files_items_items_rootfolder` (
+CREATE TABLE `a2obj_apps_files_items_rootfolder` (
   `id` char(16) NOT NULL,
   `owner` char(12) DEFAULT NULL,
-  `filesystem` char(12) NOT NULL,
+  `storage` char(12) NOT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `owner_filesystem` (`owner`,`filesystem`),
+  UNIQUE KEY `owner_storage` (`owner`,`storage`),
   KEY `owner` (`owner`),
-  KEY `filesystem` (`filesystem`),
-  CONSTRAINT `a2obj_apps_files_items_items_rootfolder_ibfk_1` FOREIGN KEY (`id`) REFERENCES `a2obj_apps_files_items_items_folder` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+  KEY `storage` (`storage`),
+  CONSTRAINT `a2obj_apps_files_items_rootfolder_ibfk_1` FOREIGN KEY (`id`) REFERENCES `a2obj_apps_files_items_folder` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -114,7 +96,7 @@ CREATE TABLE `a2obj_apps_files_items_subitem` (
   UNIQUE KEY `name_parent` (`name`,`parent`),
   KEY `parent` (`parent`),
   CONSTRAINT `a2obj_apps_files_items_subitem_ibfk_1` FOREIGN KEY (`id`) REFERENCES `a2obj_apps_files_items_item` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `a2obj_apps_files_items_subitem_ibfk_2` FOREIGN KEY (`parent`) REFERENCES `a2obj_apps_files_items_items_folder` (`id`)
+  CONSTRAINT `a2obj_apps_files_items_subitem_ibfk_2` FOREIGN KEY (`parent`) REFERENCES `a2obj_apps_files_items_folder` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -149,34 +131,6 @@ CREATE TABLE `a2obj_apps_files_limits_accounttotal` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `a2obj_apps_files_limits_filesystemtimed` (
-  `id` char(8) NOT NULL,
-  `filesystem` char(8) NOT NULL,
-  `timeperiod` int(11) NOT NULL,
-  `track_items` tinyint(1) DEFAULT NULL,
-  `track_dlstats` tinyint(1) DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `filesystem_timeperiod` (`filesystem`,`timeperiod`),
-  KEY `filesystem` (`filesystem`),
-  CONSTRAINT `a2obj_apps_files_limits_filesystemtimed_ibfk_1` FOREIGN KEY (`id`) REFERENCES `a2obj_apps_files_limits_timed` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `a2obj_apps_files_limits_filesystemtimed_ibfk_2` FOREIGN KEY (`filesystem`) REFERENCES `a2obj_apps_files_items_filesystem_fsmanager` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `a2obj_apps_files_limits_filesystemtotal` (
-  `id` char(8) NOT NULL,
-  `filesystem` char(8) NOT NULL,
-  `track_items` tinyint(1) DEFAULT NULL,
-  `track_dlstats` tinyint(1) DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `filesystem` (`filesystem`),
-  CONSTRAINT `a2obj_apps_files_limits_filesystemtotal_ibfk_1` FOREIGN KEY (`id`) REFERENCES `a2obj_apps_files_limits_total` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `a2obj_apps_files_limits_filesystemtotal_ibfk_2` FOREIGN KEY (`filesystem`) REFERENCES `a2obj_apps_files_items_filesystem_fsmanager` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `a2obj_apps_files_limits_grouptimed` (
   `id` char(12) NOT NULL,
   `group` char(12) NOT NULL,
@@ -203,6 +157,34 @@ CREATE TABLE `a2obj_apps_files_limits_grouptotal` (
   UNIQUE KEY `group` (`group`),
   CONSTRAINT `a2obj_apps_files_limits_grouptotal_ibfk_1` FOREIGN KEY (`id`) REFERENCES `a2obj_apps_files_limits_total` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `a2obj_apps_files_limits_grouptotal_ibfk_2` FOREIGN KEY (`group`) REFERENCES `a2obj_apps_accounts_group` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `a2obj_apps_files_limits_storagetimed` (
+  `id` char(8) NOT NULL,
+  `storage` char(8) NOT NULL,
+  `timeperiod` int(11) NOT NULL,
+  `track_items` tinyint(1) DEFAULT NULL,
+  `track_dlstats` tinyint(1) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `storage_timeperiod` (`storage`,`timeperiod`),
+  KEY `storage` (`storage`),
+  CONSTRAINT `a2obj_apps_files_limits_storagetimed_ibfk_1` FOREIGN KEY (`id`) REFERENCES `a2obj_apps_files_limits_timed` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `a2obj_apps_files_limits_storagetimed_ibfk_2` FOREIGN KEY (`storage`) REFERENCES `a2obj_apps_files_storage_storage` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `a2obj_apps_files_limits_storagetotal` (
+  `id` char(8) NOT NULL,
+  `storage` char(8) NOT NULL,
+  `track_items` tinyint(1) DEFAULT NULL,
+  `track_dlstats` tinyint(1) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `storage` (`storage`),
+  CONSTRAINT `a2obj_apps_files_limits_storagetotal_ibfk_1` FOREIGN KEY (`id`) REFERENCES `a2obj_apps_files_limits_total` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `a2obj_apps_files_limits_storagetotal_ibfk_2` FOREIGN KEY (`storage`) REFERENCES `a2obj_apps_files_storage_storage` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -421,10 +403,17 @@ CREATE TABLE `a2obj_apps_files_storage_smb` (
 CREATE TABLE `a2obj_apps_files_storage_storage` (
   `id` char(8) NOT NULL,
   `date_created` double NOT NULL,
-  `filesystem` char(8) NOT NULL,
+  `fstype` tinyint(2) NOT NULL,
+  `readonly` tinyint(1) NOT NULL,
+  `owner` char(12) DEFAULT NULL,
+  `name` varchar(127) NOT NULL DEFAULT 'Default',
+  `crypto_masterkey` binary(32) DEFAULT NULL,
+  `crypto_chunksize` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `filesystem` (`filesystem`),
-  CONSTRAINT `a2obj_apps_files_storage_storage_ibfk_1` FOREIGN KEY (`filesystem`) REFERENCES `a2obj_apps_files_items_filesystem_fsmanager` (`id`)
+  UNIQUE KEY `owner_name` (`owner`,`name`),
+  KEY `owner` (`owner`),
+  KEY `name` (`name`),
+  CONSTRAINT `a2obj_apps_files_storage_fsmanager_ibfk_1` FOREIGN KEY (`owner`) REFERENCES `a2obj_apps_accounts_account` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;

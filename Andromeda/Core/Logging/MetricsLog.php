@@ -238,7 +238,7 @@ class MetricsLog extends BaseObject
             $obj->rusage->SetArray($rusage); // @phpstan-ignore-line type missing
             
             $obj->includes->SetArray(get_included_files());
-            $obj->objects->SetArray($database->getLoadedObjects());
+            $obj->objects->SetArray($database->getLoadedObjectIDs());
             $obj->queries->SetArray($total->getQueries());
             
             $errman = $database->GetApiPackage()->GetErrorManager();

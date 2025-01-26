@@ -36,6 +36,7 @@ class InputPath extends InputFile
     /** 
      * Returns the size of the file to be used 
      * @throws Exceptions\FileReadFailedException if it fails
+     * @return non-negative-int
      */
     public function GetSize() : int 
     { 

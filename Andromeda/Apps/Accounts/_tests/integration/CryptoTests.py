@@ -21,5 +21,5 @@ def testChangePassword(self):
                                              
     self.deleteAccount(account)
 
-# TODO RAY !! test changepassword as sudo user (no old PW required)
+# TODO TESTS !! test changepassword as sudo user (no old PW required)
 # TODO TESTS !! crypto/changePW/recovery + two factor w/ crypto

@@ -224,7 +224,7 @@ class Config extends BaseConfig
     /** Set whether the server is allowed to respond to requests */
     public function SetEnabled(bool $enable) : self { $this->enabled->SetValue($enable); return $this; }
 
-    /** Returns true if the server is set to read-only (not dry run) */
+    /** Returns true if the server is set to read-only */
     public function isReadOnly() : bool { return $this->read_only->GetValue(); }
     
     /** Returns the configured global data directory path */

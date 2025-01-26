@@ -462,7 +462,7 @@ class ObjectDatabaseTest extends \PHPUnit\Framework\TestCase
             )
         );
         
-        $this->assertSame($loaded, $objdb->getLoadedObjects());
+        $this->assertSame($loaded, $objdb->getLoadedObjectIDs());
     }
     
     public function testEmptyKeyLoad() : void

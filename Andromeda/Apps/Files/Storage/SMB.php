@@ -2,9 +2,7 @@
 
 use Andromeda\Core\Database\{FieldTypes, ObjectDatabase};
 use Andromeda\Core\IOFormat\Input;
-
-Account::RegisterCryptoHandler(function(ObjectDatabase $database, Account $account, bool $init){ 
-    if (!$init) SMB::DecryptAccount($database, $account); });
+use Andromeda\Apps\Accounts\Account;
 
 abstract class SMBBase1 extends FWrapper { use BasePath; }
 abstract class SMBBase2 extends SMBBase1 { use UserPass; }
@@ -41,7 +39,7 @@ class SMB extends SMBBase2
     
     public static function GetCreateUsage() : string { return parent::GetCreateUsage()." --hostname alphanum [--workgroup ?alphanum]"; }
     
-    public static function Create(ObjectDatabase $database, Input $input, FSManager $filesystem) : self
+    public static function Create(ObjectDatabase $database, Input $input, ?Account $owner) : self
     {
         $params = $input->GetParams();
         
@@ -67,7 +65,7 @@ class SMB extends SMBBase2
     public function TryGetWorkgroup() : ?string { return $this->TryGetScalar('workgroup'); }
 
     /** Checks for the SMB client extension */
-    public function PostConstruct() : void
+    public function PostConstruct(bool $created) : void // TODO RAY !! where do the auth sources chec kthis?
     {
         if (!function_exists('smbclient_version')) throw new Exceptions\SMBExtensionException();
     }

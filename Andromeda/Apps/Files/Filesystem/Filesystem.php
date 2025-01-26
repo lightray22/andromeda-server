@@ -1,25 +1,18 @@
 <?php declare(strict_types=1); namespace Andromeda\Apps\Files\Filesystem; if (!defined('Andromeda')) die();
 
-use Andromeda\Core\Database\ObjectDatabase;
 use Andromeda\Core\IOFormat\InputPath;
+use Andromeda\Apps\Files\Items\{File, Folder};
+use Andromeda\Apps\Files\Storage\Storage;
 
 /**
- * Abstract class for a filesystem implementation, with the actual disk functions.
+ * Abstract class for a filesystem implementation
  * 
- * This is the interface that on-disk objects (files) will call into. Filesystem 
- * implementations define how DB objects map to disk files, and then call the underlying 
- * storage. The FSImpl class's info is managed by the FSManager and is not a DB object.
- * 
- * @see FSManager
+ * This is the interface that database objects (files) will call into. Filesystem 
+ * implementations define how DB objects map to disk files, and then call the underlying storage.
  */
-abstract class FSImpl
+abstract class Filesystem
 {
-    protected FSManager $fsmanager;
-    
-    public function __construct(FSManager $fsmanager)
-    {
-        $this->fsmanager = $fsmanager;
-    }
+    public function __construct(public Storage $storage){}
     
     /**
      * Returns the preferred byte alignment of the filesystem.
@@ -29,19 +22,16 @@ abstract class FSImpl
      */
     public function GetChunkSize() : ?int { return null; }
     
-    /** Returns a reference to the parent FS manager */
-    protected function GetFSManager() : FSManager { return $this->fsmanager; }
-
     /** Returns the underlying storage */
-    protected function GetStorage() : Storage { return $this->fsmanager->GetStorage(); }
-    
-    /** Returns a database reference */
-    protected function GetDatabase() : ObjectDatabase { return $this->fsmanager->GetDatabase(); }
+    protected function GetStorage() : Storage { return $this->storage; }
     
     /** Synchronizes the given file's metadata with storage */
     public abstract function RefreshFile(File $file) : self;
     
-    /** Synchronizes the given folder's metadata with storage */
+    /** 
+     * Synchronizes the given folder's metadata with storage
+     * @param bool $doContents if true, sync folder contents also
+     */
     public abstract function RefreshFolder(Folder $folder, bool $doContents = true) : self;
     
     /** Creates the given folder on disk */
@@ -69,8 +59,8 @@ abstract class FSImpl
      * 
      * Throws an error if the read goes beyond the end of the file
      * @param File $file file to read
-     * @param int $start byte offset
-     * @param int $length number of bytes
+     * @param non-negative-int $start byte offset
+     * @param non-negative-int $length number of bytes
      * @return string file data
      */
     public abstract function ReadBytes(File $file, int $start, int $length) : string;
@@ -78,7 +68,7 @@ abstract class FSImpl
     /**
      * Writes to the given file, possibly appending it
      * @param File $file file to write
-     * @param int $start byte offset
+     * @param non-negative-int $start byte offset
      * @param string $data data to write
      * @return $this
      */
@@ -87,10 +77,18 @@ abstract class FSImpl
     /**
      * Truncates (changes size of) a file
      * @param File $file file to truncate
-     * @param int $length desired size in bytes
+     * @param non-negative-int $length desired size in bytes
      * @return $this
      */
     public abstract function Truncate(File $file, int $length) : self;
+    
+    /**
+     * Copies a file
+     * @param File $file file to copy
+     * @param File $dest new object for destination
+     * @return $this
+     */
+    public abstract function CopyFile(File $file, File $dest) : self;
     
     /** Renames a file to the given name */
     public abstract function RenameFile(File $file, string $name) : self;
@@ -113,12 +111,4 @@ abstract class FSImpl
      * @return $this
      */
     public abstract function MoveFolder(Folder $folder, Folder $parent) : self;
-    
-    /**
-     * Copies a file
-     * @param File $file file to copy
-     * @param File $dest new object for destination
-     * @return $this
-     */
-    public abstract function CopyFile(File $file, File $dest) : self;
 }

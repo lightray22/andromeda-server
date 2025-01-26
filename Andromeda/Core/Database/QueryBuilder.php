@@ -189,18 +189,21 @@ class QueryBuilder
 
     /** 
      * Assigns/adds a WHERE clause to the query
-     * if null, resets - if called > once, uses AND 
+     * if null, resets - if called > once, uses $and
+     * @param bool $and if true, use AND else use OR
      * @return $this
      */
-    public function Where(?string $where) : self 
+    public function Where(?string $where, bool $and = true) : self
     {
         if ($where === null)
         {
             $this->where = null;
             $this->params = array();
         }
-        else if ($this->where !== null)
+        else if ($this->where !== null && $and)
             $this->where = $this->And($this->where, $where);
+        else if ($this->where !== null && !$and)
+            $this->where = $this->Or($this->where, $where);
         else $this->where = $where; 
         return $this;
     }

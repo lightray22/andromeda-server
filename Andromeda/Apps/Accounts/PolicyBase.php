@@ -75,7 +75,7 @@ abstract class PolicyBase extends BaseObject
         parent::CreateFields();
     }
 
-    /** defines command usage for SetProperties() */
+    /** defines command usage for SetPolicies() */
     public static function GetPropUsage() : string { return "[--comment ?text] [--session_timeout ?uint] [--client_timeout ?uint] [--max_password_age ?uint] ".
                                                             "[--limit_clients ?uint8] [--limit_contacts ?uint8] [--limit_recoverykeys ?uint8] ".
                                                             "[--admin ?bool] [--disabled ?bool] [--forcetf ?bool] [--allowcrypto ?bool] ".
@@ -85,7 +85,7 @@ abstract class PolicyBase extends BaseObject
      * Sets the value of an inherited property for the object 
      * @return $this
      */
-    public function SetProperties(SafeParams $params) : self
+    public function SetPolicies(SafeParams $params) : self
     {
         if ($params->HasParam('comment'))
             $this->comment->SetValue($params->GetParam("comment")->GetNullHTMLText());

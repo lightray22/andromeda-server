@@ -2,9 +2,7 @@
 
 use Andromeda\Core\Database\{FieldTypes, ObjectDatabase};
 use Andromeda\Core\IOFormat\Input;
-
-Account::RegisterCryptoHandler(function(ObjectDatabase $database, Account $account, bool $init){ 
-    if (!$init) FTP::DecryptAccount($database, $account); }); // TODO RAY !! move all these to FilesApp main
+use Andromeda\Apps\Accounts\Account;
 
 abstract class FTPBase1 extends FWrapper { use BasePath; }
 abstract class FTPBase2 extends FTPBase1 { use UserPass; }
@@ -44,7 +42,7 @@ class FTP extends FTPBase2
     
     public static function GetCreateUsage() : string { return parent::GetCreateUsage()." --hostname alphanum [--port ?uint16] [--implssl bool]"; }
     
-    public static function Create(ObjectDatabase $database, Input $input, FSManager $filesystem) : self
+    public static function Create(ObjectDatabase $database, Input $input, ?Account $owner) : self
     {
         $params = $input->GetParams();
         
@@ -68,7 +66,7 @@ class FTP extends FTPBase2
     }
     
     /** Check for the FTP extension */
-    public function PostConstruct() : void
+    public function PostConstruct(bool $created) : void
     {
         if (!function_exists('ftp_connect')) throw new Exceptions\FTPExtensionException();
     }

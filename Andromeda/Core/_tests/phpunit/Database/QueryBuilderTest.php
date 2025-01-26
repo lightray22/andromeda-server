@@ -100,6 +100,9 @@ class QueryBuilderTest extends \PHPUnit\Framework\TestCase
     {
         $q = new QueryBuilder(); $q->Where($q->Equals('a',3))->Where($q->Equals('b',4));
         $this->testQuery($q, array(3,4), "WHERE (\"a\" = :d0 AND \"b\" = :d1)");
+
+        $q = new QueryBuilder(); $q->Where($q->Equals('a',3))->Where($q->Equals('b',4),and:false);
+        $this->testQuery($q, array(3,4), "WHERE (\"a\" = :d0 OR \"b\" = :d1)");
     }
     
     public function testSpecial() : void

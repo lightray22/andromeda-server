@@ -4,20 +4,16 @@ use Andromeda\Core\Config;
 use Andromeda\Core\Database\{FieldTypes, ObjectDatabase};
 use Andromeda\Core\Errors\ErrorManager;
 use Andromeda\Core\IOFormat\{Input, SafeParams};
-
-Account::RegisterCryptoHandler(function(ObjectDatabase $database, Account $account, bool $init){ 
-    if (!$init) S3::DecryptAccount($database, $account); });
-
-abstract class S3Base extends FWrapper { use NoFolders; } // TODO does not need to be a trait?
+use Andromeda\Apps\Accounts\Account;
 
 /**
  * Allows using an S3-compatible server for backend storage
  * 
  * Uses fieldcrypt to allow encrypting the keys.
  */
-class S3 extends S3Base
+class S3 extends FWrapper
 {
-    use OptFieldCrypt;
+    //use OptFieldCrypt;
     
     protected static function getEncryptedFields() : array { return array('accesskey','secretkey'); }
     
@@ -82,7 +78,7 @@ class S3 extends S3Base
         " --endpoint fspath --bucket alphanum --region alphanum [--path_style ?bool]".
         " [--port ?uint16] [--usetls ?bool] [--accesskey ?randstr] [--secretkey ?randstr]"; }
     
-    public static function Create(ObjectDatabase $database, Input $input, FSManager $filesystem) : self
+    public static function Create(ObjectDatabase $database, Input $input, ?Account $owner) : self
     {
         $params = $input->GetParams();
         
@@ -126,7 +122,7 @@ class S3 extends S3Base
     /** The stream wrapper ID */ private string $streamID;
     
     /** Checks for the SMB client extension */
-    public function PostConstruct() : void
+    public function PostConstruct(bool $created) : void
     {
         if (!class_exists('\\Aws\\S3\\S3Client')) throw new Exceptions\S3AwsSdkException();
     }
@@ -288,5 +284,22 @@ class S3 extends S3Base
         $this->GetContext($path, 0, true); return $this;
     }
     
-    protected function SubTruncate(string $path, int $length) : self { throw new Exceptions\S3ModifyException(); }    
+    protected function SubTruncate(string $path, int $length) : self { throw new Exceptions\S3ModifyException(); }  
+
+    public function supportsFolders() : bool { return false; }   
+    
+    public function isFolder(string $path) : bool
+    {
+        return !count(array_filter(explode('/',$path)));
+    }
+    
+    protected function SubCreateFolder(string $path) : Storage { throw new Exceptions\FoldersUnsupportedException(); }
+    
+    protected function SubDeleteFolder(string $path) : Storage { throw new Exceptions\FoldersUnsupportedException(); }
+    
+    protected function SubRenameFolder(string $old, string $new) : Storage { throw new Exceptions\FoldersUnsupportedException(); }
+    
+    protected function SubMoveFile(string $old, string $new) : Storage { throw new Exceptions\FoldersUnsupportedException(); }
+    
+    protected function SubMoveFolder(string $old, string $new) : Storage { throw new Exceptions\FoldersUnsupportedException(); }
 }

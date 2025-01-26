@@ -243,7 +243,7 @@ abstract class Contact extends BaseObject
     /**
      * Fetches a type/address pair from input (depends on the param name given)
      * @throws Exceptions\ContactNotGivenException if nothing valid was found
-     * @return ?array{class:class-string<self>, address:string}
+     * @return ?array{class:class-string<self>, address:string} // TODO change to a class, more efficient
      */
     abstract public static function SubclassFetchPairFromParams(SafeParams $params) : ?array;
     

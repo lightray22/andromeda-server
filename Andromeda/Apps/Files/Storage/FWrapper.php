@@ -1,13 +1,15 @@
 <?php declare(strict_types=1); namespace Andromeda\Apps\Files\Storage; if (!defined('Andromeda')) die();
 
+use Andromeda\Apps\Files\FileUtils;
+
+/** An open file handle */
 class FileContext
 {
-    public $handle;
-    public int $offset;
-    public bool $isWrite;
-    
-    public function __construct($handle, int $offset, bool $isWrite){
-        $this->handle = $handle; $this->offset = $offset; $this->isWrite = $isWrite; }
+    /** @param resource $handle */
+    public function __construct(
+        public $handle, 
+        public int $offset,
+        public bool $isWrite){}
 }
 
 /**
@@ -22,7 +24,7 @@ abstract class FWrapper extends Storage
     public function ItemStat(string $path) : ItemStat
     {
         $data = stat($this->GetFullURL($path));
-        if (!$data) throw new Exceptions\ItemStatFailedException();
+        if ($data === false) throw new Exceptions\ItemStatFailedException($path);
         return new ItemStat($data['atime'], $data['ctime'], $data['mtime'], $data['size']);
     }
     
@@ -50,22 +52,22 @@ abstract class FWrapper extends Storage
 
     protected function SubReadFolder(string $path) : array
     {
-        $list = scandir($this->GetFullURL($path), SCANDIR_SORT_NONE);
-        if ($list === false) throw new Exceptions\FolderReadFailedException();
+        if (($list = scandir($this->GetFullURL($path), SCANDIR_SORT_NONE)) === false)
+            throw new Exceptions\FolderReadFailedException($path);
         return array_filter($list, function($item){ return $item !== "." && $item !== ".."; });
     }
     
     protected function SubCreateFolder(string $path) : parent
     {
         if (!mkdir($this->GetFullURL($path))) 
-            throw new Exceptions\FolderCreateFailedException();        
+            throw new Exceptions\FolderCreateFailedException($path);
         else return $this;
     }
     
     protected function SubCreateFile(string $path) : parent
     {
         if (file_put_contents($this->GetFullURL($path),'') === false)
-            throw new Exceptions\FileCreateFailedException();
+            throw new Exceptions\FileCreateFailedException($path);
         return $this;
     }
 
@@ -74,7 +76,7 @@ abstract class FWrapper extends Storage
         $this->ClosePath($dest);
         
         if (!copy($src, $this->GetFullURL($dest)))
-            throw new Exceptions\FileCopyFailedException();
+            throw new Exceptions\FileCopyFailedException($src);
         return $this;
     }
     
@@ -82,13 +84,14 @@ abstract class FWrapper extends Storage
     {
         $this->ClosePath($path);
         
-        if (!($handle = static::OpenWriteHandle($path)))
-            throw new Exceptions\FileWriteFailedException();
+        if (($handle = static::OpenWriteHandle($path)) === false)
+            throw new Exceptions\FileWriteFailedException($path);
 
         if (!ftruncate($handle, $length))
-            throw new Exceptions\FileWriteFailedException();
+            throw new Exceptions\FileWriteFailedException($path);
         
-        if (!fclose($handle)) throw new Exceptions\FileWriteFailedException();
+        if (!fclose($handle))
+            throw new Exceptions\FileWriteFailedException($path);
         
         return $this;
     }    
@@ -98,14 +101,14 @@ abstract class FWrapper extends Storage
         $this->ClosePath($path);
         
         if (!unlink($this->GetFullURL($path))) 
-            throw new Exceptions\FileDeleteFailedException();
+            throw new Exceptions\FileDeleteFailedException($path);
         else return $this;
     }    
     
     protected function SubDeleteFolder(string $path) : parent
     {
         if (!rmdir($this->GetFullURL($path))) 
-            throw new Exceptions\FolderDeleteFailedException();
+            throw new Exceptions\FolderDeleteFailedException($path);
         else return $this;
     }
 
@@ -114,14 +117,14 @@ abstract class FWrapper extends Storage
         $this->ClosePath($old); $this->ClosePath($new);
         
         if (!rename($this->GetFullURL($old), $this->GetFullURL($new)))
-            throw new Exceptions\FileRenameFailedException();
+            throw new Exceptions\FileRenameFailedException($old);
         return $this;
     }
     
     protected function SubRenameFolder(string $old, string $new) : parent
     {
         if (!rename($this->GetFullURL($old), $this->GetFullURL($new)))
-            throw new Exceptions\FolderRenameFailedException();
+            throw new Exceptions\FolderRenameFailedException($old);
         return $this;
     }
     
@@ -130,14 +133,14 @@ abstract class FWrapper extends Storage
         $this->ClosePath($old); $this->ClosePath($new);
         
         if (!rename($this->GetFullURL($old), $this->GetFullURL($new)))
-            throw new Exceptions\FileMoveFailedException();
+            throw new Exceptions\FileMoveFailedException($old);
         return $this;
     }
     
     protected function SubMoveFolder(string $old, string $new) : parent
     {
         if (!rename($this->GetFullURL($old), $this->GetFullURL($new)))
-            throw new Exceptions\FolderMoveFailedException();
+            throw new Exceptions\FolderMoveFailedException($old);
         return $this;
     }
     
@@ -146,7 +149,7 @@ abstract class FWrapper extends Storage
         $this->ClosePath($new);
         
         if (!copy($this->GetFullURL($old), $this->GetFullURL($new)))
-            throw new Exceptions\FileCopyFailedException();
+            throw new Exceptions\FileCopyFailedException($old);
         return $this;
     }
     
@@ -172,7 +175,7 @@ abstract class FWrapper extends Storage
         return $this;
     }
     
-    /** array<path, FileContext> map for all file handles */
+    /** @var array<string, FileContext> map for all file handles */
     private $contexts = array();
     
     /** Returns true if we can read from a stream opened as write */
@@ -181,28 +184,38 @@ abstract class FWrapper extends Storage
     /** Returns true if an already-open stream can be seeked randomly */
     protected static function supportsSeekReuse() : bool { return true; }
     
-    /** Returns a read handle for the given path */
-    protected function OpenReadHandle(string $path){ return fopen($this->GetFullURL($path),'rb'); }
+    /** 
+     * Returns a read handle for the given path
+     * @return resource|false
+     */
+    protected function OpenReadHandle(string $path) { 
+        return fopen($this->GetFullURL($path),'rb'); }
     
-    /** Returns a write handle for the given path */
-    protected function OpenWriteHandle(string $path){ return fopen($this->GetFullURL($path),'rb+'); }
+    /** 
+     * Returns a write handle for the given path
+     * @return resource|false
+     */
+    protected function OpenWriteHandle(string $path) { 
+        return fopen($this->GetFullURL($path),'rb+'); }
     
     /**
      * Returns a new handle for the given path
      * @param string $path path of file
-     * @param int $offset offset to initialize to
+     * @param non-negative-int $offset offset to initialize to
      * @param bool $isWrite true if this is a write
-     * @throws FileOpenFailedException if opening fails
-     * @throws FileSeekFailedException if seeking fails
+     * @throws Exceptions\FileOpenFailedException if opening fails
+     * @throws Exceptions\FileSeekFailedException if seeking fails
      * @return FileContext new file context
      */
     protected function OpenContext(string $path, int $offset, bool $isWrite) : FileContext
     {
         $handle = $isWrite ? $this->OpenWriteHandle($path) : $this->OpenReadHandle($path);
         
-        if (!$handle) throw new Exceptions\FileOpenFailedException();
+        if ($handle === false) 
+            throw new Exceptions\FileOpenFailedException($path);
         
-        if (fseek($handle, $offset) !== 0) throw new Exceptions\FileSeekFailedException();
+        if (fseek($handle, $offset) !== 0)
+            throw new Exceptions\FileSeekFailedException($path);
         
         return new FileContext($handle, $offset, false);
     }
@@ -210,7 +223,7 @@ abstract class FWrapper extends Storage
     /**
      * Returns a context for the given file
      * @param string $path path to file
-     * @param int $offset desired byte offset
+     * @param non-negative-int $offset desired byte offset
      * @param bool $isWrite true if write access is needed
      * @return FileContext file stream context
      */
@@ -224,10 +237,10 @@ abstract class FWrapper extends Storage
             $close = ($isWrite && !$context->isWrite);
             
             // close the stream if we want to read from a write stream and that's unsupported
-            $close |= (!$isWrite && $context->isWrite && !static::supportsReadWrite());
+            $close = $close || (!$isWrite && $context->isWrite && !static::supportsReadWrite());
             
             // close the stream if its offset is wrong and we can't seek it
-            $close |= ($context->offset !== $offset && !static::supportsSeekReuse());
+            $close = $close || ($context->offset !== $offset && !static::supportsSeekReuse());
             
             if ($close) { $this->ClosePath($path); $context = null; }
         }
@@ -237,7 +250,7 @@ abstract class FWrapper extends Storage
         if ($context->offset !== $offset)
         {
             if (fseek($context->handle, $offset) !== 0)
-                throw new Exceptions\FileSeekFailedException();
+                throw new Exceptions\FileSeekFailedException($path);
                 
             $context->offset = $offset;
         }
@@ -251,7 +264,7 @@ abstract class FWrapper extends Storage
         if (array_key_exists($path, $this->contexts))
         {
             if (!fclose($this->contexts[$path]->handle))
-                throw new Exceptions\FileCloseFailedException();
+                throw new Exceptions\FileCloseFailedException($path);
                 
             unset($this->contexts[$path]);
         }

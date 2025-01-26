@@ -1,4 +1,4 @@
-<?php declare(strict_types=1); namespace Andromeda\Apps\Files; if (!defined('Andromeda')) die();
+<?php declare(strict_types=1); namespace Andromeda\Apps\Files\Items; if (!defined('Andromeda')) die();
 
 use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, QueryBuilder};
 use Andromeda\Apps\Accounts\Account;
@@ -172,7 +172,7 @@ abstract class Item extends BaseObject // TODO was StandardObject
      * Refreshes the item from storage first to make sure it's ready to use.
      * @throws DeletedByStorageException if requreExist and the item has been deleted
      */
-    protected function GetFSImpl(bool $requireExist = true) : FSImpl 
+    /*protected function GetFilesystem(bool $requireExist = true) : Filesystem 
     {
         if ($requireExist)
         {
@@ -180,8 +180,8 @@ abstract class Item extends BaseObject // TODO was StandardObject
                 throw new Exceptions\DeletedByStorageException();
         }
         
-        return $this->GetFilesystem()->GetFSImpl(); 
-    }
+        return $this->GetFilesystem()->GetFilesystem(); 
+    }*/
     
     /** Returns true if this file should be accessible by all accounts */
     public function isWorldAccess() : bool 

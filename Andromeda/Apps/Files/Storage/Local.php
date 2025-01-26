@@ -2,35 +2,48 @@
 
 use Andromeda\Core\Database\ObjectDatabase;
 use Andromeda\Core\IOFormat\Input;
-
-abstract class LocalBase extends FWrapper { use BasePath; }
+use Andromeda\Apps\Accounts\Account;
 
 /** 
  * A storage on local-disk on the server
  * 
  * Only admin can add storages of this type!
  */
-class Local extends LocalBase
+class Local extends FWrapper
 {
+    use BasePath;
+
     public function Activate() : self { return $this; }
     
-    public static function Create(ObjectDatabase $database, Input $input, FSManager $filesystem) : self
+    public static function GetCreateUsage() : string { return self::GetBasePathCreateUsage(); }
+    
+    public static function GetEditUsage() : string { return self::GetBasePathEditUsage(); }
+
+    public static function Create(ObjectDatabase $database, Input $input, ?Account $owner) : self
     {
-        $account = $filesystem->GetOwner();
-        if ($account && !$account->isAdmin()) 
+        if ($owner !== null && !$owner->isAdmin()) 
             throw new Exceptions\LocalNonAdminException();
         
-        else return parent::Create($database, $input, $filesystem);
+        $obj = parent::Create($database, $input, $owner);
+        $obj->BasePathCreate($input->GetParams());
+        return $obj;
     }
-    
+
+    public function Edit(Input $input) : self
+    {
+        parent::Edit($input);
+        $this->BasePathEdit($input->GetParams());
+        return $this;
+    }
+
     public function canGetFreeSpace() : bool { return true; }
     
     public function usesBandwidth() : bool { return false; }
     
     public function GetFreeSpace() : int
     {
-        $space = disk_free_space($this->GetPath());
-        if ($space === false) throw new Exceptions\FreeSpaceFailedException();
+        if (($space = disk_free_space($this->GetPath())) === false)
+            throw new Exceptions\FreeSpaceFailedException();
         else return (int)$space;
     }
 

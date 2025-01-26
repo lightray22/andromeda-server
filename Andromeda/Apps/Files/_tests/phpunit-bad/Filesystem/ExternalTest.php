@@ -115,12 +115,12 @@ class ExternalTest extends \PHPUnit\Framework\TestCase
         $filesystem = $this->createMock(FSManager::class);
         $filesystem->method('GetStorage')->willReturn($storage);
         
-        $fsimpl = new External($filesystem);
+        $filesystem = new External($filesystem);
         
         $folder->method('GetFiles')->will($this->returnCallback(function()use($dbfiles){ return $dbfiles; }));
         $folder->method('GetFolders')->will($this->returnCallback(function()use($dbfolders){ return $dbfolders; }));
 
-        $fsimpl->RefreshFolder($folder, true, MockFile::class, MockFolder::class);
+        $filesystem->RefreshFolder($folder, true, MockFile::class, MockFolder::class);
         
         $fsfiles = array_map(function($path){ return basename($path); }, $fsfiles);
         $fsfolders = array_map(function($path){ return basename($path); }, $fsfolders);

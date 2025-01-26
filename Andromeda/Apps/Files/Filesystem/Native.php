@@ -1,26 +1,53 @@
 <?php declare(strict_types=1); namespace Andromeda\Apps\Files\Filesystem; if (!defined('Andromeda')) die();
 
 use Andromeda\Core\IOFormat\InputPath;
+use Andromeda\Apps\Files\Items\{File, Folder};
 
-/** 
- * A basic filesystem type that stores files as files (revolutionary) 
+/**
+ * An Andromeda native filesystem stores only file content.
  * 
- * Each file call is translated into a root-relative path and passed to storage.
+ * All folders and file/folder metadata is stored only in the database.
+ * The database is the authoritative record of what exists.
  */
-abstract class BaseFileFS extends FSImpl
+class Native extends Filesystem
 {
-    protected abstract function GetFilePath(File $file) : string;
+    /** The path to a file is simply its ID, broken into a prefix */
+    protected function GetFilePath(File $file) : string 
+    {
+        $id = $file->ID();
+        
+        $storage = $this->GetStorage();
+        
+        if (!$storage->supportsFolders()) return $id;
+
+        $len = 2; $path = substr($id, 0, $len);
+        
+        if (!$storage->isFolder($path))
+            $storage->CreateFolder($path);
+        
+        return $path.'/'.substr($id, $len); 
+    }
+
+    /** no-op */ public function RefreshFile(File $file) : self                     { return $this; }
+    /** no-op */ public function RefreshFolder(Folder $folder, bool $doContents = true) : self { return $this; }
+    /** no-op */ public function CreateFolder(Folder $folder) : self                { return $this; }
+    /** no-op */ public function DeleteFolder(Folder $folder) : self                { return $this; }
+
+    public function ImportFile(File $file, InputPath $infile) : self
+    {
+        $this->GetStorage()->ImportFile($infile->GetPath(), $this->GetFilePath($file), $infile->isTemp()); return $this;
+    }
     
     public function CreateFile(File $file) : self
     {
         $this->GetStorage()->CreateFile($this->GetFilePath($file)); return $this;
     }
     
-    public function ImportFile(File $file, InputPath $infile) : self
+    public function DeleteFile(File $file) : self
     {
-        $this->GetStorage()->ImportFile($infile->GetPath(), $this->GetFilePath($file), $infile->isTemp()); return $this;
+        $this->GetStorage()->DeleteFile($this->GetFilePath($file)); return $this;
     }
-    
+
     public function ReadBytes(File $file, int $start, int $length) : string
     {
         return $this->GetStorage()->ReadBytes($this->GetFilePath($file), $start, $length);
@@ -41,43 +68,8 @@ abstract class BaseFileFS extends FSImpl
         $this->GetStorage()->CopyFile($this->GetFilePath($file), $this->GetFilePath($dest)); return $this; 
     }
     
-    public function DeleteFile(File $file) : self
-    {
-        $this->GetStorage()->DeleteFile($this->GetFilePath($file)); return $this;
-    }
-}
-
-/**
- * An Andromeda native filesystem stores only file content.
- * 
- * All folders and file/folder metadata is stored only in the database.
- * The database is the authoritative record of what exists.
- */
-class Native extends BaseFileFS
-{
-    /** no-op */ public function RefreshFile(File $file) : self                     { return $this; }
-    /** no-op */ public function RefreshFolder(Folder $folder, bool $doContents = true) : self { return $this; }
-    /** no-op */ public function CreateFolder(Folder $folder) : self                { return $this; }
-    /** no-op */ public function DeleteFolder(Folder $folder) : self                { return $this; }
     /** no-op */ public function RenameFile(File $file, string $name) : self        { return $this; }
     /** no-op */ public function RenameFolder(Folder $folder, string $name) : self  { return $this; }
     /** no-op */ public function MoveFile(File $file, Folder $parent) : self        { return $this; }
     /** no-op */ public function MoveFolder(Folder $folder, Folder $parent) : self  { return $this; }
-    
-    /** The path to a file is simply its ID, broken into a prefix */
-    protected function GetFilePath(File $file) : string 
-    {
-        $id = $file->ID();
-        
-        $storage = $this->GetStorage();
-        
-        if (!$storage->supportsFolders()) return $id;
-
-        $len = 2; $path = substr($id, 0, $len);
-        
-        if (!$storage->isFolder($path))
-            $storage->CreateFolder($path);
-        
-        return $path.'/'.substr($id, $len); 
-    }
 }

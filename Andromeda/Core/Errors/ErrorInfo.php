@@ -157,7 +157,7 @@ class ErrorInfo
         
         if ($details && $db !== null)
         {
-            $this->objects = $db->getLoadedObjects();
+            $this->objects = $db->getLoadedObjectIDs();
             $this->queries = $db->GetInternal()->getAllQueries();
         }
         

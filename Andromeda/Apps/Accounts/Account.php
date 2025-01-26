@@ -90,7 +90,10 @@ class Account extends PolicyBase implements IKeySource
     /** Returns the account's full name if set, else its username */
     public function GetDisplayName() : string { return $this->fullname->TryGetValue() ?? $this->GetUsername(); }
     
-    /** Sets the account's full name */
+    /** 
+     * Sets the account's full name
+     * @return $this
+     */
     public function SetFullName(string $name) : self { $this->fullname->SetValue($name); return $this; }
     
     /**

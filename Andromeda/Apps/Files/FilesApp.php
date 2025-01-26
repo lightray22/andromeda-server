@@ -4,26 +4,53 @@ use Andromeda\Core\{ApiPackage, BaseApp, Emailer, EmailRecipient};
 use Andromeda\Core\IOFormat\{Input, InputPath, IOInterface, Output, OutputHandler, SafeParams};
 use Andromeda\Core\IOFormat\Interfaces\HTTP;
 
-use Andromeda\Apps\Files\Filesystem\FSManager;
-use Andromeda\Apps\Files\Storage\{FileReadFailedException, FileWriteFailedException};
 use Andromeda\Apps\Files\Storage\Storage;
+use Andromeda\Apps\Files\Storage\Exceptions\{FileReadFailedException, FileWriteFailedException};
 
 use Andromeda\Apps\Accounts\Account;
 use Andromeda\Apps\Accounts\Groups\Group;
 use Andromeda\Apps\Accounts\Authenticator;
 use Andromeda\Apps\Accounts\{AuthenticationFailedException, UnknownAccountException, UnknownGroupException};
 
+
+
+
+
+
+// when an account is deleted, need to delete files-related stuff also
+/*Account::RegisterDeleteHandler(function(ObjectDatabase $database, Account $account)
+{
+    Storage::DeleteByAccount($database, $account);
+    RootFolder::DeleteRootsByAccount($database, $account);
+});
+
+Account::RegisterCryptoHandler(function(ObjectDatabase $database, Account $account, bool $init){ 
+    if (!$init) FTP::DecryptAccount($database, $account); }); 
+
+Account::RegisterCryptoHandler(function(ObjectDatabase $database, Account $account, bool $init){ 
+    if (!$init) S3::DecryptAccount($database, $account); });
+
+Account::RegisterCryptoHandler(function(ObjectDatabase $database, Account $account, bool $init){ 
+    if (!$init) SFTP::DecryptAccount($database, $account); });
+
+Account::RegisterCryptoHandler(function(ObjectDatabase $database, Account $account, bool $init){ 
+    if (!$init) SMB::DecryptAccount($database, $account); });*/
+            
+
+
+
+
 /**
  * App that provides user-facing filesystem services.
  * 
  * Provides a general filesystem API for managing files and folders,
- * as well as admin-level functions like managing filesystems and config.
+ * as well as admin-level functions like managing storages and config.
  * 
  * Supports features like random-level byte access, multiple (user or admin-added)
  * filesystems with various backend storage drivers, social features including
  * likes and comments, sharing of content via links or to users or groups,
- * configurable rules per-account or per-filesystem, and granular statistics
- * gathering and limiting for accounts/groups/filesystems.
+ * configurable rules per-account or per-storage, and granular statistics
+ * gathering and limiting for accounts/groups/storages.
  * @extends InstalledApp<Config>
  */
 class FilesApp extends BaseApp
@@ -39,33 +66,30 @@ class FilesApp extends BaseApp
 
     public function getUsage() : array 
     { 
-        return array('NOT WORKING YET');
-        /*return array(
+        return array(
             'getconfig',
-            'setconfig '.Config::GetSetConfigUsage(),
+            /*'setconfig '.Config::GetSetConfigUsage(),
             '- AUTH for shared items: --sid id [--skey randstr] [--spassword raw]',
             'upload (--file% path [name] | --file- name) --parent id [--overwrite bool]',
             'download --file id [--fstart uint] [--flast int] [--debugdl bool]',
             'ftruncate --file id --size uint',
             'writefile (--data% path | --data-) --file id [--offset uint]',
-            'getfilelikes --file id [--limit ?uint] [--offset ?uint]',
-            'getfolderlikes --folder id [--limit ?uint] [--offset ?uint]',
-            'getfilecomments --file id [--limit ?uint] [--offset ?uint]',
-            'getfoldercomments --folder id [--limit ?uint] [--offset ?uint]',
+            'createfolder --parent id --name fsname',
             'filemeta --file id [--details bool]',
-            'getfolder [--folder id | --filesystem id] [--files bool] [--folders bool] [--recursive bool] [--limit ?uint] [--offset ?uint] [--details bool]',
-            'getitembypath --path fspath [--folder id | --filesystem id] [--isfile bool]',
+            'getfolder [--folder id | --storage id] [--files bool] [--folders bool] [--recursive bool] [--limit ?uint] [--offset ?uint] [--details bool]',
+            'getitembypath --path fspath [--folder id | --storage id] [--isfile bool]',
             'editfilemeta --file id [--description ?text]',
             'editfoldermeta --folder id [--description ?text]',
             'ownfile --file id',
             'ownfolder --folder id',
-            'createfolder --parent id --name fsname',
+
             'deletefile --file id',
             'deletefolder --folder id',
             'renamefile --file id --name fsname [--overwrite bool] [--copy bool]',
             'renamefolder --folder id --name fsname [--overwrite bool] [--copy bool]',
             'movefile --parent id --file id  [--overwrite bool] [--copy bool]',
             'movefolder --parent id --folder id [--overwrite bool] [--copy bool]',
+
             'likefile --file id --value ?bool',
             'likefolder --folder id --value ?bool',
             'tagfile --file id --tag alphanum',
@@ -75,35 +99,42 @@ class FilesApp extends BaseApp
             'commentfolder --folder id --comment text',
             'editcomment --commentid id [--comment text]',
             'deletecomment --commentid id',
+            'getfilelikes --file id [--limit ?uint] [--offset ?uint]',
+            'getfolderlikes --folder id [--limit ?uint] [--offset ?uint]',
+            'getfilecomments --file id [--limit ?uint] [--offset ?uint]',
+            'getfoldercomments --folder id [--limit ?uint] [--offset ?uint]',
+
             'sharefile --file id (--link bool [--email email] | --account id | --group id | --everyone bool) '.Share::GetSetOptionsUsage(),
             'sharefolder --folder id (--link bool [--email email] | --account id | --group id | --everyone bool) '.Share::GetSetOptionsUsage(),
             'editshare --share id '.Share::GetSetOptionsUsage(),
             'deleteshare --share id',
             'shareinfo --sid id [--skey randstr] [--spassword raw]',
             'getshares [--mine bool]',
-            'getadopted',
-            'getfilesystem [--filesystem id] [--activate bool]',
-            'getfilesystems [--everyone bool [--limit ?uint] [--offset ?uint]]',
-            'createfilesystem '.FSManager::GetCreateUsage(),
-            ...array_map(function($u){ return "(createfilesystem...) $u"; }, FSManager::GetCreateUsages()),
-            'deletefilesystem --filesystem id --auth_password raw [--unlink bool]',
-            'editfilesystem --filesystem id '.FSManager::GetEditUsage(),
-            ...array_map(function($u){ return "(editfilesystem...) $u"; }, FSManager::GetEditUsages()),
-            'getlimits [--account ?id | --group ?id | --filesystem ?id] [--limit ?uint] [--offset ?uint]',
-            'gettimedlimits [--account ?id | --group ?id | --filesystem ?id] [--limit ?uint] [--offset ?uint]',
-            'gettimedstatsfor [--account id | --group id | --filesystem id] --timeperiod uint [--limit ?uint] [--offset ?uint]',
-            'gettimedstatsat (--account ?id | --group ?id | --filesystem ?id) --timeperiod uint --matchtime uint [--limit ?uint] [--offset ?uint]',
-            'configlimits (--account id | --group id | --filesystem id) '.Limits\Total::BaseConfigUsage(),
+            'getadopted',*/
+
+            'getstorage [--storage id] [--activate bool]',
+            'getstorages [--everyone bool [--limit ?uint] [--offset ?uint]]',
+            'createstorage '.Storage::GetCreateUsage(),
+            ...array_map(function($u){ return "(createstorage...) $u"; }, Storage::GetCreateUsages()),
+            'deletestorage --storage id --auth_password raw [--unlink bool]',
+            'editstorage --storage id '.Storage::GetEditUsage(),
+            ...array_map(function($u){ return "(editstorage...) $u"; }, Storage::GetEditUsages()),
+
+            /*'getlimits [--account ?id | --group ?id | --storage ?id] [--limit ?uint] [--offset ?uint]',
+            'gettimedlimits [--account ?id | --group ?id | --storage ?id] [--limit ?uint] [--offset ?uint]',
+            'gettimedstatsfor [--account id | --group id | --storage id] --timeperiod uint [--limit ?uint] [--offset ?uint]',
+            'gettimedstatsat (--account ?id | --group ?id | --storage ?id) --timeperiod uint --matchtime uint [--limit ?uint] [--offset ?uint]',
+            'configlimits (--account id | --group id | --storage id) '.Limits\Total::BaseConfigUsage(),
             "(configlimits) --account id ".Limits\AccountTotal::GetConfigUsage(),
             "(configlimits) --group id ".Limits\GroupTotal::GetConfigUsage(),
-            "(configlimits) --filesystem id ".Limits\FilesystemTotal::GetConfigUsage(),
-            'configtimedlimits (--account id | --group id | --filesystem id) '.Limits\Timed::BaseConfigUsage(),
+            "(configlimits) --storage id ".Limits\FilesystemTotal::GetConfigUsage(),
+            'configtimedlimits (--account id | --group id | --storage id) '.Limits\Timed::BaseConfigUsage(),
             "(configtimedlimits) --account id ".Limits\AccountTimed::GetConfigUsage(),
             "(configtimedlimits) --group id ".Limits\GroupTimed::GetConfigUsage(),
-            "(configtimedlimits) --filesystem id ".Limits\FilesystemTimed::GetConfigUsage(),
-            'purgelimits (--account id | --group id | --filesystem id)',
-            'purgetimedlimits (--account id | --group id | --filesystem id) --period uint',
-        ); */
+            "(configtimedlimits) --storage id ".Limits\FilesystemTimed::GetConfigUsage(),
+            'purgelimits (--account id | --group id | --storage id)',
+            'purgetimedlimits (--account id | --group id | --storage id) --period uint',*/
+        );
     }
     
     public function __construct(ApiPackage $api)
@@ -113,8 +144,8 @@ class FilesApp extends BaseApp
         $this->config = Config::GetInstance($this->database);
     }
 
-    //public function commit() : void { Storage::commitAll(); }     // TODO FILES fix me
-    //public function rollback() : void { Storage::rollbackAll(); }
+    public function commit() : void { Storage::commitAll($this->database); }
+    public function rollback() : void { Storage::rollbackAll($this->database); }
     
     /**
      * {@inheritDoc}
@@ -144,19 +175,11 @@ class FilesApp extends BaseApp
             case 'ftruncate':  return $this->TruncateFile($params, $authenticator, $actionlog);
             case 'writefile':  return $this->WriteToFile($input, $authenticator, $actionlog);
             case 'createfolder':  return $this->CreateFolder($params, $authenticator, $actionlog);
-            
-            case 'getfilelikes':   return $this->GetFileLikes($params, $authenticator, $actionlog);
-            case 'getfolderlikes': return $this->GetFolderLikes($params, $authenticator, $actionlog);
-            case 'getfilecomments':   return $this->GetFileComments($params, $authenticator, $actionlog);
-            case 'getfoldercomments': return $this->GetFolderComments($params, $authenticator, $actionlog);
-            
             case 'filemeta':      return $this->GetFileMeta($params, $authenticator, $actionlog);
             case 'getfolder':     return $this->GetFolder($params, $authenticator, $actionlog);
             case 'getitembypath': return $this->GetItemByPath($params, $authenticator, $actionlog);
-            
             case 'ownfile':   return $this->OwnFile($params, $authenticator, $actionlog);
             case 'ownfolder': return $this->OwnFolder($params, $authenticator, $actionlog);
-            
             case 'editfilemeta':   return $this->EditFileMeta($params, $authenticator, $actionlog);
             case 'editfoldermeta': return $this->EditFolderMeta($params, $authenticator, $actionlog);
            
@@ -176,6 +199,10 @@ class FilesApp extends BaseApp
             case 'commentfolder': return $this->CommentFolder($params, $authenticator, $actionlog);
             case 'editcomment':   return $this->EditComment($params, $authenticator);
             case 'deletecomment': $this->DeleteComment($params, $authenticator, $actionlog); return null;
+            case 'getfilelikes':   return $this->GetFileLikes($params, $authenticator, $actionlog);
+            case 'getfolderlikes': return $this->GetFolderLikes($params, $authenticator, $actionlog);
+            case 'getfilecomments':   return $this->GetFileComments($params, $authenticator, $actionlog);
+            case 'getfoldercomments': return $this->GetFolderComments($params, $authenticator, $actionlog);
             
             case 'sharefile':    return $this->ShareFile($params, $authenticator, $actionlog);
             case 'sharefolder':  return $this->ShareFolder($params, $authenticator, $actionlog);
@@ -185,20 +212,20 @@ class FilesApp extends BaseApp
             case 'getshares':   return $this->GetShares($params, $authenticator);
             case 'getadopted':  return $this->GetAdopted($authenticator);
             
-            case 'getfilesystem':  return $this->GetFilesystem($params, $authenticator, $actionlog);
-            case 'getfilesystems': return $this->GetFilesystems($params, $authenticator);
-            case 'createfilesystem': return $this->CreateFilesystem($input, $authenticator, $actionlog);
-            case 'deletefilesystem': $this->DeleteFilesystem($params, $authenticator, $actionlog); return null;
-            case 'editfilesystem':   return $this->EditFilesystem($input, $authenticator);
+            case 'getstorage':  return $this->GetStorage($params, $authenticator, $actionlog);
+            case 'getstorages': return $this->GetStorages($params, $authenticator);
+            case 'createstorage': return $this->CreateStorage($input, $authenticator, $actionlog);
+            case 'deletestorage': $this->DeleteStorage($params, $authenticator, $actionlog); return null;
+            case 'editstorage':   return $this->EditStorage($input, $authenticator);
             
-            case 'getlimits':      return $this->GetLimits($params, $authenticator);
-            case 'gettimedlimits': return $this->GetTimedLimits($params, $authenticator);
-            case 'gettimedstatsfor': return $this->GetTimedStatsFor($params, $authenticator);
-            case 'gettimedstatsat':  return $this->GetTimedStatsAt($params, $authenticator);
-            case 'configlimits':      return $this->ConfigLimits($params, $authenticator);
-            case 'configtimedlimits': return $this->ConfigTimedLimits($params, $authenticator);
-            case 'purgelimits':      $this->PurgeLimits($params, $authenticator); return null;
-            case 'purgetimedlimits': $this->PurgeTimedLimits($params, $authenticator); return null;
+            //case 'getlimits':      return $this->GetLimits($params, $authenticator);
+            //case 'gettimedlimits': return $this->GetTimedLimits($params, $authenticator);
+            //case 'gettimedstatsfor': return $this->GetTimedStatsFor($params, $authenticator);
+            //case 'gettimedstatsat':  return $this->GetTimedStatsAt($params, $authenticator);
+            //case 'configlimits':      return $this->ConfigLimits($params, $authenticator);
+            //case 'configtimedlimits': return $this->ConfigTimedLimits($params, $authenticator);
+            //case 'purgelimits':      $this->PurgeLimits($params, $authenticator); return null;
+            //case 'purgetimedlimits': $this->PurgeTimedLimits($params, $authenticator); return null; // LIMITS
             
             default: throw new Exceptions\UnknownActionException($input->GetAction());
         }
@@ -562,6 +589,8 @@ class FilesApp extends BaseApp
         
         return $file->GetClientObject(($share === null), $details);
     }
+
+    // TODO search and replace "filesystem" with "storage" as necessary
 
     /**
      * Lists folder metadata and optionally the items in a folder (or filesystem root)
@@ -1600,7 +1629,7 @@ class FilesApp extends BaseApp
      * @return array [id:FSManager]
      * @see FSManager::GetClientObject()
      */
-    protected function GetFilesystems(SafeParams $params, ?Authenticator $authenticator) : array
+    protected function GetStorages(SafeParams $params, ?Authenticator $authenticator) : array
     {
         if ($authenticator === null) 
             throw new Exceptions\AuthenticationFailedException();
@@ -1628,7 +1657,7 @@ class FilesApp extends BaseApp
      * @return array FSManager
      * @see FSManager::GetClientObject()
      */
-    protected function CreateFilesystem(Input $input, ?Authenticator $authenticator, ?ActionLog $actionlog) : array
+    protected function CreateStorage(Input $input, ?Authenticator $authenticator, ?ActionLog $actionlog) : array // TODO change all filesystem calls to storage
     {
         $params = $input->GetParams();
         
@@ -1652,11 +1681,11 @@ class FilesApp extends BaseApp
     /**
      * Edits an existing filesystem
      * @throws AuthenticationFailedException if not signed in
-     * @throws UnknownFilesystemException if the given filesystem is not found
+     * @throws UnknownStorageException if the given filesystem is not found
      * @return array FSManager
      * @see FSManager::GetClientObject()
      */
-    protected function EditFilesystem(Input $input, ?Authenticator $authenticator) : array
+    protected function EditStorage(Input $input, ?Authenticator $authenticator) : array
     {
         $params = $input->GetParams();
         
@@ -1671,7 +1700,7 @@ class FilesApp extends BaseApp
         else $filesystem = FSManager::TryLoadByAccountAndID($this->database, $account, $fsid);
         
         if ($filesystem === null) 
-            throw new Exceptions\UnknownFilesystemException();
+            throw new Exceptions\UnknownStorageException();
 
         return $filesystem->Edit($input)->GetClientObject(true);
     }
@@ -1679,9 +1708,9 @@ class FilesApp extends BaseApp
     /**
      * Removes a filesystem (and potentially its content)
      * @throws AuthenticationFailedException if not signed in
-     * @throws UnknownFilesystemException if the given filesystem is not found
+     * @throws UnknownStorageException if the given filesystem is not found
      */
-    protected function DeleteFilesystem(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : void
+    protected function DeleteStorage(SafeParams $params, ?Authenticator $authenticator, ?ActionLog $actionlog) : void
     {
         if ($authenticator === null) 
             throw new Exceptions\AuthenticationFailedException();
@@ -1696,7 +1725,7 @@ class FilesApp extends BaseApp
         else $filesystem = FSManager::TryLoadByAccountAndID($this->database, $account, $fsid);
         
         if ($filesystem === null)
-            throw new Exceptions\UnknownFilesystemException();
+            throw new Exceptions\UnknownStorageException();
         
         $unlink = $params->GetOptParam('unlink',false)->GetBool();
         
@@ -1706,6 +1735,11 @@ class FilesApp extends BaseApp
         $filesystem->Delete($unlink);
     }
     
+
+
+
+
+
     /**
      * Common function for loading and authenticating the limited object and limit class referred to by input
      * 
@@ -1720,7 +1754,7 @@ class FilesApp extends BaseApp
      * @throws UnknownObjectException if nothing valid was specified
      * @return array<mixed> `{class:string, obj:object, full:bool}`
      */
-    private function GetLimitObject(SafeParams $params, ?Authenticator $authenticator, bool $allowAuto, bool $allowMany, bool $timed) : array
+    /*private function GetLimitObject(SafeParams $params, ?Authenticator $authenticator, bool $allowAuto, bool $allowMany, bool $timed) : array
     {
         $obj = null; $admin = $authenticator->isAdmin();
 
@@ -1777,7 +1811,7 @@ class FilesApp extends BaseApp
         if ($obj === null && (!$allowMany || !$admin)) throw new Exceptions\UnknownObjectException();
         
         return array('obj'=>$obj, 'class'=>$class, 'full'=>$full);
-    }
+    }*/ // LIMITS
     
     /**
      * Loads the total limit object or objects for the given objects
@@ -1788,7 +1822,7 @@ class FilesApp extends BaseApp
      * @see FilesApp::GetLimitObject()
      * @see Limits\Total::GetClientObject()
      */
-    protected function GetLimits(SafeParams $params, ?Authenticator $authenticator) : ?array
+    /*protected function GetLimits(SafeParams $params, ?Authenticator $authenticator) : ?array
     {
         if ($authenticator === null) 
             throw new Exceptions\AuthenticationFailedException();
@@ -1810,7 +1844,7 @@ class FilesApp extends BaseApp
             return array_map(function(Limits\Total $obj)use($full){ 
                 return $obj->GetClientObject($full); }, array_values($lims));
         }
-    }
+    }*/ // LIMITS
     
     /**
      * Loads the timed limit object or objects for the given objects
@@ -1821,7 +1855,7 @@ class FilesApp extends BaseApp
      * @see FilesApp::GetLimitObject()
      * @see Limits\Timed::GetClientObject()
      */
-    protected function GetTimedLimits(SafeParams $params, ?Authenticator $authenticator) : array
+    /*protected function GetTimedLimits(SafeParams $params, ?Authenticator $authenticator) : array
     {
         if ($authenticator === null) 
             throw new Exceptions\AuthenticationFailedException();
@@ -1842,7 +1876,7 @@ class FilesApp extends BaseApp
 
         return array_map(function(Limits\Timed $lim)use($full){ 
             return $lim->GetClientObject($full); }, array_values($lims));
-    }
+    }*/ // LIMITS
     
     /**
      * Returns all stored time stats for an object
@@ -1853,7 +1887,7 @@ class FilesApp extends BaseApp
      * @see FilesApp::GetLimitObject()
      * @see Limits\TimedStats::GetClientObject()
      */
-    protected function GetTimedStatsFor(SafeParams $params, ?Authenticator $authenticator) : ?array
+    /*protected function GetTimedStatsFor(SafeParams $params, ?Authenticator $authenticator) : ?array
     {
         if ($authenticator === null) 
             throw new Exceptions\AuthenticationFailedException();
@@ -1871,7 +1905,7 @@ class FilesApp extends BaseApp
         
         return array_map(function(Limits\TimedStats $stats){ return $stats->GetClientObject(); },
             Limits\TimedStats::LoadAllByLimit($this->database, $lim, $count, $offset));        
-    }
+    }*/ // LIMITS
     
     /**
      * Returns timed stats for the given object or objects at the given time
@@ -1882,7 +1916,7 @@ class FilesApp extends BaseApp
      * @see FilesApp::GetLimitObject()
      * @see Limits\TimedStats::GetClientObject()
      */
-    protected function GetTimedStatsAt(SafeParams $params, ?Authenticator $authenticator) : ?array
+    /*protected function GetTimedStatsAt(SafeParams $params, ?Authenticator $authenticator) : ?array
     {
         if ($authenticator === null) 
             throw new Exceptions\AuthenticationFailedException();
@@ -1916,7 +1950,7 @@ class FilesApp extends BaseApp
             
             return $retval;
         }   
-    }
+    }*/ // LIMITS
 
     /**
      * Configures total limits for the given object
@@ -1925,7 +1959,7 @@ class FilesApp extends BaseApp
      * @see FilesApp::GetLimitObject()
      * @see Limits\Total::GetClientObject()
      */
-    protected function ConfigLimits(SafeParams $params, ?Authenticator $authenticator) : array
+    /*protected function ConfigLimits(SafeParams $params, ?Authenticator $authenticator) : array
     {
         if ($authenticator === null)
             throw new Exceptions\AdminRequiredException();
@@ -1935,7 +1969,7 @@ class FilesApp extends BaseApp
         $class = $lobj['class']; $obj = $lobj['obj'];
         
         return $class::ConfigLimits($this->database, $obj, $params)->GetClientObject(true);
-    }    
+    }*/ // LIMITS
     
     /**
      * Configures timed limits for the given object
@@ -1944,7 +1978,7 @@ class FilesApp extends BaseApp
      * @see FilesApp::GetLimitObject()
      * @see Limits\Timed::GetClientObject()
      */
-    protected function ConfigTimedLimits(SafeParams $params, ?Authenticator $authenticator) : array
+    /*protected function ConfigTimedLimits(SafeParams $params, ?Authenticator $authenticator) : array
     {
         if ($authenticator === null) 
             throw new Exceptions\AdminRequiredException();
@@ -1954,14 +1988,14 @@ class FilesApp extends BaseApp
         $class = $lobj['class']; $obj = $lobj['obj'];
         
         return $class::ConfigLimits($this->database, $obj, $params)->GetClientObject(true);
-    }
+    }*/ // LIMITS
     
     /**
      * Deletes all total limits for the given object
      * @throws AdminRequiredException if not admin
      * @see FilesApp::GetLimitObject()
      */
-    protected function PurgeLimits(SafeParams $params, ?Authenticator $authenticator) : void
+    /*protected function PurgeLimits(SafeParams $params, ?Authenticator $authenticator) : void
     {
         if ($authenticator === null) 
             throw new Exceptions\AdminRequiredException();
@@ -1971,14 +2005,14 @@ class FilesApp extends BaseApp
         $class = $lobj['class']; $obj = $lobj['obj'];
         
         $class::DeleteByClient($this->database, $obj);
-    }    
+    }   */ // LIMITS 
     
     /**
      * Deletes all timed limits for the given object
      * @throws AdminRequiredException if not admin
      * @see FilesApp::GetLimitObject()
      */
-    protected function PurgeTimedLimits(SafeParams $params, ?Authenticator $authenticator) : void
+    /*protected function PurgeTimedLimits(SafeParams $params, ?Authenticator $authenticator) : void
     {
         if ($authenticator === null) 
             throw new Exceptions\AdminRequiredException();
@@ -1989,6 +2023,6 @@ class FilesApp extends BaseApp
         
         $period = $params->GetParam('period')->GetUint();
         $class::DeleteClientAndPeriod($this->database, $obj, $period);
-    }
+    }*/ // LIMITS
 }
 

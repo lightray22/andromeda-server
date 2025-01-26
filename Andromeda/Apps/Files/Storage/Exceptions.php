@@ -2,19 +2,51 @@
 
 use Andromeda\Core\Errors\BaseExceptions;
 
-/** Client exception indicating that a write was attempted to a read-only storage */
-class ReadOnlyException extends BaseExceptions\ClientDeniedException
-{
-    public function __construct(?string $details = null) {
-        parent::__construct("READ_ONLY_FILESYSTEM", $details);
-    }
-}
-
 /** Exception indicating that this storage does not support folder functions */
 class FoldersUnsupportedException extends BaseExceptions\ClientErrorException
 {
     public function __construct(?string $details = null) {
         parent::__construct("STORAGE_FOLDERS_UNSUPPORTED", $details);
+    }
+}
+
+/** Client exception indicating that a write was attempted to a read-only storage */
+class ReadOnlyException extends BaseExceptions\ClientDeniedException
+{
+    public function __construct(?string $details = null) {
+        parent::__construct("READ_ONLY_STORAGE", $details);
+    }
+}
+
+/** Exception indicating that the given storage name is invalid */
+class InvalidNameException extends BaseExceptions\ClientErrorException
+{
+    public function __construct(?string $details = null) {
+        parent::__construct("INVALID_STORAGE_NAME", $details);
+    }
+}
+
+/** Exception indicating that the underlying storage connection failed */
+class InvalidStorageException extends BaseExceptions\ClientErrorException
+{
+    public function __construct(?string $details = null) {
+        parent::__construct("STORAGE_ACTIVATION_FAILED", $details);
+    }
+}
+
+/** Exception indicating that the stored filesystem type is not valid */
+class InvalidFSTypeException extends BaseExceptions\ServerException
+{
+    public function __construct(?string $details = null) {
+        parent::__construct("UNKNOWN_FILESYSTEM_TYPE", $details);
+    }
+}
+
+/** Exception indicating a rollback was attempted on a storage that was written to */
+class InvalidRollbackException extends BaseExceptions\ServerException
+{
+    public function __construct(?string $details = null) {
+        parent::__construct("INVALID_STORAGE_ROLLBACK", $details);
     }
 }
 
@@ -203,16 +235,18 @@ abstract class ActivateException extends StorageException { }
 /** Exception indicating that the tested storage is not readable */
 class TestReadFailedException extends ActivateException
 {
-    public function __construct(?string $details = null) {
-        parent::__construct("STORAGE_TEST_READ_FAILED", $details);
+    public function __construct(?StorageException $ex = null) {
+        parent::__construct("STORAGE_TEST_READ_FAILED"); // TODO is append right here, or should we use copy?
+        if ($ex !== null) $this->AppendException($ex,true);
     }
 }
 
 /** Exception indicating that the tested storage is not writeable */
 class TestWriteFailedException extends ActivateException
-{
-    public function __construct(?string $details = null) {
-        parent::__construct("STORAGE_TEST_WRITE_FAILED", $details);
+{    
+    public function __construct(?StorageException $ex = null) {
+        parent::__construct("STORAGE_TEST_WRITE_FAILED");
+        if ($ex !== null) $this->AppendException($ex,true);
     }
 }
 

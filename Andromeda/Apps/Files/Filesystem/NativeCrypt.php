@@ -2,6 +2,9 @@
 
 use Andromeda\Core\Crypto;
 use Andromeda\Core\IOFormat\InputPath;
+use Andromeda\Apps\Files\FileUtils;
+use Andromeda\Apps\Files\Items\File;
+use Andromeda\Apps\Files\Storage\{Storage, Exceptions\FileReadFailedException};
 
 /**
  * Implements an encryption layer on top of the native filesystem.
@@ -16,31 +19,44 @@ use Andromeda\Core\IOFormat\InputPath;
 class NativeCrypt extends Native
 {
     protected string $masterkey;
+    /** @var non-negative-int */
     protected int $chunksize;
     
-    public function __construct(FSManager $filesystem, string $masterkey, int $chunksize)
+    /**
+     * @param string $masterkey key to use for encryption
+     * @param non-negative-int $chunksize chunk size for encryption
+     */
+    public function __construct(Storage $storage, string $masterkey, int $chunksize)
     {
         $this->masterkey = $masterkey;
         $this->chunksize = $chunksize;
-        parent::__construct($filesystem);
+        parent::__construct($storage);
     }
     
     public function GetChunkSize() : ?int { return $this->chunksize; }
     
     /** Chunk swapping is prevented by signing each with the file ID and chunk index */
-    private function GetAuthString(File $file, int $index) { return $file->ID().":$index"; }
+    private function GetAuthString(File $file, int $index) : string { return $file->ID().":$index"; }
 
-    /** Returns the chunk index storing the given byte offset */
-    protected function GetChunkIndex(int $byte) : int { return ($byte < 0) ? -1 : intdiv($byte, $this->chunksize); }
+    /** 
+     * Returns the chunk index storing the given byte offset
+     * @param non-negative-int $byte
+     * @return non-negative-int
+     */
+    protected function GetChunkIndex(int $byte) : int { 
+        return intdiv($byte, $this->chunksize); } // @phpstan-ignore-line non-negative intdiv
     
-    /** Returns the number of chunks required to store the given number of bytes */
-    protected function GetNumChunks(int $bytes) : int { return $bytes ? intdiv($bytes-1, $this->chunksize)+1 : 0; }
+    /** 
+     * Returns the number of chunks required to store the given number of bytes
+     * @param non-negative-int $bytes
+     * @return non-negative-int
+     */
+    protected function GetNumChunks(int $bytes) : int { 
+        return ($bytes > 0) ? intdiv($bytes-1, $this->chunksize)+1 : 0; } // @phpstan-ignore-line non-negative intdiv
     
     public function ImportFile(File $file, InputPath $infile) : self
     {
-        if (!($handle = $infile->GetHandle()))
-            throw new Exceptions\FileReadFailedException();
-        
+        $handle = $infile->GetHandle();
         $newpath = static::GetFilePath($file);
         $this->GetStorage()->CreateFile($newpath);
         
@@ -50,11 +66,10 @@ class NativeCrypt extends Native
         for ($chunk = 0; $chunk < $chunks; $chunk++)
         {
             $offset = $chunk * $this->chunksize;
-            
             $rbytes = min($this->chunksize, $length-$offset);
+            assert($rbytes >= 0); // by computations above
             
             $data = FileUtils::ReadStream($handle, $rbytes);
-            
             $this->WriteChunk($file, $chunk, $data);
         }
         
@@ -67,10 +82,9 @@ class NativeCrypt extends Native
         $this->GetStorage()->CreateFile($newpath);
         
         $chunks = $this->GetNumChunks($file->GetSize());
-        
         for ($chunk = 0; $chunk < $chunks; $chunk++)
         {
-            // need to manually re-encrypt each chunk
+            // need to manually re-encrypt each chunk (different ID)
             $this->WriteChunk($dest, $chunk, $this->ReadChunk($file, $chunk));
         }
         
@@ -79,6 +93,8 @@ class NativeCrypt extends Native
     
     public function ReadBytes(File $file, int $start, int $length) : string
     {
+        if ($length === 0) return "";
+
         $chunk0 = $this->GetChunkIndex($start);
         $chunkn = $this->GetChunkIndex($start+$length-1);
 
@@ -100,13 +116,15 @@ class NativeCrypt extends Native
         $retval = implode($output);
         
         if (strlen($retval) !== $length)
-            throw new Exceptions\FileReadFailedException();
+            throw new FileReadFailedException();
         
         return $retval;
     }
     
     public function WriteBytes(File $file, int $start, string $data) : self
     {
+        if (strlen($data) === 0) return $this;
+
         // the algorithm does not work when starting beyond EOF
         if ($start > $file->GetSize()) $file->SetSize($start);
         
@@ -183,14 +201,14 @@ class NativeCrypt extends Native
         
         $overhead = Crypto::SecretNonceLength() + Crypto::SecretOutputOverhead();
         $fsize = $overhead * ($this->GetNumChunks($length)) + $length;
-        
+
         parent::Truncate($file, $fsize); return $this;
     }
     
     /**
      * Reads and decrypts the given chunk from the file
      * @param File $file file to read from
-     * @param int $index chunk number
+     * @param non-negative-int $index chunk number
      * @return string decrypted chunk
      */
     protected function ReadChunk(File $file, int $index) : string
@@ -210,10 +228,13 @@ class NativeCrypt extends Native
 
         // a chunk is stored as [nonce,data]
         $nonce = parent::ReadBytes($file, $nonceoffset, $noncesize);
-        $data = parent::ReadBytes($file, $dataoffset, $datasize);
+        if (strlen($nonce) !== $noncesize) 
+            throw new FileReadFailedException();
         
-        if (strlen($nonce) !== $noncesize || strlen($data) !== $datasize) 
-            throw new Exceptions\FileReadFailedException();
+        assert($datasize >= 0); // if nonce read was ok, this must be true
+        $data = parent::ReadBytes($file, $dataoffset, $datasize);
+        if (strlen($data) !== $datasize) 
+            throw new FileReadFailedException();
         
         $auth = $this->GetAuthString($file, $index);
         
@@ -223,7 +244,7 @@ class NativeCrypt extends Native
     /**
      * Encrypts and writes the given data to the given chunk
      * @param File $file file to write to
-     * @param int $index chunk index to write
+     * @param non-negative-int $index chunk index to write
      * @param string $data plaintext data to write
      * @return $this
      */

@@ -1,7 +1,8 @@
-<?php declare(strict_types=1); namespace Andromeda\Apps\Files; if (!defined('Andromeda')) die();
+<?php declare(strict_types=1); namespace Andromeda\Apps\Files\Items; if (!defined('Andromeda')) die();
 
 use Andromeda\Core\Database\{FieldTypes, ObjectDatabase, QueryBuilder};
 use Andromeda\Core\IOFormat\InputPath;
+use Andromeda\Apps\Accounts\Account;
 
 /** 
  * Defines a user-stored file 
@@ -28,7 +29,10 @@ class File extends Item
     /** Returns the ID of the parent folder */
     public function GetParentID() : string { return $this->GetObjectID('parent'); }
     
-    /** Returns the size of the file, in bytes */
+    /** 
+     * Returns the size of the file, in bytes
+     * @return non-negative-int
+     */
     public function GetSize() : int { return $this->TryGetScalar('size') ?? 0; }
     
     /** Returns the number of share objects belonging to the file */
@@ -54,7 +58,7 @@ class File extends Item
         $this->MapToLimits(function(Limits\Base $lim)use($delta,$notify){
             if (!$this->onOwnerFS()) $lim->CountSize($delta,$notify); });
         
-        if (!$notify) $this->GetFSImpl()->Truncate($this, $size);
+        if (!$notify) $this->GetFilesystem()->Truncate($this, $size);
         
         return $this->SetScalar('size', $size); 
     }
@@ -130,7 +134,7 @@ class File extends Item
 
         $this->refreshed = true;
         
-        $this->GetFSImpl()->RefreshFile($this);
+        $this->GetFilesystem()->RefreshFile($this);
         
         return $this;
     }
@@ -139,7 +143,7 @@ class File extends Item
     {
         static::CheckName($name, $overwrite, false);
         
-        $this->GetFSImpl()->RenameFile($this, $name); 
+        $this->GetFilesystem()->RenameFile($this, $name); 
         return $this->SetScalar('name', $name);
     }
     
@@ -147,7 +151,7 @@ class File extends Item
     {
         static::CheckParent($parent, $overwrite, false);
         
-        $this->GetFSImpl()->MoveFile($this, $parent);
+        $this->GetFilesystem()->MoveFile($this, $parent);
         return $this->SetObject('parent', $parent);
     }
 
@@ -157,7 +161,7 @@ class File extends Item
 
         $file ??= static::NotifyCreate($this->database, $this->GetParent(), $owner, $name);
         
-        $this->GetFSImpl()->CopyFile($this, $file->SetSize($this->GetSize(),true)); return $file;
+        $this->GetFilesystem()->CopyFile($this, $file->SetSize($this->GetSize(),true)); return $file;
     }
     
     public function CopyToParent(?Account $owner, Folder $parent, bool $overwrite = false) : self
@@ -166,7 +170,7 @@ class File extends Item
         
         $file ??= static::NotifyCreate($this->database, $parent, $owner, $this->GetName());
         
-        $this->GetFSImpl()->CopyFile($this, $file->SetSize($this->GetSize(),true)); return $file;
+        $this->GetFilesystem()->CopyFile($this, $file->SetSize($this->GetSize(),true)); return $file;
     }
 
     /** @return static */
@@ -211,7 +215,7 @@ class File extends Item
     {
         $file = static::BasicCreate($database, $parent, $account, $name, $overwrite);
         
-        $file->SetSize(0,true)->GetFSImpl()->CreateFile($file); return $file;
+        $file->SetSize(0,true)->GetFilesystem()->CreateFile($file); return $file;
     }
     
     /**
@@ -237,11 +241,11 @@ class File extends Item
     {
         $this->SetSize($infile->GetSize(), true);
         
-        $this->GetFSImpl(false)->ImportFile($this, $infile); return $this;
+        $this->GetFilesystem(false)->ImportFile($this, $infile); return $this;
     }
     
     /** Gets the preferred chunk size by the filesystem holding this file */
-    public function GetChunkSize() : ?int { return $this->GetFSImpl()->GetChunkSize(); }
+    public function GetChunkSize() : ?int { return $this->GetFilesystem()->GetChunkSize(); }
     
     /** Returns true if the file resides on a user-added storage */
     public function onOwnerFS() : bool { return $this->GetFilesystem()->isUserOwned(); }
@@ -254,7 +258,7 @@ class File extends Item
      */
     public function ReadBytes(int $start, int $length) : string
     {
-        $this->SetAccessed(); return $this->GetFSImpl()->ReadBytes($this, $start, $length);
+        $this->SetAccessed(); return $this->GetFilesystem()->ReadBytes($this, $start, $length);
     }
     
     /**
@@ -269,7 +273,7 @@ class File extends Item
         
         $this->CheckSize($length); 
         
-        $this->GetFSImpl()->WriteBytes($this, $start, $data); 
+        $this->GetFilesystem()->WriteBytes($this, $start, $data); 
         
         $this->SetSize($length, true); 
         
@@ -291,7 +295,7 @@ class File extends Item
     {
         if (!$this->isDeleted() && !$this->GetParent()->isFSDeleted()) 
         {
-            $this->GetFSImpl(false)->DeleteFile($this);
+            $this->GetFilesystem(false)->DeleteFile($this);
         }
         
         $this->NotifyFSDeleted();

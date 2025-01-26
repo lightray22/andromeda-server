@@ -424,10 +424,27 @@ class ObjectDatabase
     private array $objectsByBase = array();
 
     /**
-     * Returns an array of loaded object info for debugging, by class
+     * Returns an array of loaded objects of a given class
+     * @template T of BaseObject
+     * @param class-string<T> $class to filter by
+     * @return array<string, T>
+     */
+    public function getLoadedObjects(string $class) : array // TODO RAY !! unit test
+    {
+        $base = $class::GetBaseTableClass();
+        if (array_key_exists($base, $this->objectsByBase))
+        {
+            return array_filter($this->objectsByBase[$base], 
+                function(BaseObject $obj)use($class){ return is_a($obj, $class); });
+        }
+        else return array();
+    }
+    
+    /**
+     * Returns an array of loaded object IDs, by class
      * @return array<class-string<BaseObject>, array<string, class-string<BaseObject>>>
      */
-    public function getLoadedObjects() : array
+    public function getLoadedObjectIDs() : array
     {
         $retval = array(); 
         foreach ($this->objectsByBase as $bclass=>$objs)

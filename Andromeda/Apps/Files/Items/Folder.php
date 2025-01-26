@@ -1,7 +1,8 @@
-<?php declare(strict_types=1); namespace Andromeda\Apps\Files; if (!defined('Andromeda')) die();
+<?php declare(strict_types=1); namespace Andromeda\Apps\Files\Items; if (!defined('Andromeda')) die();
 
- use Andromeda\Core\Utilities;
- use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, QueryBuilder};
+use Andromeda\Core\Utilities;
+use Andromeda\Core\Database\{BaseObject, FieldTypes, ObjectDatabase, QueryBuilder};
+use Andromeda\Apps\Accounts\Account;
 
 /** 
  * Defines a user-stored folder which groups other items 
@@ -174,7 +175,7 @@ abstract class Folder extends Item
         if (!$this->refreshed || (!$this->subrefreshed && $doContents)) 
         {
             $this->refreshed = true; $this->subrefreshed = $doContents;
-            $this->GetFSImpl(false)->RefreshFolder($this, $doContents);
+            $this->GetFilesystem(false)->RefreshFolder($this, $doContents);
         }
         
         return $this;

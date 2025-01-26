@@ -10,7 +10,7 @@ class NativeCryptTest extends \PHPUnit\Framework\TestCase
     private array $paths = array(); // array of FS path -> memory buffer
     private array $sizes = array(); // array of file ID -> file size 
     
-    private NativeCrypt $fsimpl;
+    private NativeCrypt $filesystem;
     
     public function SetUp() : void
     {        
@@ -55,7 +55,7 @@ class NativeCryptTest extends \PHPUnit\Framework\TestCase
         $filesystem = $this->createMock(FSManager::class);
         $filesystem->method('GetStorage')->willReturn($storage);
         
-        $this->fsimpl = new NativeCrypt($filesystem, Crypto::GenerateSecretKey(), self::CHUNK_SIZE);
+        $this->filesystem = new NativeCrypt($filesystem, Crypto::GenerateSecretKey(), self::CHUNK_SIZE);
     }
     
     /** @var list<string> */
@@ -85,7 +85,7 @@ class NativeCryptTest extends \PHPUnit\Framework\TestCase
         $file->method('SetSize')->will($this->returnCallback(
             function(int $size,bool $notify)use($file)
         {
-            if (!$notify) $this->fsimpl->Truncate($file, $size);
+            if (!$notify) $this->filesystem->Truncate($file, $size);
             
             $this->sizes[$file->ID()] = $size; return $file;
         }));
@@ -95,7 +95,7 @@ class NativeCryptTest extends \PHPUnit\Framework\TestCase
         
         $infile = new InputPath($path);
         
-        $this->fsimpl->ImportFile($file->SetSize(strlen($data),true), $infile);
+        $this->filesystem->ImportFile($file->SetSize(strlen($data),true), $infile);
         
         return $file;
     }
@@ -107,7 +107,7 @@ class NativeCryptTest extends \PHPUnit\Framework\TestCase
         $data = Utilities::Random($size0);        
         $file = $this->createFile($data);
         
-        $ret = $this->fsimpl->ReadBytes($file, 0, $size0);        
+        $ret = $this->filesystem->ReadBytes($file, 0, $size0);        
         $this->assertSame($data, $ret);
         
         // next write to the file and check its new contents
@@ -119,19 +119,19 @@ class NativeCryptTest extends \PHPUnit\Framework\TestCase
         $wdata = Utilities::Random($wlen);
         
         $data = substr_replace($data, $wdata, $offset, strlen($wdata));
-        $this->fsimpl->WriteBytes($file, $offset, $wdata); 
+        $this->filesystem->WriteBytes($file, $offset, $wdata); 
         $file->SetSize($size,true);
 
-        $ret = $this->fsimpl->ReadBytes($file, 0, $size);
+        $ret = $this->filesystem->ReadBytes($file, 0, $size);
         $this->assertSame($data, $ret);
         
         if ($size > $size0) // test shrinking back to size0
         {
             $data = substr($data, 0, $size0);
-            $this->fsimpl->Truncate($file, $size0); 
+            $this->filesystem->Truncate($file, $size0); 
             $file->SetSize($size0, true);
             
-            $ret = $this->fsimpl->ReadBytes($file, 0, $size0);
+            $ret = $this->filesystem->ReadBytes($file, 0, $size0);
             $this->assertSame($data, $ret);
         }
     }

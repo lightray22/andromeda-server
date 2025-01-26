@@ -55,6 +55,7 @@ class Crypto
      * Returns the size overhead of an encrypted string over a plaintext one
      * 
      * The size overhead exists because the crypto is authenticated
+     * @return positive-int
      */
     public static function SecretOutputOverhead() : int { return SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_ABYTES; }
     
