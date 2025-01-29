@@ -1,13 +1,47 @@
 <?php declare(strict_types=1); namespace Andromeda\Apps\Accounts\Crypto\CryptFields; if (!defined('Andromeda')) die();
 
 use Andromeda\Core\Crypto;
-use Andromeda\Core\Database\FieldTypes\{BaseField, NullStringType, ObjectRefT};
+use Andromeda\Core\Database\ObjectDatabase;
+use Andromeda\Core\Database\FieldTypes\{BaseField, NullStringType, ObjectRefT, NullObjectRefT};
 use Andromeda\Core\Database\Exceptions\FieldDataNullException;
 
 use Andromeda\Apps\Accounts\{Account, Authenticator};
 use Andromeda\Apps\Accounts\Crypto\Exceptions\CryptoUnlockRequiredException;
 
-// TODO FILES possibly will need to bring back OptFieldCrypt, and the object-central parts of FieldCrypt (SetEncrypted?)
+/** Helper functions for an object with CryptFields */
+trait CryptObject // TODO RAY !! unit test
+{
+    /**
+     * Returns a list of all CryptFields in this object
+     * @return list<CryptField>
+     */
+    abstract protected function GetCryptFields() : array;
+
+    /** Sets the encryption state of all crypt fields */
+    public function SetEncrypted(bool $crypt) : void
+    {
+        foreach ($this->GetCryptFields() as $field)
+            $field->SetEncrypted($crypt);
+    }
+     
+    /** 
+     * Loads all objects owned by the given account
+     * @return array<string, static>
+     */
+    abstract public static function LoadByAccount(ObjectDatabase $database, Account $owner) : array;
+
+    /**
+     * Loads any objects for the given account and decrypts their fields
+     * @param ObjectDatabase $database database reference
+     * @param Account $account account to load by
+     * @param bool $init if true, set encrypted, else decrypted
+     */
+    public static function SetEncryptedByAccount(ObjectDatabase $database, Account $account, bool $init) : void 
+    { 
+        foreach (static::LoadByAccount($database, $account) as $obj) 
+            $obj->SetEncrypted($init);
+    }
+}
 
 /** 
  * A field that is encrypted with an account's crypto
@@ -18,18 +52,18 @@ abstract class CryptField extends BaseField
 {
     /** 
      * field holding the account field to encrypt this field for
-     * @var ObjectRefT<Account> 
+     * @var ObjectRefT<Account>|NullObjectRefT<Account> 
      */
-    protected ObjectRefT $account;
+    protected ObjectRefT|NullObjectRefT $account;
 
     /** nonce field to use for encryption */
     protected NullStringType $nonce;
 
     /** 
-     * @param ObjectRefT<Account> $account to encrypt for
+     * @param ObjectRefT<Account>|NullObjectRefT<Account> $account to encrypt for
      * @param NullStringType $nonce nonce field to encrypt with
      */
-    public function __construct(string $name, ObjectRefT $account, NullStringType $nonce)
+    public function __construct(string $name, ObjectRefT|NullObjectRefT $account, NullStringType $nonce)
     {
         parent::__construct($name);
         $this->account = $account;
@@ -42,16 +76,29 @@ abstract class CryptField extends BaseField
         return $this->nonce->TryGetValue() !== null;
     }
 
+    /** Returns the account used with this object */
+    public function TryGetAccount() : ?Account
+    {
+        return $this->account instanceof NullObjectRefT 
+            ? $this->account->TryGetObject() 
+            : $this->account->GetObject();
+    }
+
     /** Returns true if the decrypted value is available */
     abstract public function isValueReady() : bool;
 
-    /** Sets the encryption state of the field */
+    /** 
+     * Sets the encryption state of the field
+     * @throws CryptoUnlockRequiredException if crypto has not been unlocked
+     */
     abstract public function SetEncrypted(bool $crypt) : bool;
     
     /** Unlocks account crypto for usage and returns it */
-    protected function RequireCrypto() : Account
+    protected function TryRequireCrypto() : ?Account
     {
-        $account = $this->account->GetObject();
+        $account = $this->TryGetAccount();
+        if ($account === null) return null;
+
         Authenticator::RequireCryptoFor($account);
         return $account;
     }
@@ -81,7 +128,8 @@ class NullCryptStringType extends CryptField
 
     public function isValueReady() : bool
     { 
-        return isset($this->plainvalue) || !$this->isEncrypted() || $this->account->GetObject()->isCryptoAvailable();
+        return isset($this->plainvalue) || !$this->isEncrypted() || 
+            ($this->TryGetAccount()?->isCryptoAvailable() ?? false);
     }
 
     public function SetEncrypted(bool $crypt) : bool
@@ -100,7 +148,8 @@ class NullCryptStringType extends CryptField
             $nonce = $this->nonce->TryGetValue();
             if ($this->dbvalue !== null && $nonce !== null)
             {
-                $account = $this->RequireCrypto();
+                if (($account = $this->TryRequireCrypto()) === null)
+                    throw new CryptoUnlockRequiredException();
                 $this->plainvalue = $account->DecryptSecret($this->dbvalue, $nonce);
             }
             else $this->plainvalue = $this->dbvalue;
@@ -114,6 +163,7 @@ class NullCryptStringType extends CryptField
      * @param ?string $value string value (maybe null)
      * @param bool $docrypt if true, store encrypted - default is current state
      * @return bool true if the field's DB value was modified
+     * @throws CryptoUnlockRequiredException if crypto has not been unlocked
      */
     public function SetValue(?string $value, ?bool $docrypt = null) : bool
     {
@@ -130,7 +180,8 @@ class NullCryptStringType extends CryptField
                 $nonce = Crypto::GenerateSecretNonce();
                 $this->nonce->SetValue($nonce);
 
-                $account = $this->RequireCrypto();
+                if (($account = $this->TryRequireCrypto()) === null)
+                    throw new CryptoUnlockRequiredException();
                 $value = $account->EncryptSecret($value, $nonce);
             }
         }
@@ -175,7 +226,8 @@ class CryptStringType extends CryptField
 
     public function isValueReady() : bool
     { 
-        return isset($this->plainvalue) || !$this->isEncrypted() || $this->account->GetObject()->isCryptoAvailable();
+        return isset($this->plainvalue) || !$this->isEncrypted() || 
+            ($this->TryGetAccount()?->isCryptoAvailable() ?? false);
     }
 
     /** Returns true if this field's value is initialized */
@@ -197,7 +249,8 @@ class CryptStringType extends CryptField
             $nonce = $this->nonce->TryGetValue();
             if ($nonce !== null)
             {
-                $account = $this->RequireCrypto();
+                if (($account = $this->TryRequireCrypto()) === null)
+                    throw new CryptoUnlockRequiredException();
                 $this->plainvalue = $account->DecryptSecret($this->dbvalue, $nonce);
             }
             else $this->plainvalue = $this->dbvalue;
@@ -211,6 +264,7 @@ class CryptStringType extends CryptField
      * @param string $value string value
      * @param bool $docrypt if true, store encrypted - default is current state
      * @return bool true if the field's DB value was modified
+     * @throws CryptoUnlockRequiredException if crypto has not been unlocked
      */
     public function SetValue(string $value, ?bool $docrypt = null) : bool
     {
@@ -219,7 +273,8 @@ class CryptStringType extends CryptField
         $docrypt ??= $this->isEncrypted();
         if ($docrypt)
         {
-            $account = $this->RequireCrypto();
+            if (($account = $this->TryRequireCrypto()) === null)
+                throw new CryptoUnlockRequiredException();
             $nonce = Crypto::GenerateSecretNonce();
             $this->nonce->SetValue($nonce);
 

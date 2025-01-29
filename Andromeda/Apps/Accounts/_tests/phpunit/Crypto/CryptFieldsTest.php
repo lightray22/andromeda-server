@@ -1,7 +1,7 @@
 <?php declare(strict_types=1); namespace Andromeda\Apps\Accounts\Crypto\CryptFields; require_once("init.php");
 
 use Andromeda\Core\Database\{BaseObject, ObjectDatabase};
-use Andromeda\Core\Database\FieldTypes\{NullStringType, ObjectRefT};
+use Andromeda\Core\Database\FieldTypes\{NullStringType, NullObjectRefT};
 use Andromeda\Apps\Accounts\Account;
 
 class CryptFieldsTest extends \PHPUnit\Framework\TestCase
@@ -12,7 +12,7 @@ class CryptFieldsTest extends \PHPUnit\Framework\TestCase
         $parent = $this->createMock(BaseObject::class);
         $parent->method('GetDatabase')->willReturn($database);
         
-        $accountf = new ObjectRefT(Account::class, 'account');
+        $accountf = new NullObjectRefT(Account::class, 'account');
         $noncef = new NullStringType('myfield_nonce');
         $accountf->SetParent($parent);
         $noncef->SetParent($parent);
@@ -41,13 +41,15 @@ class CryptFieldsTest extends \PHPUnit\Framework\TestCase
         $this->assertFalse($field->isInitialized());
     }
 
+    // TODO RAY !! test null account
+
     public function testEncryptDecrypt() : void
     {
         $database = $this->createMock(ObjectDatabase::class);
         $parent = $this->createMock(BaseObject::class);
         $parent->method('GetDatabase')->willReturn($database);
         
-        $accountf = new ObjectRefT(Account::class, 'account');
+        $accountf = new NullObjectRefT(Account::class, 'account');
         $noncef = new NullStringType('myfield_nonce');
         $accountf->SetParent($parent);
         $noncef->SetParent($parent);

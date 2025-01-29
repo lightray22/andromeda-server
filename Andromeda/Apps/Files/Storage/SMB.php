@@ -1,11 +1,8 @@
 <?php declare(strict_types=1); namespace Andromeda\Apps\Files\Storage; if (!defined('Andromeda')) die();
 
-use Andromeda\Core\Database\{FieldTypes, ObjectDatabase};
+use Andromeda\Core\Database\{FieldTypes, ObjectDatabase, TableTypes};
 use Andromeda\Core\IOFormat\Input;
 use Andromeda\Apps\Accounts\Account;
-
-abstract class SMBBase1 extends FWrapper { use BasePath; }
-abstract class SMBBase2 extends SMBBase1 { use UserPass; }
 
 /**
  * Allows using an SMB/CIFS server for backend storage
@@ -14,68 +11,87 @@ abstract class SMBBase2 extends SMBBase1 { use UserPass; }
  * functions but some manual workarounds are needed.
  * Uses fieldcrypt to allow encrypting the username/password.
  */
-class SMB extends SMBBase2
-{    
-    public static function GetFieldTemplate() : array
+class SMB extends FWrapper
+{
+    use BasePath, UserPass, TableTypes\TableNoChildren;
+
+    /** Hostname of the SMB server */
+    protected FieldTypes\StringType $hostname;
+    /** Optional SMB workgroup */
+    protected FieldTypes\NullStringType $workgroup;
+
+    protected function CreateFields() : void
     {
-        return array_merge(parent::GetFieldTemplate(), array(
-            'workgroup' => new FieldTypes\StringType(),
-            'hostname' => new FieldTypes\StringType()
-        ));
+        $fields = array();
+        $this->hostname = new FieldTypes\StringType('hostname');
+        $this->workgroup = new FieldTypes\NullStringType('workgroup');
+
+        $this->RegisterFields($fields, self::class);
+        $this->BasePathCreateFields();
+        $this->UserPassCreateFields();
+        parent::CreateFields();
     }
-    
+
     /**
      * Returns a printable client object of this SMB storage
-     * @return array<mixed> `{workgroup:?string, hostname:string}`
+     * @return array{id:string} // TODO RAY !! types
      * @see Storage::GetClientObject()
      */
     public function GetClientObject(bool $activate = false) : array
     {
         return parent::GetClientObject($activate) + array(
-            'workgroup' => $this->TryGetScalar('workgroup'),
-            'hostname' => $this->GetScalar('hostname')
+            'hostname' => $this->hostname->GetValue(), // TODO RAY !! priv only?
+            'workgroup' => $this->workgroup->TryGetValue()
         );
     }
     
-    public static function GetCreateUsage() : string { return parent::GetCreateUsage()." --hostname alphanum [--workgroup ?alphanum]"; }
+    public static function GetCreateUsage() : string { 
+        return static::GetBasePathCreateUsage()." ".static::GetUserPassCreateUsage()." ".
+        "--hostname alphanum [--workgroup ?alphanum]"; }
     
     public static function Create(ObjectDatabase $database, Input $input, ?Account $owner) : self
     {
         $params = $input->GetParams();
-        
-        return parent::Create($database, $input, $filesystem)
-            ->SetScalar('workgroup', $params->GetOptParam('workgroup',null)->CheckLength(255)->GetNullAlphanum())
-            ->SetScalar('hostname', $params->GetParam('hostname')->GetHostname());
+        $obj = parent::Create($database, $input, $owner);
+
+        $obj->hostname->SetValue($params->GetParam('hostname')->GetHostname());
+        $obj->workgroup->SetValue($params->GetOptParam('workgroup',null)->CheckLength(255)->GetNullAlphanum());
+
+        $obj->BasePathCreate($params);
+        $obj->UserPassCreate($params);
+        return $obj;
     }
     
-    public static function GetEditUsage() : string { return parent::GetEditUsage()." [--hostname alphanum] [--workgroup ?alphanum]"; }
+    public static function GetEditUsage() : string { 
+        return static::GetBasePathEditUsage()." ".static::GetUserPassEditUsage()." ".
+        "[--hostname alphanum] [--workgroup ?alphanum]"; }
     
     public function Edit(Input $input) : self
     {
         $params = $input->GetParams();
     
-        if ($params->HasParam('workgroup')) $this->SetScalar('workgroup', $params->GetParam('workgroup')->CheckLength(255)->GetNullAlphanum());
+        if ($params->HasParam('hostname')) 
+            $this->hostname->SetValue($params->GetParam('hostname')->GetHostname());
         
-        if ($params->HasParam('hostname')) $this->SetScalar('hostname', $params->GetParam('hostname')->GetHostname());
+        if ($params->HasParam('workgroup')) 
+            $this->workgroup->SetValue($params->GetParam('workgroup')->CheckLength(255)->GetNullAlphanum());
         
         return parent::Edit($input);
     }
     
-    /** Returns the SMB workgroup to use (or null) */
-    public function TryGetWorkgroup() : ?string { return $this->TryGetScalar('workgroup'); }
-
     /** Checks for the SMB client extension */
     public function PostConstruct(bool $created) : void // TODO RAY !! where do the auth sources chec kthis?
     {
-        if (!function_exists('smbclient_version')) throw new Exceptions\SMBExtensionException();
+        if (!function_exists('smbclient_version')) 
+            throw new Exceptions\SMBExtensionException();
     }
     
+    /** @var resource */
     private $state;
     
     public function Activate() : self
     {
-        if (isset($this->state)) return $this;
-        
+        if (is_resource($this->state)) return $this;
         $state = smbclient_state_new();
         
         if (!is_resource($state) || smbclient_state_init($state) !== true)
@@ -94,19 +110,29 @@ class SMB extends SMBBase2
         return $this; 
     }
 
+    public function canGetFreeSpace() : bool { return true; }
+    
+    public function GetFreeSpace() : int
+    {
+        if (($data = smbclient_statvfs($this->state, $this->GetFullURL())) === false)
+            throw new Exceptions\FreeSpaceFailedException();
+
+        return $data['frsize'] * $data['bsize'] * $data['bavail']; // @phpstan-ignore-line
+    }
+
     protected function GetFullURL(string $path = "") : string
     {
-        $username = rawurlencode($this->TryGetUsername() ?? "");
-        $password = rawurlencode($this->TryGetPassword() ?? "");
-        $workgroup = rawurlencode($this->TryGetWorkgroup() ?? "");
+        $username = rawurlencode($this->username->TryGetValue() ?? "");
+        $password = rawurlencode($this->password->TryGetValue() ?? "");
+        $workgroup = rawurlencode($this->workgroup->TryGetValue() ?? "");
                 
         $connstr = "";
-        if ($workgroup) $connstr .= "$workgroup;";
-        if ($username) $connstr .= $username;
-        if ($password) $connstr .= ":$password";
-        if ($connstr) $connstr .= "@";
+        if ($workgroup !== "") $connstr .= "$workgroup;";
+        if ($username !== "")  $connstr .= $username;
+        if ($password !== "")  $connstr .= ":$password";
+        if ($connstr !== "")   $connstr .= "@";
         
-        $connstr = "smb://".$connstr.$this->GetScalar('hostname');
+        $connstr = "smb://".$connstr.$this->hostname->GetValue();
                 
         return $connstr.'/'.$this->GetPath($path);
     }
@@ -130,16 +156,5 @@ class SMB extends SMBBase2
             throw new Exceptions\FileWriteFailedException();
 
         return $this;
-    }
-    
-    public function canGetFreeSpace() : bool { return true; }
-    
-    public function GetFreeSpace() : int
-    {        
-        $data = smbclient_statvfs($this->state, $this->GetFullURL());
-        
-        if ($data === false) throw new Exceptions\FreeSpaceFailedException();
-        
-        return $data['frsize'] * $data['bsize'] * $data['bavail'];
     }
 }

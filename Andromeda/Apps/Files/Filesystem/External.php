@@ -104,7 +104,7 @@ class External extends Filesystem
                 else
                 {
                     $database = $this->GetStorage()->GetDatabase();
-                    $owner = $this->GetStorage()->GetOwner();
+                    $owner = $this->GetStorage()->TryGetOwner();
                     
                     $class = $isfile ? File::class : Folder::class;
                     $dbitem = $class::NotifyCreate($database, $folder, $owner, $fsname);

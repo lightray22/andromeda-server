@@ -1,6 +1,6 @@
 <?php declare(strict_types=1); namespace Andromeda\Apps\Files\Storage; if (!defined('Andromeda')) die();
 
-use Andromeda\Core\Database\ObjectDatabase;
+use Andromeda\Core\Database\{ObjectDatabase, TableTypes};
 use Andromeda\Core\IOFormat\Input;
 use Andromeda\Apps\Accounts\Account;
 
@@ -11,10 +11,16 @@ use Andromeda\Apps\Accounts\Account;
  */
 class Local extends FWrapper
 {
-    use BasePath;
+    use BasePath, TableTypes\TableNoChildren;
 
-    public function Activate() : self { return $this; }
-    
+    protected function CreateFields() : void
+    {
+        $fields = array();
+        $this->RegisterFields($fields, self::class);
+        $this->BasePathCreateFields();
+        parent::CreateFields();
+    }
+
     public static function GetCreateUsage() : string { return self::GetBasePathCreateUsage(); }
     
     public static function GetEditUsage() : string { return self::GetBasePathEditUsage(); }
@@ -36,6 +42,8 @@ class Local extends FWrapper
         return $this;
     }
 
+    public function Activate() : self { return $this; }
+    
     public function canGetFreeSpace() : bool { return true; }
     
     public function usesBandwidth() : bool { return false; }

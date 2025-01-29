@@ -1,85 +1,82 @@
 <?php declare(strict_types=1); namespace Andromeda\Apps\Files\Storage; if (!defined('Andromeda')) die();
 
-use Andromeda\Core\Database\{FieldTypes, ObjectDatabase};
-use Andromeda\Core\IOFormat\{Input, SafeParams};
-use Andromeda\Apps\Accounts\Account;
+use Andromeda\Core\Database\FieldTypes;
+use Andromeda\Core\IOFormat\SafeParams;
+use Andromeda\Apps\Accounts\Crypto\CryptFields;
 
 /** Trait for storage classes that store a possibly-encrypted username and password */
-trait UserPass // TODO RAY !! change function names to be trait-specific
+trait UserPass
 {
-    //use OptFieldCrypt; // TODO RAY !! deleted from accounts, needs refactor
-    
-    protected static function getEncryptedFields() : array { return array('username','password'); }
-    
-    /** Gets the extra DB fields required for this trait */
-    public static function GetFieldTemplate() : array
+    use CryptFields\CryptObject;
+
+    /** The optional username to use with the storage */
+    protected CryptFields\NullCryptStringType $username;
+    /** The nonce to use if the username is encrypted */
+    protected FieldTypes\NullStringType $username_nonce;
+    /** The optional password to use with the storage */
+    protected CryptFields\NullCryptStringType $password;
+    /** The nonce to use if the password is encrypted */
+    protected FieldTypes\NullStringType $password_nonce;
+
+    protected function UserPassCreateFields() : void
     {
-        return array_merge(parent::GetFieldTemplate(), self::GetFieldCryptFieldTemplate(), array(
-            'username' => new FieldTypes\StringType(), 
-            'password' => new FieldTypes\StringType(),
-        ));
+        $fields = array();
+        $this->username_nonce = $fields[] = new FieldTypes\NullStringType('username_nonce');
+        $this->username = $fields[] = new CryptFields\NullCryptStringType('username',$this->owner,$this->username_nonce);
+        $this->password_nonce = $fields[] = new FieldTypes\NullStringType('password_nonce');
+        $this->password = $fields[] = new CryptFields\NullCryptStringType('password',$this->owner,$this->password_nonce);
+        $this->RegisterChildFields($fields);
+    }
+
+    /** @return list<CryptFields\CryptField> */
+    protected function GetCryptFields() : array { return array($this->username, $this->password); }
+
+    /** Returns the command usage for Create() */
+    public static function GetUserPassCreateUsage() : string { return "[--username ?alphanum] [--password ?raw] [--fieldcrypt bool]"; }
+    
+    /** Performs cred-crypt level initialization on a new storage */
+    public function UserPassCreate(SafeParams $params) : self
+    {
+        $this->SetEncrypted($params->GetOptParam('fieldcrypt',false)->GetBool());
+        $this->username->SetValue($params->GetOptParam('username',null)->CheckLength(255)->GetNullAlphanum());
+        $this->password->SetValue($params->GetOptParam('password',null,SafeParams::PARAMLOG_NEVER)->GetNullRawString());
+        return $this;
+    }
+    
+    /** Returns the command usage for Edit() */
+    public static function GetUserPassEditUsage() : string { return "[--username ?alphanum] [--password ?raw] [--fieldcrypt bool]"; }
+    
+    /** Performs cred-crypt level edit on an existing storage */
+    public function UserPassEdit(SafeParams $params) : self
+    {
+        if ($params->HasParam('fieldcrypt'))
+            $this->SetEncrypted($params->GetParam('fieldcrypt')->GetBool());
+        if ($params->HasParam('username')) 
+            $this->username->SetValue($params->GetParam('username')->CheckLength(255)->GetNullAlphanum());
+        if ($params->HasParam('password')) 
+            $this->password->SetValue($params->GetParam('password',SafeParams::PARAMLOG_NEVER)->GetNullRawString());
+        return $this;
     }
     
     /**
      * Returns the printable client object of this trait
-     * @return array<mixed> `{username:?string, password:bool}`
-     * @see Storage::GetClientObject()
+     * @return array{}
      */
-    public function GetClientObject(bool $activate = false) : array
+    public function GetUserPassClientObject() : array
     {
-        return parent::GetClientObject($activate) + $this->GetFieldCryptClientObject() + array(
+        /*$retval = array();
+        
+        foreach (static::getEncryptedFields() as $field)
+        {
+            $retval[$field."_iscrypt"] = $this->isFieldEncrypted($field);
+        }
+        
+        return $retval;*/
+        /*return parent::GetClientObject($activate) + $this->GetUserPassClientObject() + array(
             'username' => $this->TryGetUsername(),
             'password' => (bool)($this->TryGetPassword()),
-        );
+        );*/
+        // TODO RAY !! implement me - also should have username and password bool?
+        return array();
     }
-    
-    /** Returns the command usage for Create() */
-    public static function GetCreateUsage() : string { return parent::GetCreateUsage()." ".self::GetFieldCryptCreateUsage()." [--username ?alphanum] [--password ?raw]"; }
-    
-    /** Performs cred-crypt level initialization on a new storage */
-    public static function Create(ObjectDatabase $database, Input $input, ?Account $owner) : Storage
-    {
-        $params = $input->GetParams();
-        
-        return parent::Create($database, $input, $filesystem)->FieldCryptCreate($params)
-            ->SetPassword($params->GetOptParam('password',null,SafeParams::PARAMLOG_NEVER)->GetNullRawString())
-            ->SetUsername($params->GetOptParam('username',null)->CheckLength(255)->GetNullAlphanum());
-    }
-    
-    /** Returns the command usage for Edit() */
-    public static function GetEditUsage() : string { return parent::GetEditUsage()." ".self::GetFieldCryptEditUsage()." [--username ?alphanum] [--password ?raw]"; }
-    
-    /** Performs cred-crypt level edit on an existing storage */
-    public function Edit(Input $input) : Storage
-    {
-        $params = $input->GetParams();
-        
-        if ($params->HasParam('password')) $this->SetPassword($params->GetParam('password',SafeParams::PARAMLOG_NEVER)->GetNullRawString());
-        if ($params->HasParam('username')) $this->SetUsername($params->GetParam('username')->CheckLength(255)->GetNullAlphanum());
-
-        $this->FieldCryptEdit($params);
-        return parent::Edit($input);
-    }
-    
-    /** Returns the decrypted username */
-    protected function TryGetUsername() : ?string { return $this->TryGetEncryptedScalar('username'); }
-    
-    /** Returns the decrypted password */
-    protected function TryGetPassword() : ?string { return $this->TryGetEncryptedScalar('password'); }
-    
-    /**
-     * Sets the stored username
-     * @param ?string $username username
-     * @return $this
-     */
-    protected function SetUsername(?string $username) : self { 
-        return $this->SetEncryptedScalar('username',$username); }
-    
-    /**
-     * Sets the stored password
-     * @param ?string $password password
-     * @return $this
-     */
-    protected function SetPassword(?string $password) : self { 
-        return $this->SetEncryptedScalar('password',$password); }
 }

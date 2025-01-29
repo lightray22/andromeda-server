@@ -29,7 +29,7 @@ class ItemStat
  * Storages do not implement transactions and cannot rollback actions.
  * Any "expected" exceptions should always be checked before storage actions.
  */
-abstract class Storage extends BaseObject // TODO was StandardObject
+abstract class Storage extends BaseObject
 {
     use TableTypes\TableLinkedChildren;
     
@@ -95,7 +95,7 @@ abstract class Storage extends BaseObject // TODO was StandardObject
      * @param bool $public if true, include public storages
      * @return array<string, static>
      */
-    public static function LoadByAccount(ObjectDatabase $database, Account $owner, bool $public) : array
+    public static function LoadByAccount(ObjectDatabase $database, Account $owner, bool $public = true) : array // TODO RAY !! what should default value of public be here and below?
     {
         $retval = $database->LoadObjectsByKey(static::class, 'owner', $owner->ID());
         if ($public) $retval += $database->LoadObjectsByKey(static::class, 'owner', null); // public storages
@@ -108,7 +108,7 @@ abstract class Storage extends BaseObject // TODO was StandardObject
      * @param bool $public if true, allow owner being null (public storage)
      * @return ?static 
      */
-    public static function TryLoadByAccountAndID(ObjectDatabase $database, Account $owner, string $id, bool $public) : ?self
+    public static function TryLoadByAccountAndID(ObjectDatabase $database, Account $owner, string $id, bool $public = true) : ?self
     {
         $q = new QueryBuilder(); 
         $ownerq = $q->Equals('owner',$owner->ID());
@@ -178,10 +178,10 @@ abstract class Storage extends BaseObject // TODO was StandardObject
     public function isUserOwned() : bool { return $this->owner->TryGetObjectID() !== null; }
     
     /** Returns the account that owns this storage (or null) */
-    public function GetOwner() : ?Account { return $this->owner->TryGetObject(); }
+    public function TryGetOwner() : ?Account { return $this->owner->TryGetObject(); }
     
     /** Returns the owner ID of this storage (or null) */
-    public function GetOwnerID() : ?string { return $this->owner->TryGetObjectID(); }
+    public function TryGetOwnerID() : ?string { return $this->owner->TryGetObjectID(); }
     
     /** Returns true if the data in this storage is external, false if Andromeda owns it */
     public function isExternal() : bool { return $this->fstype->GetValue() === self::FSTYPE_EXTERNAL; }
@@ -205,7 +205,7 @@ abstract class Storage extends BaseObject // TODO was StandardObject
     {
         $name ??= self::DEFAULT_NAME;
 
-        if (static::TryLoadByAccountAndName($this->database, $this->GetOwner(), $name) !== null)
+        if (static::TryLoadByAccountAndName($this->database, $this->TryGetOwner(), $name) !== null)
             throw new Exceptions\InvalidNameException();
         
         $this->name->SetValue($name); return $this;
@@ -332,7 +332,7 @@ abstract class Storage extends BaseObject // TODO was StandardObject
         $data = array(
             'id' => $this->ID(),
             'name' => $this->GetName(),
-            'owner' => $this->GetOwnerID(),
+            'owner' => $this->TryGetOwnerID(),
             'external' => $this->isExternal(),
             'encrypted' => $this->isEncrypted(),
             'readonly' => $this->isReadOnly(),

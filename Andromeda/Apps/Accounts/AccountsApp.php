@@ -624,6 +624,8 @@ class AccountsApp extends BaseApp
         /* delete old session associated with this client, create a new one */
         Session::DeleteByClient($this->database, $client);
         $session = Session::Create($this->database, $account, $client)->Save(); // save now for Client GetClientObject
+
+        // TODO Don't like that session create has separate queries for set date active. Do earlier? Or why not in create? Or why set at all?
         
         if ($actionlog !== null) $actionlog->LogDetails('session',$session->ID()); 
         
