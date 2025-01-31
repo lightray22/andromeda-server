@@ -24,17 +24,16 @@ use Andromeda\Apps\Accounts\{AuthenticationFailedException, UnknownAccountExcept
     RootFolder::DeleteRootsByAccount($database, $account);
 });
 
-Account::RegisterCryptoHandler(function(ObjectDatabase $database, Account $account, bool $init){ 
-    if (!$init) FTP::DecryptAccount($database, $account); }); 
-
-Account::RegisterCryptoHandler(function(ObjectDatabase $database, Account $account, bool $init){ 
-    if (!$init) S3::DecryptAccount($database, $account); });
-
-Account::RegisterCryptoHandler(function(ObjectDatabase $database, Account $account, bool $init){ 
-    if (!$init) SFTP::DecryptAccount($database, $account); });
-
-Account::RegisterCryptoHandler(function(ObjectDatabase $database, Account $account, bool $init){ 
-    if (!$init) SMB::DecryptAccount($database, $account); });*/
+Account::RegisterCryptoHandler(function(ObjectDatabase $database, Account $account, bool $init)
+{ 
+    if (!$init) // don't auto-encrypt
+    {
+        FTP::DecryptAccount($database, $account); 
+        S3::DecryptAccount($database, $account); 
+        SFTP::DecryptAccount($database, $account); 
+        SMB::DecryptAccount($database, $account); 
+    }
+}*/
             
 
 

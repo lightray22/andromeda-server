@@ -29,7 +29,7 @@ trait UserPass
     }
 
     /** @return list<CryptFields\CryptField> */
-    protected function GetCryptFields() : array { return array($this->username, $this->password); }
+    protected function GetUserPassCryptFields() : array { return array($this->username, $this->password); }
 
     /** Returns the command usage for Create() */
     public static function GetUserPassCreateUsage() : string { return "[--username ?alphanum] [--password ?raw] [--fieldcrypt bool]"; }

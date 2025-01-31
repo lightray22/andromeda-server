@@ -16,7 +16,6 @@ parameters:
             - ../../Andromeda/Apps/Files/Items
             - ../../Andromeda/Apps/Files/Limits.bad
             - ../../Andromeda/Apps/Files/Storage/S3.php
-            - ../../Andromeda/Apps/Files/Storage/SFTP.php
             - ../../Andromeda/Apps/Files/Storage/FTP.php
             - ../../Andromeda/Apps/Files/Social
             - ../../Andromeda/Apps/Files/_tests/phpunit-bad

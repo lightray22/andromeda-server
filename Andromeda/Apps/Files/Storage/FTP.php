@@ -1,8 +1,9 @@
 <?php declare(strict_types=1); namespace Andromeda\Apps\Files\Storage; if (!defined('Andromeda')) die();
 
-use Andromeda\Core\Database\{FieldTypes, ObjectDatabase};
+use Andromeda\Core\Database\{FieldTypes, ObjectDatabase, TableTypes};
 use Andromeda\Core\IOFormat\Input;
 use Andromeda\Apps\Accounts\Account;
+use Andromeda\Apps\Accounts\Crypto\CryptFields;
 
 abstract class FTPBase1 extends FWrapper { use BasePath; }
 abstract class FTPBase2 extends FTPBase1 { use UserPass; }
@@ -17,6 +18,9 @@ abstract class FTPBase2 extends FTPBase1 { use UserPass; }
  */
 class FTP extends FTPBase2
 {    
+    /** @return list<CryptFields\CryptField> */
+    protected function GetCryptFields() : array { return $this->GetUserPassCryptFields(); }
+
     public static function GetFieldTemplate() : array
     {
         return array_merge(parent::GetFieldTemplate(), array(

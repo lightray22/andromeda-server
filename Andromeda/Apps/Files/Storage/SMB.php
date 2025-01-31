@@ -3,6 +3,7 @@
 use Andromeda\Core\Database\{FieldTypes, ObjectDatabase, TableTypes};
 use Andromeda\Core\IOFormat\Input;
 use Andromeda\Apps\Accounts\Account;
+use Andromeda\Apps\Accounts\Crypto\CryptFields;
 
 /**
  * Allows using an SMB/CIFS server for backend storage
@@ -15,7 +16,7 @@ class SMB extends FWrapper
 {
     use BasePath, UserPass, TableTypes\TableNoChildren;
 
-    /** Hostname of the SMB server */
+    /** Hostname of the server */
     protected FieldTypes\StringType $hostname;
     /** Optional SMB workgroup */
     protected FieldTypes\NullStringType $workgroup;
@@ -32,6 +33,9 @@ class SMB extends FWrapper
         parent::CreateFields();
     }
 
+    /** @return list<CryptFields\CryptField> */
+    protected function GetCryptFields() : array { return $this->GetUserPassCryptFields(); }
+
     /**
      * Returns a printable client object of this SMB storage
      * @return array{id:string} // TODO RAY !! types
@@ -46,8 +50,8 @@ class SMB extends FWrapper
     }
     
     public static function GetCreateUsage() : string { 
-        return static::GetBasePathCreateUsage()." ".static::GetUserPassCreateUsage()." ".
-        "--hostname alphanum [--workgroup ?alphanum]"; }
+        return static::GetBasePathCreateUsage()." ".static::GetUserPassCreateUsage().
+        " --hostname alphanum [--workgroup ?alphanum]"; }
     
     public static function Create(ObjectDatabase $database, Input $input, ?Account $owner) : self
     {
@@ -63,8 +67,8 @@ class SMB extends FWrapper
     }
     
     public static function GetEditUsage() : string { 
-        return static::GetBasePathEditUsage()." ".static::GetUserPassEditUsage()." ".
-        "[--hostname alphanum] [--workgroup ?alphanum]"; }
+        return static::GetBasePathEditUsage()." ".static::GetUserPassEditUsage().
+        " [--hostname alphanum] [--workgroup ?alphanum]"; }
     
     public function Edit(Input $input) : self
     {
@@ -86,12 +90,15 @@ class SMB extends FWrapper
             throw new Exceptions\SMBExtensionException();
     }
     
-    /** @var resource */
-    private $state;
+    /** @var ?resource */
+    private $state = null;
     
-    public function Activate() : self
+    public function Activate() : self { $this->GetState(); return $this; }
+
+    /** @return resource */
+    protected function GetState()
     {
-        if (is_resource($this->state)) return $this;
+        if ($this->state !== null) return $this->state;
         $state = smbclient_state_new();
         
         if (!is_resource($state) || smbclient_state_init($state) !== true)
@@ -105,16 +112,14 @@ class SMB extends FWrapper
         if (!is_readable($this->GetFullURL()))
             throw new Exceptions\SMBConnectException();
         
-        $this->state = $state;
-        
-        return $this; 
+        return $this->state = $state;
     }
 
     public function canGetFreeSpace() : bool { return true; }
     
     public function GetFreeSpace() : int
     {
-        if (($data = smbclient_statvfs($this->state, $this->GetFullURL())) === false)
+        if (($data = smbclient_statvfs($this->GetState(), $this->GetFullURL())) === false)
             throw new Exceptions\FreeSpaceFailedException();
 
         return $data['frsize'] * $data['bsize'] * $data['bavail']; // @phpstan-ignore-line
@@ -145,14 +150,15 @@ class SMB extends FWrapper
     protected function SubTruncate(string $path, int $length) : self
     {
         $this->ClosePath($path); // close existing handles
+        $state = $this->GetState();
         
-        $handle = smbclient_open($this->state, $this->GetFullURL($path), 'r+');
+        $handle = smbclient_open($state, $this->GetFullURL($path), 'r+');
         if (!$handle) throw new Exceptions\FileWriteFailedException();
             
-        if (!smbclient_ftruncate($this->state, $handle, $length))
+        if (!smbclient_ftruncate($state, $handle, $length))
             throw new Exceptions\FileWriteFailedException();
         
-        if (!smbclient_close($this->state, $handle))
+        if (!smbclient_close($state, $handle))
             throw new Exceptions\FileWriteFailedException();
 
         return $this;

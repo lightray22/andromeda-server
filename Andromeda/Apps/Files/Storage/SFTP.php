@@ -1,151 +1,174 @@
 <?php declare(strict_types=1); namespace Andromeda\Apps\Files\Storage; if (!defined('Andromeda')) die();
 
-use Andromeda\Core\Database\{FieldTypes, ObjectDatabase};
+use Andromeda\Core\Database\{FieldTypes, ObjectDatabase, TableTypes};
+use Andromeda\Core\Database\Exceptions\FieldDataNullException;
+use Andromeda\Core\Errors\BaseExceptions;
 use Andromeda\Core\IOFormat\{Input, SafeParams};
 use Andromeda\Apps\Accounts\Account;
+use Andromeda\Apps\Accounts\Crypto\CryptFields;
 
-abstract class SFTPBase1 extends FWrapper { use BasePath; }
-abstract class SFTPBase2 extends SFTPBase1 { use UserPass; }
+use \phpseclib3\Crypt\PublicKeyLoader;
+use \phpseclib3\Net\SFTP as SFTPConnection;
 
 /**
  * Allows using an SFTP server for backend storage using phpseclib
  * 
  * Uses fieldcrypt to allow encrypting the username/password.
  */
-class SFTP extends SFTPBase2
+class SFTP extends FWrapper
 {
-    protected static function getEncryptedFields() : array { return array_merge(parent::getEncryptedFields(), array('privkey','keypass')); }
-    
-    public static function GetFieldTemplate() : array
+    use BasePath, UserPass, TableTypes\TableNoChildren;
+
+    /** Hostname of the server */
+    protected FieldTypes\StringType $hostname;
+    /** The port to connect to the server */
+    protected FieldTypes\NullIntType $port;
+    /** The last known host key of the server */
+    protected FieldTypes\NullStringType $hostkey;
+    /** The private key to use for authentication */
+    protected CryptFields\NullCryptStringType $privkey;
+    protected FieldTypes\NullStringType $privkey_nonce;
+    /** The key to use to unlock the private key */
+    protected CryptFields\NullCryptStringType $keypass;
+    protected FieldTypes\NullStringType $keypass_nonce;
+
+    protected function CreateFields() : void
     {
-        return array_merge(parent::GetFieldTemplate(), array(
-            'hostname' => new FieldTypes\StringType(),
-            'port' => new FieldTypes\IntType(),
-            'hostkey' => new FieldTypes\StringType(),
-            'privkey' => new FieldTypes\StringType(), // private key material for auth
-            'keypass' => new FieldTypes\StringType(), // key for unlocking the private key
-        ));
+        $fields = array();
+        $this->hostname = new FieldTypes\StringType('hostname');
+        $this->port = new FieldTypes\NullIntType('port');
+        $this->hostkey = new FieldTypes\NullStringType('hostkey');
+        $this->privkey_nonce = new FieldTypes\NullStringType('privkey_nonce');
+        $this->privkey = new CryptFields\NullCryptStringType('privkey',$this->owner,$this->privkey_nonce);
+        $this->keypass_nonce = new FieldTypes\NullStringType('keypass_nonce');
+        $this->keypass = new CryptFields\NullCryptStringType('keypass',$this->owner,$this->keypass_nonce);
+
+        $this->RegisterFields($fields, self::class);
+        $this->BasePathCreateFields();
+        $this->UserPassCreateFields();
+        parent::CreateFields();
     }
-    
+
+    /** @return list<CryptFields\CryptField> */
+    protected function GetCryptFields() : array { 
+        return array($this->privkey, $this->keypass) + $this->GetUserPassCryptFields(); }
+
     /**
      * Returns a printable client object of this SFTP storage
-     * @return array<mixed> `{hostname:string, port:?int, pubkey:bool, keypass:bool}`
+     * @return array{id:string} `{hostname:string, port:?int, pubkey:bool, keypass:bool}`
      * @see Storage::GetClientObject()
      */
     public function GetClientObject(bool $activate = false) : array
     {
-        return parent::GetClientObject($activate) + array(
+        /*return parent::GetClientObject($activate) + array(
             'hostname' => $this->GetScalar('hostname'),
             'port' => $this->TryGetScalar('port'),
             'hostkey' => $this->TryGetHostKey(),
             'privkey' => (bool)($this->TryGetScalar('privkey')),
             'keypass' => (bool)($this->TryGetScalar('keypass')),
-        );
+        );*/ return parent::GetClientObject($activate); // TODO RAY !!
     }
 
-    /** Returns the configured username (mandatory) */
-    protected function GetUsername() : string { return $this->GetEncryptedScalar('username'); }
-    
-    /** Returns the private key for authentication */
-    protected function TryGetPrivkey() : ?string { return $this->TryGetEncryptedScalar('privkey'); }
-    
-    /** Returns the password for the private key */
-    protected function TryGetKeypass() : ?string { return $this->TryGetEncryptedScalar('keypass'); }
-    
-    /** Sets the private key used for authentication */
-    protected function SetPrivkey(?string $privkey) : self 
-    {
-        return $this->SetEncryptedScalar('privkey',$privkey); 
-    }
-    
-    /** Sets the password for the private key, encrypted if $fieldcrypt */
-    protected function SetKeypass(?string $keypass) : self 
-    {
-        return $this->SetEncryptedScalar('keypass',$keypass); 
-    }
-
-    /** Returns the cached public key for the server host */
-    protected function TryGetHostKey() : ? string { return $this->TryGetScalar('hostkey'); }
-    
-    /** Sets the cached host public key to the given value */
-    protected function SetHostKey(?string $val) : self { return $this->SetScalar('hostkey',$val); }
-    
-    public static function GetCreateUsage() : string { return parent::GetCreateUsage()." --hostname alphanum [--port ?uint16] [--privkey% path | --privkey-] [--keypass ?raw]"; }
+    public static function GetCreateUsage() : string { 
+        return static::GetBasePathCreateUsage()." ".static::GetUserPassCreateUsage().
+        " --hostname alphanum [--port ?uint16] [--privkey% path | --privkey-] [--keypass ?raw]"; }
     
     public static function Create(ObjectDatabase $database, Input $input, ?Account $owner) : self
     { 
         $params = $input->GetParams();
+        $obj = parent::Create($database, $input, $owner);
         
-        $obj = parent::Create($database, $input, $filesystem)
-            ->SetScalar('hostname', $params->GetParam('hostname')->GetHostname())
-            ->SetScalar('port', $params->GetOptParam('port',null)->GetNullUint16())
-            ->SetKeypass($params->GetOptParam('keypass',null,SafeParams::PARAMLOG_NEVER)->GetNullRawString());
+        $obj->hostname->SetValue($params->GetParam('hostname')->GetHostname());
+        $obj->port->SetValue($params->GetOptParam('port',null)->GetNullUint16());
         
-        if ($input->HasFile('privkey')) $obj->SetPrivkey($input->GetFile('privkey')->GetData());
+        if ($input->HasFile('privkey'))
+            $obj->privkey->SetValue($input->GetFile('privkey')->GetData());
+        $obj->keypass->SetValue($params->GetOptParam('keypass',null,SafeParams::PARAMLOG_NEVER)->GetNullRawString());
         
+        $obj->BasePathCreate($params);
+        $obj->UserPassCreate($params);
         return $obj;
     }
 
-    public static function GetEditUsage() : string { return parent::GetEditUsage()." [--hostname alphanum] [--port ?uint16] [--privkey% path | --privkey-] [--keypass ?raw] [--resethost bool]"; }
+    // TODO username for SFTP is mandatory, fix help text and create/edit functions
+
+    public static function GetEditUsage() : string { 
+        return static::GetBasePathEditUsage()." ".static::GetUserPassEditUsage().
+        " [--hostname alphanum] [--port ?uint16] [--privkey% path | --privkey-] [--keypass ?raw] [--resethost bool]"; }
     
     public function Edit(Input $input) : self
     {
         $params = $input->GetParams();
         
-        if ($params->HasParam('hostname')) $this->SetScalar('hostname',$params->GetParam('hostname')->GetHostname());
-        if ($params->HasParam('port')) $this->SetScalar('port',$params->GetParam('port')->GetNullUint16());
+        if ($params->HasParam('hostname'))
+            $this->hostname->SetValue($params->GetParam('hostname')->GetHostname());
+        if ($params->HasParam('port'))
+            $this->port->SetValue($params->GetParam('port')->GetNullUint16());
         
-        if ($params->HasParam('keypass')) $this->SetKeypass($params->GetParam('keypass',SafeParams::PARAMLOG_NEVER)->GetNullRawString());
-        if ($params->HasFile('privkey')) $this->SetPrivkey($input->GetFile('privkey')->GetData());
+        if ($params->HasParam('keypass'))
+            $this->keypass->SetValue($params->GetParam('keypass',SafeParams::PARAMLOG_NEVER)->GetNullRawString());
+        if ($input->HasFile('privkey'))
+            $this->privkey->SetValue($input->GetFile('privkey')->GetData());
         
-        if ($params->GetOptParam('resethost',false)->GetBool()) $this->SetHostKey(null);
+        if ($params->GetOptParam('resethost',false)->GetBool())
+            $this->hostkey->SetValue(null);
         
         return parent::Edit($input);
     }
 
-    /** sftp connection resource */ private $sftp;
+    /** @var ?SFTPConnection */
+    private $sftp = null;
 
-    public function Activate() : self
+    public function Activate() : self { $this->GetConnection(); return $this; }
+
+    /** @return SFTPConnection */
+    protected function GetConnection() : SFTPConnection
     {
-        if (isset($this->sftp)) return $this;
+        if ($this->sftp !== null) return $this->sftp;
         
-        \phpseclib3\Net\SFTP\Stream::register();
+        SFTPConnection\Stream::register();
 
-        $host = $this->GetScalar('hostname'); 
-        $port = $this->TryGetScalar('port') ?? 22;
+        $host = $this->hostname->GetValue(); 
+        $port = $this->port->TryGetValue() ?? 22;
         
-        try
+        try // connect
         {
-            $sftp = new \phpseclib3\Net\SFTP($host, $port);
-            
+            $sftp = new SFTPConnection($host, $port);
+
             $hostkey = $sftp->getServerPublicHostKey();
-            
-            $cached = $this->TryGetHostKey();
-            if ($cached === null) $this->SetHostKey($hostkey);
-            else if ($cached !== $hostkey) throw new Exceptions\HostKeyMismatchException();            
+            $lastkey = $this->hostkey->TryGetValue();
+            if ($lastkey === null && $hostkey !== false) 
+                $this->hostkey->SetValue($hostkey);
+            else if ($lastkey !== $hostkey) 
+                throw new Exceptions\HostKeyMismatchException();
         }
-        catch (BaseExceptions\PHPError $e) { throw SSHConnectionFailure::Append($e); }
+        catch (\RuntimeException $e) {
+            throw new Exceptions\SSHConnectionFailure($e); }
 
-        try
+        try // authenticate
         {
-            $username = $this->GetUsername();
+            if (($username = $this->username->TryGetValue()) === null)
+                throw new FieldDataNullException('username');
+            
             $sftp->login($username);
     
-            if (($password = $this->TryGetPassword()) !== null) 
+            if (($password = $this->password->TryGetValue()) !== null) 
                 $sftp->login($username, $password);
     
-            if (($privkey = $this->TryGetPrivkey()) !== null)
+            if (($privkey = $this->privkey->TryGetValue()) !== null)
             {
-                $keypass = $this->TryGetKeypass();
-                $privkey = \phpseclib3\Crypt\PublicKeyLoader::load($privkey, $keypass);            
-                $sftp->login($username, $privkey);
+                $keypass = $this->keypass->TryGetValue();
+                $privkey2 = PublicKeyLoader::loadPrivateKey($privkey, $keypass ?? false); /** @phpstan-ignore-line doc is wrong */
+                $sftp->login($username, $privkey2);
             }
     
-            if (!$sftp->isAuthenticated()) throw new Exceptions\SSHAuthenticationFailure();
+            if (!$sftp->isAuthenticated()) 
+                throw new Exceptions\SSHAuthenticationFailure();
         }
-        catch (\RuntimeException $e) { throw SSHAuthenticationFailure::Copy($e); }
+        catch (\RuntimeException $e) { 
+            throw new Exceptions\SSHAuthenticationFailure($e); }
         
-        $this->sftp = $sftp; return $this;
+        return $this->sftp = $sftp;
     }    
     
     // WORKAROUND - is_writeable does not work on directories
@@ -153,14 +176,14 @@ class SFTP extends SFTPBase2
 
     protected function GetFullURL(string $path = "") : string
     {
-        return "sftp://".$this->sftp."/".$this->GetPath($path);
+        return "sftp://".$this->GetConnection()."/".$this->GetPath($path);
     }
     
     protected function SubImportFile(string $src, string $dest, bool $istemp) : self
     {
-        $mode = \phpseclib3\Net\SFTP::SOURCE_LOCAL_FILE;
+        $mode = SFTPConnection::SOURCE_LOCAL_FILE;
         
-        if (!$this->sftp->put($this->GetPath($dest), $src, $mode))   
+        if (!$this->GetConnection()->put($this->GetPath($dest), $src, $mode))
             throw new Exceptions\FileCreateFailedException();
             
         return $this;

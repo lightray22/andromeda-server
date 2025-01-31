@@ -1,10 +1,11 @@
 <?php declare(strict_types=1); namespace Andromeda\Apps\Files\Storage; if (!defined('Andromeda')) die();
 
 use Andromeda\Core\Config;
-use Andromeda\Core\Database\{FieldTypes, ObjectDatabase};
+use Andromeda\Core\Database\{FieldTypes, ObjectDatabase, TableTypes};
 use Andromeda\Core\Errors\ErrorManager;
 use Andromeda\Core\IOFormat\{Input, SafeParams};
 use Andromeda\Apps\Accounts\Account;
+use Andromeda\Apps\Accounts\Crypto\CryptFields;
 
 /**
  * Allows using an S3-compatible server for backend storage

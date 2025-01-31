@@ -301,16 +301,18 @@ class S3ConnectException extends ActivateException
 /** Exception indicating that the SSH connection failed */
 class SSHConnectionFailure extends ActivateException
 {
-    public function __construct(?string $details = null) {
-        parent::__construct("SSH_CONNECTION_FAILURE", $details);
+    public function __construct(\RuntimeException $ex = null) {
+        parent::__construct("SSH_CONNECTION_FAILURE");
+        if ($ex !== null) $this->AppendException($ex,true); // TODO append or copy?
     }
 }
 
 /** Exception indicating that SSH authentication failed */
 class SSHAuthenticationFailure extends ActivateException
 {
-    public function __construct(?string $details = null) {
-        parent::__construct("SSH_AUTHENTICATION_FAILURE", $details);
+    public function __construct(\RuntimeException $ex = null) {
+        parent::__construct("SSH_AUTHENTICATION_FAILURE");
+        if ($ex !== null) $this->AppendException($ex,true); // TODO append or copy?
     }
 }
 
