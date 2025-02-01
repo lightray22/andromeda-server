@@ -32,25 +32,25 @@ trait UserPass
     protected function GetUserPassCryptFields() : array { return array($this->username, $this->password); }
 
     /** Returns the command usage for Create() */
-    public static function GetUserPassCreateUsage() : string { return "[--username ?alphanum] [--password ?raw] [--fieldcrypt bool]"; }
+    public static function GetUserPassCreateUsage() : string { return "[--username ?alphanum] [--password ?raw] [--credcrypt bool]"; }
     
     /** Performs cred-crypt level initialization on a new storage */
     public function UserPassCreate(SafeParams $params) : self
     {
-        $this->SetEncrypted($params->GetOptParam('fieldcrypt',false)->GetBool());
+        $this->SetEncrypted($params->GetOptParam('credcrypt',false)->GetBool());
         $this->username->SetValue($params->GetOptParam('username',null)->CheckLength(255)->GetNullAlphanum());
         $this->password->SetValue($params->GetOptParam('password',null,SafeParams::PARAMLOG_NEVER)->GetNullRawString());
         return $this;
     }
     
     /** Returns the command usage for Edit() */
-    public static function GetUserPassEditUsage() : string { return "[--username ?alphanum] [--password ?raw] [--fieldcrypt bool]"; }
+    public static function GetUserPassEditUsage() : string { return "[--username ?alphanum] [--password ?raw] [--credcrypt bool]"; }
     
     /** Performs cred-crypt level edit on an existing storage */
     public function UserPassEdit(SafeParams $params) : self
     {
-        if ($params->HasParam('fieldcrypt'))
-            $this->SetEncrypted($params->GetParam('fieldcrypt')->GetBool());
+        if ($params->HasParam('credcrypt'))
+            $this->SetEncrypted($params->GetParam('credcrypt')->GetBool());
         if ($params->HasParam('username')) 
             $this->username->SetValue($params->GetParam('username')->CheckLength(255)->GetNullAlphanum());
         if ($params->HasParam('password')) 

@@ -91,7 +91,7 @@ Some storages also require additional PHP extensions.
 * FTP requires the PHP FTP extension.
 * S3 requires the PHP simplexml extension.
 
-As the external storages can all store external authentication credentials in the database, the `--fieldcrypt` param allows encrypting these credentials using the [Account encryption service](Accounts-App.md#account-cryptography).  FTP/SMB/SFTP use it for username/password while S3 uses it for accesskey/secretkey.  SFTP also uses it for the private key and private key password.  This will only work if your account has server-side encryption enabled.  This will also prevent sharing any content out of the storage to other users (or via link), since they won't have the key to read the authentication information.
+As the external storages can all store external authentication credentials in the database, the `--credcrypt` param allows encrypting these credentials using the [Account encryption service](Accounts-App.md#account-cryptography).  FTP/SMB/SFTP use it for username/password while S3 uses it for accesskey/secretkey.  SFTP also uses it for the private key and private key password.  This will only work if your account has server-side encryption enabled.  This will also prevent sharing any content out of the storage to other users (or via link), since they won't have the key to read the authentication information.
 
 ## Administration
 

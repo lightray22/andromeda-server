@@ -39,10 +39,10 @@ abstract class Storage extends BaseObject
      */
     public const TYPES = array(
         'local' => Local::class, 
-        /*'smb' => SMB::class, 
+        'smb' => SMB::class, 
         'sftp' => SFTP::class, 
         's3' => S3::class,
-        'ftp' => FTP::class*/
+        'ftp' => FTP::class
     );
     
     /** @return array<string, class-string<self>> */

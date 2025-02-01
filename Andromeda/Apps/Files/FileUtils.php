@@ -35,7 +35,7 @@ class FileUtils
         $data = implode($data);
         
         if ($strict && strlen($data) !== $bytes)
-            throw new FileReadFailedException("read ".strlen($data).", wanted bytes");
+            throw new FileReadFailedException("read ".strlen($data).", wanted $bytes");
         
         return $data;
     }

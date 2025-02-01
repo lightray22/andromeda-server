@@ -224,8 +224,9 @@ class FileCloseFailedException extends StorageException
 /** Exception that wraps S3 SDK exceptions */
 class S3ErrorException extends StorageException
 {
-    public function __construct(?string $details = null) {
-        parent::__construct("S3_SDK_EXCEPTION", $details);
+    public function __construct(?\Aws\S3\Exception\S3Exception $ex = null) {
+        parent::__construct("S3_SDK_EXCEPTION");
+        if ($ex !== null) $this->AppendException($ex,false);
     }
 }
 

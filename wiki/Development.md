@@ -8,7 +8,7 @@
 
 ## Bug Reporting
 
-Any code 500 server-error response should be considered a bug and reported.  This excludes errors caught when interfacing with a badly-behaving storage backends.  By default, basic backtraces (no personal info) are logged to the database and can be viewed with the `core geterrors` command.  Bug reports made here must include the relevant error log entry if possible.
+Any code 500 server-error response should be considered a bug and reported.  This *excludes* errors caught when interfacing with a badly-behaving storage or authentication backends.  By default, basic backtraces (no personal info) are logged to the database and can be viewed with the `core geterrors` command.  Bug reports made here must include the relevant error log entry if possible.
 
 See the [error logging how-to](Core-and-CoreApp.md#error-logging) for more details.
 

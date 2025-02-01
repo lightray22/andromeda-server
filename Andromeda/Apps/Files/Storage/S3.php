@@ -2,7 +2,6 @@
 
 use Andromeda\Core\Config;
 use Andromeda\Core\Database\{FieldTypes, ObjectDatabase, TableTypes};
-use Andromeda\Core\Errors\ErrorManager;
 use Andromeda\Core\IOFormat\{Input, SafeParams};
 use Andromeda\Apps\Accounts\Account;
 use Andromeda\Apps\Accounts\Crypto\CryptFields;
@@ -10,39 +9,68 @@ use Andromeda\Apps\Accounts\Crypto\CryptFields;
 /**
  * Allows using an S3-compatible server for backend storage
  * 
- * Uses fieldcrypt to allow encrypting the keys.
+ * Uses credcrypt to allow encrypting the keys.
  */
 class S3 extends FWrapper
 {
-    //use OptFieldCrypt;
-    
-    protected static function getEncryptedFields() : array { return array('accesskey','secretkey'); }
-    
-    public static function GetFieldTemplate() : array
+    use BasePath, UserPass, TableTypes\TableNoChildren;
+
+    /** The endpoint of the S3 connection */
+    protected FieldTypes\StringType $endpoint;
+    /** Whether or not to use path_style_endpoint */
+    protected FieldTypes\NullBoolType $path_style;
+    /** The port number to use for the connection */
+    protected FieldTypes\NullIntType $port;
+    /** Whether or not to connect with TLS */
+    protected FieldTypes\NullBoolType $usetls;
+    /** The region string of the S3 connection */
+    protected FieldTypes\StringType $region;
+    /** The bucket string of the S3 connection */
+    protected FieldTypes\StringType $bucket;
+    /** The access key to use for the connection */
+    protected CryptFields\NullCryptStringType $accesskey;
+    protected FieldTypes\NullStringType $accesskey_nonce;
+    /** The secret key to use for the connection */
+    protected CryptFields\NullCryptStringType $secretkey;
+    protected FieldTypes\NullStringType $secretkey_nonce;
+
+    protected function CreateFields() : void
     {
-        return array_merge(parent::GetFieldTemplate(), self::GetFieldCryptFieldTemplate(), array(
-            'endpoint' => new FieldTypes\StringType(),
-            'path_style' => new FieldTypes\BoolType(),
-            'port' => new FieldTypes\IntType(),
-            'usetls' => new FieldTypes\BoolType(),
-            'region' => new FieldTypes\StringType(),
-            'bucket' => new FieldTypes\StringType(),
-            'accesskey' => new FieldTypes\StringType(),
-            'secretkey' => new FieldTypes\StringType()
-        ));
+        $fields = array();
+
+        $this->endpoint = new FieldTypes\StringType('endpoint');
+        $this->path_style = new FieldTypes\NullBoolType('path_style');
+        $this->port = new FieldTypes\NullIntType('port');
+        $this->usetls = new FieldTypes\NullBoolType('usetls');
+        $this->region = new FieldTypes\StringType('region');
+        $this->bucket = new FieldTypes\StringType('bucket');
+        
+        $this->accesskey_nonce = new FieldTypes\NullStringType('accesskey_nonce');
+        $this->accesskey = new CryptFields\NullCryptStringType('accesskey',$this->owner,$this->accesskey_nonce);
+        $this->secretkey_nonce = new FieldTypes\NullStringType('secretkey_nonce');
+        $this->secretkey = new CryptFields\NullCryptStringType('secretkey',$this->owner,$this->secretkey_nonce);
+
+        $this->RegisterFields($fields, self::class);
+        $this->BasePathCreateFields();
+        $this->UserPassCreateFields();
+        parent::CreateFields();
     }
-    
+
+    /** @return list<CryptFields\CryptField> */
+    protected function GetCryptFields() : array { 
+        return array_merge(array($this->accesskey, $this->secretkey),$this->GetUserPassCryptFields()); }
+
     /**
      * Returns a printable client object of this S3 storage
-     * @return array<mixed> `{endpoint:string, path_style:?bool, port:?int, usetls:bool, \
+     * @return array{id:string} `{endpoint:string, path_style:?bool, port:?int, usetls:bool, \
            region:string, bucket:string, accesskey:string/bool, secretkey:bool}`
      * @see Storage::GetClientObject()
      */
-    public function GetClientObject(bool $activate = false) : array
+    public function GetClientObject(bool $activate = false) : array // TODO RAY !!
     {
-        $accesskey = $this->isCryptoAvailable() ? $this->TryGetAccessKey() : (bool)($this->TryGetScalar('accesskey'));
+        //$accesskey = $this->isCryptoAvailable() ? $this->TryGetAccessKey() : (bool)($this->TryGetScalar('accesskey'));
         
-        return parent::GetClientObject($activate) + $this->GetFieldCryptClientObject() + array(
+        return parent::GetClientObject($activate) /*+ $this->GetFieldCryptClientObject() + array(
             'endpoint' => $this->GetScalar('endpoint'),
             'path_style' => $this->TryGetScalar('path_style'),
             'port' => $this->TryGetScalar('port'),
@@ -51,50 +79,35 @@ class S3 extends FWrapper
             'bucket' => $this->GetScalar('bucket'),
             'accesskey' => $accesskey,
             'secretkey' => (bool)($this->TryGetScalar('secretkey'))
-        );
+        )*/;
     }
     
-    /** Returns the S3 bucket identifier */
-    protected function GetBucket() : string { return $this->GetScalar('bucket'); }
-    
-    /** Returns the S3 access key (or null) */
-    protected function TryGetAccessKey() : ?string { return $this->TryGetEncryptedScalar('accesskey'); }
-    
-    /** Returns the S3 secret key (or null) */
-    protected function TryGetSecretKey() : ?string { return $this->TryGetEncryptedScalar('secretkey'); }
-    
-    /** Sets the S3 access key to the given value */
-    protected function SetAccessKey(?string $key) : self { return $this->SetEncryptedScalar('accesskey',$key); }
-    
-    /** Sets the S3 secret key to the given value */
-    protected function SetSecretKey(?string $key) : self { return $this->SetEncryptedScalar('secretkey',$key); }
-    
-    /** Returns true if the connection should use TLS */
-    protected function getUseTLS() : bool { return (bool)($this->TryGetScalar('usetls') ?? true); }
-    
-    /** Returns the given path with no leading, trailing or duplicate / */
-    protected static function cleanPath(string $path) : string { return implode('/',array_filter(explode('/',$path))); }
-    
-    public static function GetCreateUsage() : string { return parent::GetCreateUsage()." ".self::GetFieldCryptCreateUsage().
+    public static function GetCreateUsage() : string { 
+        return static::GetBasePathCreateUsage()." ".static::GetUserPassCreateUsage().
         " --endpoint fspath --bucket alphanum --region alphanum [--path_style ?bool]".
         " [--port ?uint16] [--usetls ?bool] [--accesskey ?randstr] [--secretkey ?randstr]"; }
     
     public static function Create(ObjectDatabase $database, Input $input, ?Account $owner) : self
     {
         $params = $input->GetParams();
+        $obj = parent::Create($database, $input, $owner);
         
-        return parent::Create($database, $input, $filesystem)->FieldCryptCreate($params)
-            ->SetScalar('endpoint', self::cleanPath($params->GetParam('endpoint')->GetFSPath()))
-            ->SetScalar('path_style', $params->GetOptParam('path_style',null)->GetNullBool())
-            ->SetScalar('port', $params->GetOptParam('port',null)->GetNullUint16())
-            ->SetScalar('usetls', $params->GetOptParam('usetls',null)->GetNullBool())
-            ->SetScalar('region', $params->GetParam('region')->GetAlphanum())
-            ->SetScalar('bucket', $params->GetParam('bucket')->GetAlphanum())
-            ->SetAccessKey($params->GetOptParam('accesskey',null,SafeParams::PARAMLOG_NEVER)->GetNullRandstr())
-            ->SetSecretKey($params->GetOptParam('secretkey',null,SafeParams::PARAMLOG_NEVER)->GetNullRandstr());
+        $obj->endpoint->SetValue(self::cleanPath($params->GetParam('endpoint')->GetFSPath()));
+        $obj->path_style->SetValue($params->GetOptParam('path_style',null)->GetNullBool());
+        $obj->port->SetValue($params->GetOptParam('port',null)->GetNullUint16());
+        $obj->usetls->SetValue($params->GetOptParam('usetls',null)->GetNullBool());
+        $obj->region->SetValue($params->GetParam('region')->GetAlphanum());
+        $obj->bucket->SetValue($params->GetParam('bucket')->GetAlphanum());
+        $obj->accesskey->SetValue($params->GetOptParam('accesskey',null,SafeParams::PARAMLOG_NEVER)->GetNullRandstr());
+        $obj->secretkey->SetValue($params->GetOptParam('secretkey',null,SafeParams::PARAMLOG_NEVER)->GetNullRandstr());
+
+        $obj->BasePathCreate($params);
+        $obj->UserPassCreate($params);
+        return $obj;
     }
     
-    public static function GetEditUsage() : string { return parent::GetEditUsage()." ".self::GetFieldCryptEditUsage().
+    public static function GetEditUsage() : string {
+        return static::GetBasePathEditUsage()." ".static::GetUserPassEditUsage().
         " [--endpoint fspath] [--bucket alphanum] [--region alphanum] [--path_style ?bool]".
         " [--port ?uint16] [--usetls ?bool] [--accesskey ?randstr] [--secretkey ?randstr]"; }
     
@@ -102,44 +115,54 @@ class S3 extends FWrapper
     {
         $params = $input->GetParams();
         
-        if ($params->HasParam('endpoint')) $this->SetScalar('endpoint', self::cleanPath($params->GetParam('endpoint')->GetFSPath()));
+        if ($params->HasParam('endpoint'))
+            $this->endpoint->SetValue(self::cleanPath($params->GetParam('endpoint')->GetFSPath()));
+        if ($params->HasParam('path_style'))
+            $this->path_style->SetValue($params->GetParam('path_style')->GetNullBool());
+        if ($params->HasParam('port'))
+            $this->port->SetValue($params->GetParam('port')->GetNullUint16());
+        if ($params->HasParam('usetls'))
+            $this->usetls->SetValue($params->GetParam('usetls')->GetNullBool());
         
-        if ($params->HasParam('region')) $this->SetScalar('region', $params->GetParam('region')->GetAlphanum());
-        if ($params->HasParam('bucket')) $this->SetScalar('bucket', $params->GetParam('bucket')->GetAlphanum());
+        if ($params->HasParam('region'))
+            $this->region->SetValue($params->GetParam('region')->GetAlphanum());
+        if ($params->HasParam('bucket'))
+            $this->bucket->SetValue($params->GetParam('bucket')->GetAlphanum());
         
-        if ($params->HasParam('port')) $this->SetScalar('port', $params->GetParam('port')->GetNullUint16());
-        if ($params->HasParam('usetls')) $this->SetScalar('usetls', $params->GetParam('usetls')->GetNullBool());
-        if ($params->HasParam('path_style')) $this->SetScalar('path_style', $params->GetParam('path_style')->GetNullBool());
+        if ($params->HasParam('accesskey'))
+            $this->accesskey->SetValue($params->GetParam('accesskey',SafeParams::PARAMLOG_NEVER)->GetNullRandstr());
+        if ($params->HasParam('secretkey'))
+            $this->secretkey->SetValue($params->GetParam('secretkey',SafeParams::PARAMLOG_NEVER)->GetNullRandstr());
         
-        if ($params->HasParam('accesskey')) $this->SetScalar('accesskey', $params->GetParam('accesskey',SafeParams::PARAMLOG_NEVER)->GetNullRandstr());
-        if ($params->HasParam('secretkey')) $this->SetScalar('secretkey', $params->GetParam('secretkey',SafeParams::PARAMLOG_NEVER)->GetNullRandstr());
-        
-        $this->FieldCryptEdit($params); 
+        $this->BasePathEdit($params);
+        $this->UserPassEdit($params);
         return parent::Edit($input);
     }
-    
-    /** s3 connection resource */ private $s3;
-    
-    /** The stream wrapper ID */ private string $streamID;
     
     /** Checks for the SMB client extension */
     public function PostConstruct(bool $created) : void
     {
-        if (!class_exists('\\Aws\\S3\\S3Client')) throw new Exceptions\S3AwsSdkException();
+        if (!class_exists('\\Aws\\S3\\S3Client'))
+            throw new Exceptions\S3AwsSdkException();
     }
     
-    public function Activate() : self
+    private ?\Aws\S3\S3Client $s3client;
+    private ?string $streamID;
+    
+    public function Activate() : self { $this->GetClient(); return $this; }
+
+    /** @return \Aws\S3\S3Client */
+    protected function GetClient() : \Aws\S3\S3Client
     {
-        if (isset($this->s3)) return $this;
+        if ($this->s3client !== null) return $this->s3client;
         
         $params = array(
             'version' => '2006-03-01', 
-            'region' => $this->GetScalar('region')    
+            'region' => $this->region->GetValue()    
         );
         
-        $endpoint = $this->GetScalar('endpoint');        
-        
-        if (($port = $this->TryGetScalar('port')) !== null) 
+        $endpoint = $this->endpoint->GetValue();
+        if (($port = $this->port->TryGetValue()) !== null) 
         {
             $endpoint = explode('/', $endpoint);
             $endpoint[0] .= ":$port";
@@ -147,15 +170,12 @@ class S3 extends FWrapper
         }
         
         $params['endpoint'] = $endpoint;
+        $params['scheme'] = ($this->usetls->TryGetValue() ?? true) ? 'https' : 'http';
+        if (($pathstyle = $this->path_style->TryGetValue()) !== null)
+            $params['use_path_style_endpoint'] = $pathstyle;
         
-        $params['scheme'] = $this->getUseTLS() ? 'https' : 'http';
-        
-        if (($pathstyle = $this->TryGetScalar('path_style')) !== null)
-            $params['use_path_style_endpoint'] = (bool)($pathstyle);
-        
-        $accesskey = $this->TryGetAccessKey();
-        $secretkey = $this->TryGetSecretKey();
-        
+        $accesskey = $this->accesskey->TryGetValue();
+        $secretkey = $this->secretkey->TryGetValue();
         if ($accesskey !== null || $secretkey !== null)
         {
             $params['credentials'] = array();
@@ -163,64 +183,61 @@ class S3 extends FWrapper
             if ($secretkey !== null) $params['credentials']['secret'] = $secretkey;
         }
 
-        $api = Main::GetInstance(); $debug = $api->GetDebugLevel();
-        
-        if ($debug >= Config::ERRLOG_SENSITIVE)
-            $params['debug'] = array('logfn'=>function(string $str){
-                ErrorManager::GetInstance()->LogDebugInfo("S3 SDK: $str"); });
-                
-        $this->s3 = new \Aws\S3\S3Client($params);
-        
-        $this->streamID = str_replace('_','-',$this->ID());        
-        \Aws\S3\StreamWrapper::Register($this->s3, $this->streamID);
-        
+        $api = $this->GetApiPackage();
+        if ($api->GetDebugLevel() >= Config::ERRLOG_SENSITIVE)
+            $params['debug'] = array('logfn'=>function(string $str)use($api){
+                $api->GetErrorManager()->LogDebugHint("S3 SDK: $str"); });
+
+        $this->s3client = new \Aws\S3\S3Client($params);
         if (!is_readable($this->GetFullURL()))
             throw new Exceptions\S3ConnectException();
-        
-        return $this;
+        return $this->s3client;
     }
-    
+
+    protected function GetStreamID() : string
+    {
+        if ($this->streamID !== null) return $this->streamID;
+        
+        $this->streamID = str_replace('_','-',$this->ID());        
+        \Aws\S3\StreamWrapper::register($this->GetClient(), $this->streamID);
+        return $this->streamID;
+    }
+
     protected function GetFullURL(string $path = "") : string
     {
-        return $this->streamID."://".$this->GetBucket().'/'.$path;
-    }
-    
-    /**
-     * Runs an S3 client function
-     * @param string $func name of S3Client function
-     * @param array $params params to pass
-     * @throws S3ErrorException if the SDK throws any S3Exception
-     * @return \Aws\ResultInterface S3 result
-     */
-    protected function tryS3(string $func, array $params) : \Aws\ResultInterface
-    {
-        try { return $this->s3->$func($params); }
-        catch (\Aws\S3\Exception\S3Exception $e) {
-            throw S3ErrorException::Append($e); }
+        return $this->GetStreamID()."://".$this->bucket->GetValue().'/'.$path;
     }
     
     /**
      * Returns an array of the params used for all requests (bucket and key)
      * @param string $path key/path of object
-     * @return array<mixed> `{Bucket:string,Key:string}`
+     * @return array{Bucket:string,Key:string}`
      */
     protected function getStdParams(string $path) : array
     {
-        return array('Bucket' => $this->GetBucket(), 'Key' => $path);
+        return array('Bucket'=>$this->bucket->GetValue(), 'Key'=>$path);
+    }
+    
+    public function supportsFolders() : bool { return false; }  
+
+    public function isFolder(string $path) : bool
+    {
+        return count(array_filter(explode('/',$path))) === 0; // root only
     }
     
     protected function assertReadable() : void
     {
         try { $this->ReadFolder(''); } 
-        catch (FolderReadFailedException $e) { 
-            throw TestReadFailedException::Copy($e); }
+        catch (Exceptions\FolderReadFailedException $e) { 
+            throw new Exceptions\TestReadFailedException($e); }
     }
     
     protected function assertWriteable() : void { $this->TestWriteable(); }
 
     public function ItemStat(string $path) : ItemStat
     {
-        if ($this->isFolder($path)) return new ItemStat();
+        if ($this->isFolder($path))
+            return new ItemStat(); // root
         
         else return parent::ItemStat($path);
     }
@@ -230,8 +247,21 @@ class S3 extends FWrapper
         if (!$this->isFolder($path))
             throw new Exceptions\FoldersUnsupportedException();
             
-        else return parent::SubReadFolder('');
+        else return parent::SubReadFolder(""); // root
     } 
+    
+    protected function SubCreateFolder(string $path) : Storage { 
+        throw new Exceptions\FoldersUnsupportedException(); }
+
+    protected function SubCreateFile(string $path) : self
+    {
+        $this->ClosePath($path);
+        
+        if ($this->isFile($path))
+            $this->SubDeleteFile($path);
+        
+        $this->GetContext($path, 0, true); return $this;
+    }
     
     protected function SubReadBytes(string $path, int $start, int $length) : string
     {
@@ -241,24 +271,39 @@ class S3 extends FWrapper
         $this->ClosePath($path);
         
         $params = $this->getStdParams($path);
-        
         $params['Range'] = "bytes=$start-".($start+$length-1);
         
-        $result = $this->tryS3('getObject', $params);
-        
-        $data = (string)$result->get('Body');
+        try { $result = $this->GetClient()->getObject($params); }
+        catch (\Aws\S3\Exception\S3Exception $e) {
+            throw new Exceptions\S3ErrorException($e); }
+
+        if (!$result->hasKey('body') || !is_string($data = $result->get('Body')))
+            throw new Exceptions\S3ErrorException();
         
         if (strlen($data) !== $length)
         {
-            ErrorManager::GetInstance()->LogDebugInfo(array(
-                'read'=>strlen($data), 'wanted'=>$length));
-            
-            throw new Exceptions\FileReadFailedException();
+            throw new Exceptions\FileReadFailedException(
+                "read ".strlen($data).", wanted $length");
         }
         
         return $data;
     }
     
+    protected function SubTruncate(string $path, int $length) : self { 
+        throw new Exceptions\S3ModifyException(); }  
+
+    protected function SubDeleteFolder(string $path) : Storage { 
+        throw new Exceptions\FoldersUnsupportedException(); }
+
+    protected function SubRenameFolder(string $old, string $new) : Storage { 
+        throw new Exceptions\FoldersUnsupportedException(); }
+    
+    protected function SubMoveFile(string $old, string $new) : Storage { 
+        throw new Exceptions\FoldersUnsupportedException(); }
+    
+    protected function SubMoveFolder(string $old, string $new) : Storage { 
+        throw new Exceptions\FoldersUnsupportedException(); }
+
     protected static function supportsReadWrite() : bool { return false; }
     protected static function supportsSeekReuse() : bool { return false; }
     
@@ -268,39 +313,10 @@ class S3 extends FWrapper
     protected function OpenContext(string $path, int $offset, bool $isWrite) : FileContext
     {
         if (!$isWrite) throw new Exceptions\FileReadFailedException();
+        if ($offset !== 0) throw new Exceptions\S3ModifyException();
         
-        if ($offset) throw new Exceptions\S3ModifyException();
-        
-        $handle = fopen($this->GetFullURL($path),'w');
-        
+        if (!is_resource($handle = fopen($this->GetFullURL($path),'w')))
+            throw new Exceptions\FileReadFailedException();
         return new FileContext($handle, 0, true);
     }
-    
-    protected function SubCreateFile(string $path) : self
-    {
-        $this->ClosePath($path);
-        
-        if ($this->isFile($path)) $this->SubDeleteFile($path);
-        
-        $this->GetContext($path, 0, true); return $this;
-    }
-    
-    protected function SubTruncate(string $path, int $length) : self { throw new Exceptions\S3ModifyException(); }  
-
-    public function supportsFolders() : bool { return false; }   
-    
-    public function isFolder(string $path) : bool
-    {
-        return !count(array_filter(explode('/',$path)));
-    }
-    
-    protected function SubCreateFolder(string $path) : Storage { throw new Exceptions\FoldersUnsupportedException(); }
-    
-    protected function SubDeleteFolder(string $path) : Storage { throw new Exceptions\FoldersUnsupportedException(); }
-    
-    protected function SubRenameFolder(string $old, string $new) : Storage { throw new Exceptions\FoldersUnsupportedException(); }
-    
-    protected function SubMoveFile(string $old, string $new) : Storage { throw new Exceptions\FoldersUnsupportedException(); }
-    
-    protected function SubMoveFolder(string $old, string $new) : Storage { throw new Exceptions\FoldersUnsupportedException(); }
 }

@@ -10,7 +10,7 @@ use Andromeda\Apps\Accounts\Crypto\CryptFields;
  * 
  * Uses PHP libsmbclient.  Mostly uses the PHP fwrapper
  * functions but some manual workarounds are needed.
- * Uses fieldcrypt to allow encrypting the username/password.
+ * Uses credcrypt to allow encrypting the username/password.
  */
 class SMB extends FWrapper
 {
@@ -80,6 +80,8 @@ class SMB extends FWrapper
         if ($params->HasParam('workgroup')) 
             $this->workgroup->SetValue($params->GetParam('workgroup')->CheckLength(255)->GetNullAlphanum());
         
+        $this->BasePathEdit($params);
+        $this->UserPassEdit($params);
         return parent::Edit($input);
     }
     

@@ -2,7 +2,6 @@
 
 use Andromeda\Core\Database\{FieldTypes, ObjectDatabase, TableTypes};
 use Andromeda\Core\Database\Exceptions\FieldDataNullException;
-use Andromeda\Core\Errors\BaseExceptions;
 use Andromeda\Core\IOFormat\{Input, SafeParams};
 use Andromeda\Apps\Accounts\Account;
 use Andromeda\Apps\Accounts\Crypto\CryptFields;
@@ -13,7 +12,7 @@ use \phpseclib3\Net\SFTP as SFTPConnection;
 /**
  * Allows using an SFTP server for backend storage using phpseclib
  * 
- * Uses fieldcrypt to allow encrypting the username/password.
+ * Uses credcrypt to allow encrypting the username/password.
  */
 class SFTP extends FWrapper
 {
@@ -38,6 +37,7 @@ class SFTP extends FWrapper
         $this->hostname = new FieldTypes\StringType('hostname');
         $this->port = new FieldTypes\NullIntType('port');
         $this->hostkey = new FieldTypes\NullStringType('hostkey');
+
         $this->privkey_nonce = new FieldTypes\NullStringType('privkey_nonce');
         $this->privkey = new CryptFields\NullCryptStringType('privkey',$this->owner,$this->privkey_nonce);
         $this->keypass_nonce = new FieldTypes\NullStringType('keypass_nonce');
@@ -51,7 +51,7 @@ class SFTP extends FWrapper
 
     /** @return list<CryptFields\CryptField> */
     protected function GetCryptFields() : array { 
-        return array($this->privkey, $this->keypass) + $this->GetUserPassCryptFields(); }
+        return array_merge(array($this->privkey, $this->keypass),$this->GetUserPassCryptFields()); }
 
     /**
      * Returns a printable client object of this SFTP storage
@@ -113,11 +113,12 @@ class SFTP extends FWrapper
         if ($params->GetOptParam('resethost',false)->GetBool())
             $this->hostkey->SetValue(null);
         
+        $this->BasePathEdit($params);
+        $this->UserPassEdit($params);
         return parent::Edit($input);
     }
 
-    /** @var ?SFTPConnection */
-    private $sftp = null;
+    private ?SFTPConnection $sftp = null;
 
     public function Activate() : self { $this->GetConnection(); return $this; }
 

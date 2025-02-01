@@ -259,7 +259,7 @@ CREATE TABLE `a2obj_apps_files_storage_s3` (
 ,  `usetls` integer DEFAULT NULL
 ,  `region` varchar(64) NOT NULL
 ,  `bucket` varchar(64) NOT NULL
-,  `accesskey` varbinary(144) NOT NULL
+,  `accesskey` varbinary(144) DEFAULT NULL
 ,  `accesskey_nonce` binary(24) DEFAULT NULL
 ,  `secretkey` varbinary(56) DEFAULT NULL
 ,  `secretkey_nonce` binary(24) DEFAULT NULL
