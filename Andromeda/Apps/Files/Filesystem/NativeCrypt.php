@@ -223,26 +223,23 @@ class NativeCrypt extends Native
         
         $blocksize = $this->chunksize + $overhead;
         $datasize = $blocksize - $noncesize;
-        
-        $nonceoffset = $index * $blocksize;
-        $dataoffset = $nonceoffset + $noncesize;
+        $offset = $index * $blocksize;
 
         // make sure we don't read beyond the end of the file
         $foverhead = $overhead * ($this->GetNumChunks($file->GetSize()));
-        $datasize = min($datasize, $file->GetSize() + $foverhead - $dataoffset);
+        $datasize = min($datasize, $file->GetSize() + $foverhead-$offset-$noncesize);
+        assert($datasize >= 0); // num chunks >= 1 if running this function -> foverhead >= offset+noncesize
 
         // a chunk is stored as [nonce,data]
-        $nonce = parent::ReadBytes($file, $nonceoffset, $noncesize);
-        if (strlen($nonce) !== $noncesize) 
-            throw new FileReadFailedException("nonce was ".strlen($nonce)." wanted $noncesize");
-        
-        assert($datasize >= 0); // if nonce read was ok, this must be true
-        $data = parent::ReadBytes($file, $dataoffset, $datasize);
-        if (strlen($data) !== $datasize) 
-            throw new FileReadFailedException("data was ".strlen($data)." wanted $datasize");
-        
-        $auth = $this->GetAuthString($file, $index);
-        
+        $readsize = $noncesize+$datasize;
+        $data = parent::ReadBytes($file, $offset, $readsize);
+        if (strlen($data) !== $readsize)
+            throw new FileReadFailedException("read ".strlen($data)." bytes, wanted $readsize");
+
+        $nonce = substr($data, 0, $noncesize);
+        $data = substr($data, $noncesize);
+
+        $auth = $this->GetAuthString($file, $index);        
         return Crypto::DecryptSecret($data, $nonce, $this->masterkey, $auth);
     }
 
@@ -256,20 +253,14 @@ class NativeCrypt extends Native
     protected function WriteChunk(File $file, int $index, string $data) : self
     {        
         $noncesize = Crypto::SecretNonceLength();
-
         $blocksize = $noncesize + $this->chunksize + Crypto::SecretOutputOverhead();
-        
-        $nonceoffset = $index * $blocksize;
-        $dataoffset = $nonceoffset + $noncesize;
+        $offset = $index * $blocksize;
 
         $nonce = Crypto::GenerateSecretNonce();
         $auth = $this->GetAuthString($file, $index);
         
         $data = Crypto::EncryptSecret($data, $nonce, $this->masterkey, $auth);
-
-        parent::WriteBytes($file, $nonceoffset, $nonce);
-        parent::WriteBytes($file, $dataoffset, $data);
-        
+        parent::WriteBytes($file, $offset, $nonce.$data);
         return $this;
     }
 }
