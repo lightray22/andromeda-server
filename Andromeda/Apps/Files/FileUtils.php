@@ -68,15 +68,15 @@ class FileUtils
      * Performs a chunked File read, echoing output and counting bandwidth
      * @param File $file file to read from
      * @param non-negative-int $fstart first byte to read
-     * @param non-negative-int $flast last byte to read (inclusive!)
+     * @param non-negative-int $length number of bytes to read
      * @param int $chunksize read chunk size
      * @param bool $align if true, align reads to chunk size multiples
      * @param bool $debugdl if true, don't actually echo anything
      * @throws FileReadFailedException if reading the file fails
      */
-    protected static function DoChunkedRead(File $file, int $fstart, int $flast, int $chunksize, bool $align, bool $debugdl = false) : void
+    public static function DoChunkedRead(File $file, int $fstart, int $length, int $chunksize, bool $align, bool $debugdl = false) : void
     {
-        for ($byte = $fstart; $byte <= $flast; )
+        for ($byte = $fstart; $byte <= $fstart+$length-1; )
         {
             if (connection_aborted() !== 0) break;
             
@@ -84,7 +84,7 @@ class FileUtils
             if (!$align) $nbyte = $byte + $chunksize;
             else $nbyte = (intdiv($byte, $chunksize) + 1) * $chunksize;
             
-            $rlen = min($nbyte - $byte, $flast - $byte + 1);
+            $rlen = min($nbyte-$byte, $fstart+$length-$byte);
             
             $data = $file->ReadBytes($byte, $rlen);
             
@@ -108,7 +108,7 @@ class FileUtils
      * @throws FileReadFailedException if reading input fails
      * @return non-negative-int number of bytes written
      */
-    protected static function DoChunkedWrite($stream, File $file, int $wstart, int $chunksize, bool $align) : int
+    public static function DoChunkedWrite($stream, File $file, int $wstart, int $chunksize, bool $align) : int
     {
         $wbyte = $wstart; 
         while (!feof($stream))
@@ -153,17 +153,17 @@ class FileUtils
      * @param ObjectDatabase $database database reference
      * @param File $file file to read
      * @param non-negative-int $fstart byte offset to start reading
-     * @param non-negative-int $flast last byte to read (inclusive)
+     * @param non-negative-int $length number of bytes to read
      * @see self::DoChunkedRead()
      */
-    public static function ChunkedRead(ObjectDatabase $database, File $file, int $fstart, int $flast, bool $debugdl = false) : void
+    public static function ChunkedRead(ObjectDatabase $database, File $file, int $fstart, int $length, bool $debugdl = false) : void
     {
         $rwsize = Config::GetInstance($database)->GetRWChunkSize();
         $fcsize = $file->GetChunkSize();
         $align = ($fcsize !== null);
         $chunksize = self::GetChunkSize($rwsize, $fcsize);
         
-        self::DoChunkedRead($file, $fstart, $flast, $chunksize, $align, $debugdl);
+        self::DoChunkedRead($file, $fstart, $length, $chunksize, $align, $debugdl);
     }
     
     /**

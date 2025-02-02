@@ -388,6 +388,12 @@ abstract class Storage extends BaseObject
         return $this->filesystem;
     }
     
+    /** Returns the given path with no leading, trailing or duplicate / */
+    protected static function cleanPath(string $path) : string
+    { 
+        return implode('/',array_filter(explode('/',$path)));
+    }
+    
     /** By default, most storages support using folders */
     public function supportsFolders() : bool { return true; }
     

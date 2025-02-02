@@ -13,7 +13,7 @@ use Andromeda\Apps\Accounts\Crypto\CryptFields;
  */
 class S3 extends FWrapper
 {
-    use BasePath, UserPass, TableTypes\TableNoChildren;
+    use TableTypes\TableNoChildren;
 
     /** The endpoint of the S3 connection */
     protected FieldTypes\StringType $endpoint;
@@ -51,14 +51,12 @@ class S3 extends FWrapper
         $this->secretkey = new CryptFields\NullCryptStringType('secretkey',$this->owner,$this->secretkey_nonce);
 
         $this->RegisterFields($fields, self::class);
-        $this->BasePathCreateFields();
-        $this->UserPassCreateFields();
         parent::CreateFields();
     }
 
     /** @return list<CryptFields\CryptField> */
     protected function GetCryptFields() : array { 
-        return array_merge(array($this->accesskey, $this->secretkey),$this->GetUserPassCryptFields()); }
+        return array($this->accesskey, $this->secretkey); }
 
     /**
      * Returns a printable client object of this S3 storage
@@ -82,8 +80,7 @@ class S3 extends FWrapper
         )*/;
     }
     
-    public static function GetCreateUsage() : string { 
-        return static::GetBasePathCreateUsage()." ".static::GetUserPassCreateUsage().
+    public static function GetCreateUsage() : string { return
         " --endpoint fspath --bucket alphanum --region alphanum [--path_style ?bool]".
         " [--port ?uint16] [--usetls ?bool] [--accesskey ?randstr] [--secretkey ?randstr]"; }
     
@@ -101,13 +98,10 @@ class S3 extends FWrapper
         $obj->accesskey->SetValue($params->GetOptParam('accesskey',null,SafeParams::PARAMLOG_NEVER)->GetNullRandstr());
         $obj->secretkey->SetValue($params->GetOptParam('secretkey',null,SafeParams::PARAMLOG_NEVER)->GetNullRandstr());
 
-        $obj->BasePathCreate($params);
-        $obj->UserPassCreate($params);
         return $obj;
     }
     
-    public static function GetEditUsage() : string {
-        return static::GetBasePathEditUsage()." ".static::GetUserPassEditUsage().
+    public static function GetEditUsage() : string { return
         " [--endpoint fspath] [--bucket alphanum] [--region alphanum] [--path_style ?bool]".
         " [--port ?uint16] [--usetls ?bool] [--accesskey ?randstr] [--secretkey ?randstr]"; }
     
@@ -134,8 +128,6 @@ class S3 extends FWrapper
         if ($params->HasParam('secretkey'))
             $this->secretkey->SetValue($params->GetParam('secretkey',SafeParams::PARAMLOG_NEVER)->GetNullRandstr());
         
-        $this->BasePathEdit($params);
-        $this->UserPassEdit($params);
         return parent::Edit($input);
     }
     

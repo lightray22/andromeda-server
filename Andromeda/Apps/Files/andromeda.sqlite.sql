@@ -252,7 +252,6 @@ CREATE TABLE `a2obj_apps_files_storage_local` (
 );
 CREATE TABLE `a2obj_apps_files_storage_s3` (
   `id` char(8) NOT NULL
-,  `path` text NOT NULL
 ,  `endpoint` text NOT NULL
 ,  `path_style` integer DEFAULT NULL
 ,  `port` integer DEFAULT NULL

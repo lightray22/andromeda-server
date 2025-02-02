@@ -348,7 +348,6 @@ CREATE TABLE `a2obj_apps_files_storage_local` (
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `a2obj_apps_files_storage_s3` (
   `id` char(8) NOT NULL,
-  `path` text NOT NULL,
   `endpoint` text NOT NULL,
   `path_style` tinyint(1) DEFAULT NULL,
   `port` smallint(6) DEFAULT NULL,

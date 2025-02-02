@@ -467,7 +467,7 @@ class FilesApp extends BaseApp
         {            
             set_time_limit(0); ignore_user_abort(true);
             
-            FileUtils::ChunkedRead($this->database,$file,$fstart,$flast,$debugdl);
+            FileUtils::ChunkedRead($this->database,$file,$fstart,$flast-$fstart+1,$debugdl);
         }));
     }
         

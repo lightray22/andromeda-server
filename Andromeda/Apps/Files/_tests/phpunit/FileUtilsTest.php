@@ -1,6 +1,7 @@
 <?php declare(strict_types=1); namespace Andromeda\Apps\Files; require_once("init.php");
 
 use Andromeda\Core\Utilities;
+use Andromeda\Apps\Files\Items\File;
 
 class FileUtilsTest extends \PHPUnit\Framework\TestCase
 {
@@ -28,6 +29,13 @@ class FileUtilsTest extends \PHPUnit\Framework\TestCase
         $this->assertSame(600, FileUtils::GetChunkSize(600, 100));
     }    
     
+    /** 
+     * @param non-negative-int $datasize
+     * @param non-negative-int $offset
+     * @param non-negative-int $length
+     * @param non-negative-int $chunksize
+     * @param list<list<non-negative-int>> $reads
+     */
     protected function tryChunkedRead(int $datasize, int $offset, int $length, int $chunksize, bool $align, array $reads) : void
     {
         $file = $this->createMock(File::class);
@@ -40,7 +48,7 @@ class FileUtilsTest extends \PHPUnit\Framework\TestCase
         $file->expects($this->exactly(count($reads)))->method('ReadBytes')->withConsecutive(...$reads);
         
         $output = Utilities::CaptureOutput(function()use($file,$offset,$length,$chunksize,$align){ 
-            FileUtils::DoChunkedRead($file, $offset, $offset+$length-1, $chunksize, $align, false); });
+            FileUtils::DoChunkedRead($file, $offset, $length, $chunksize, $align, false); });
         
         $this->assertSame($output, substr($data,$offset,$length));
     }
@@ -76,6 +84,13 @@ class FileUtilsTest extends \PHPUnit\Framework\TestCase
         $this->tryChunkedRead(100, 33, 37, 12, true, array([33,3],[36,12],[48,12],[60,10]));
     }
     
+    /** 
+     * @param non-negative-int $fsize
+     * @param non-negative-int $offset
+     * @param non-negative-int $length
+     * @param non-negative-int $chunksize
+     * @param list<list<non-negative-int>> $writes
+     */
     protected function tryChunkedWrite(int $fsize, int $offset, int $length, int $chunksize, bool $align, array $writes) : void
     {
         $fdata0 = Utilities::Random($fsize); // original file data
@@ -84,6 +99,7 @@ class FileUtilsTest extends \PHPUnit\Framework\TestCase
         $fdata1 = substr_replace($fdata0,$wdata,$offset,strlen($wdata)); // resulting output
         
         $whandle = fopen("php://memory",'rb+');
+        assert(is_resource($whandle));
         fwrite($whandle, $wdata); fseek($whandle, 0);
         
         // map the expected write lengths to the actual data argument

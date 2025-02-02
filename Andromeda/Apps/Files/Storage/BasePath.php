@@ -44,12 +44,6 @@ trait BasePath
         return $this;
     }
     
-    /** Returns the given path with no leading, trailing or duplicate / */
-    protected static function cleanPath(string $path) : string
-    { 
-        return implode('/',array_filter(explode('/',$path)));
-    }
-    
     /** 
      * Returns the full storage level path for the given root-relative path
      * @param string $path path to add to the result
