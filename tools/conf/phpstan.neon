@@ -16,7 +16,6 @@ parameters:
             - ../../Andromeda/Apps/Files/Items
             - ../../Andromeda/Apps/Files/Limits
             - ../../Andromeda/Apps/Files/Social
-            - ../../Andromeda/Apps/Files/_tests/phpunit.old
             - ../../Andromeda/Apps/Files/ActionLog.php
             - ../../Andromeda/Apps/Files/FilesApp.php
             - ../../Andromeda/Apps/Files/ItemAccess.php

@@ -68,7 +68,7 @@ class NativeCrypt extends Native
             $offset = $chunk * $this->chunksize;
             $rbytes = min($this->chunksize, $length-$offset);
             assert($rbytes >= 0); // by computations above
-            
+
             $data = FileUtils::ReadStream($handle, $rbytes);
             $this->WriteChunk($file, $chunk, $data);
         }
@@ -126,7 +126,11 @@ class NativeCrypt extends Native
         if (strlen($data) === 0) return $this;
 
         // the algorithm does not work when starting beyond EOF
-        if ($start > $file->GetSize()) $file->SetSize($start);
+        if ($start > $file->GetSize())
+        {
+            $this->Truncate($file, $start);
+            $file->SetSize($start, true);
+        }
         
         $chunk0 = $this->GetChunkIndex($start);
         $chunkn = $this->GetChunkIndex($start+strlen($data)-1);
@@ -202,7 +206,8 @@ class NativeCrypt extends Native
         $overhead = Crypto::SecretNonceLength() + Crypto::SecretOutputOverhead();
         $fsize = $overhead * ($this->GetNumChunks($length)) + $length;
 
-        parent::Truncate($file, $fsize); return $this;
+        parent::Truncate($file, $fsize);
+        return $this;
     }
     
     /**
@@ -229,12 +234,12 @@ class NativeCrypt extends Native
         // a chunk is stored as [nonce,data]
         $nonce = parent::ReadBytes($file, $nonceoffset, $noncesize);
         if (strlen($nonce) !== $noncesize) 
-            throw new FileReadFailedException();
+            throw new FileReadFailedException("nonce was ".strlen($nonce)." wanted $noncesize");
         
         assert($datasize >= 0); // if nonce read was ok, this must be true
         $data = parent::ReadBytes($file, $dataoffset, $datasize);
         if (strlen($data) !== $datasize) 
-            throw new FileReadFailedException();
+            throw new FileReadFailedException("data was ".strlen($data)." wanted $datasize");
         
         $auth = $this->GetAuthString($file, $index);
         
@@ -251,7 +256,7 @@ class NativeCrypt extends Native
     protected function WriteChunk(File $file, int $index, string $data) : self
     {        
         $noncesize = Crypto::SecretNonceLength();
-        
+
         $blocksize = $noncesize + $this->chunksize + Crypto::SecretOutputOverhead();
         
         $nonceoffset = $index * $blocksize;
