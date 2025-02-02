@@ -94,8 +94,38 @@ class NativeCryptTest extends \PHPUnit\Framework\TestCase
         return $file;
     }
 
-    // TODO test CopyFile
-    
+    /** 
+     * Creates data of the given size and does ImportFile on that file
+     * @param non-negative-int $size 
+     */
+    protected function randomImport(File $file, int $size) : string
+    {
+        $path = self::getTmpFile();
+        $data = Utilities::Random($size);        
+        file_put_contents($path, $data);
+        
+        $this->filesystem->ImportFile($file, new InputPath($path));
+        $file->SetSize(strlen($data),notify:true);
+        return $data;
+    }
+
+    /** 
+     * Tests CopyFile with a file of the given size
+     * @param non-negative-int $size 
+     */
+    protected function tryCopyFile(int $size) : void
+    {
+        $file0 = $this->createFile();
+        $data = $this->randomImport($file0, $size);
+
+        $file1 = $this->createFile();
+        $this->filesystem->CopyFile($file0, $file1);
+        $file1->SetSize($size,notify:true);
+        
+        $ret = $this->filesystem->ReadBytes($file1, 0, $size);
+        $this->assertSame($data, $ret);
+    }
+
     /**
      * Tests writing to an encrypted file, checking results with ReadBytes()
      * 1) Tests ImportFile by importing a plaintext file of length size0
@@ -109,13 +139,7 @@ class NativeCryptTest extends \PHPUnit\Framework\TestCase
     {
         // first import a mock file and check its contents
         $file = $this->createFile();
-        
-        $path = self::getTmpFile();
-        $data = Utilities::Random($size0);        
-        file_put_contents($path, $data);
-        
-        $this->filesystem->ImportFile($file, new InputPath($path));
-        $file->SetSize(strlen($data),notify:true);
+        $data = $this->randomImport($file, $size0);
 
         $ret = $this->filesystem->ReadBytes($file, 0, $size0);
         $this->assertSame($data, $ret);
@@ -149,9 +173,17 @@ class NativeCryptTest extends \PHPUnit\Framework\TestCase
     
     private const CHUNK_SIZE = 10; // bytes, assumed below
     
-    public function testTruncateZeroes() : void
+    public function testCopyFile() : void
+    {
+        $tests = [0, 1, 8, 9, 10, 11, 19, 20, 21, 25, 29, 30, 31, 99, 100];
+        foreach ($tests as $size) $this->tryCopyFile($size);
+    }
+    
+    /** test tryWriting with various zero-cases */
+    public function testZeroes() : void
     {
         $this->tryWriting(size0:0, offset:0,wlen:0);
+        // see comment below about general pattern
 
         $this->tryWriting(size0:1, offset:0,wlen:0);
         $this->tryWriting(size0:1, offset:0,wlen:1);
@@ -190,15 +222,18 @@ class NativeCryptTest extends \PHPUnit\Framework\TestCase
         $this->tryWriting(size0:0, offset:61,wlen:61);
     }
     
-    public function testTruncateWithinChunk() : void
+    public function testWithinChunk() : void
     {
         $this->tryWriting(size0:3, offset:0,wlen:3);
         $this->tryWriting(size0:3, offset:3,wlen:3);
         $this->tryWriting(size0:3, offset:3,wlen:3);
 
+        // import, write inside file
         $this->tryWriting(size0:8, offset:2,wlen:3);
-        $this->tryWriting(size0:8, offset:3,wlen:8);
-        $this->tryWriting(size0:3, offset:8,wlen:8);
+        // import, write starting inside EOF, expand, shrink
+        $this->tryWriting(size0:8, offset:3,wlen:8); 
+        // import, extend, write starting at EOF, shrink
+        $this->tryWriting(size0:3, offset:8,wlen:8); 
 
         $this->tryWriting(size0:10, offset:3,wlen:3);
         $this->tryWriting(size0:10, offset:3,wlen:10);
@@ -225,7 +260,7 @@ class NativeCryptTest extends \PHPUnit\Framework\TestCase
         $this->tryWriting(size0:14, offset:20,wlen:20);
     }
     
-    public function testTruncateOneChunk() : void
+    public function testOneChunk() : void
     {
         $this->tryWriting(size0:11, offset:1,wlen:8);
         $this->tryWriting(size0:11, offset:8,wlen:11);
@@ -264,7 +299,7 @@ class NativeCryptTest extends \PHPUnit\Framework\TestCase
         $this->tryWriting(size0:49, offset:59,wlen:59);
     }
     
-    public function testTruncateManyChunks() : void
+    public function testManyChunks() : void
     {
         $this->tryWriting(size0:50, offset:23,wlen:3);
         $this->tryWriting(size0:50, offset:3,wlen:50);
