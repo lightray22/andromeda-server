@@ -19,6 +19,8 @@ class ItemStat
         public int $size = 0) {}
 }
 
+// TODO RAY !! missing @throws
+
 /** 
  * A Storage implements the on-disk functions that actually store data.
  * Storages have some metadata, like name, owner, a read-only flag.
@@ -80,7 +82,7 @@ abstract class Storage extends BaseObject
         $fields = array();
         $this->date_created = $fields[] = new FieldTypes\Timestamp('date_created');
         $this->fstype = $fields[] = new FieldTypes\IntType('fstype');
-        $this->readonly = $fields[] = new FieldTypes\BoolType('readonly');
+        $this->readonly = $fields[] = new FieldTypes\BoolType('readonly', default:false);
         $this->owner = $fields[] = new FieldTypes\NullObjectRefT(Account::class, 'owner');
         $this->name = $fields[] = new FieldTypes\StringType('name', default:self::DEFAULT_NAME);
         $this->crypto_masterkey = $fields[] = new FieldTypes\NullStringType('crypto_masterkey');
@@ -224,7 +226,7 @@ abstract class Storage extends BaseObject
     {
         $retval = array();
         foreach (self::TYPES as $name=>$class)
-            $retval[] = "--sttype $name ".$class::GetCreateUsage(); // TODO RAY !! after fixes
+            $retval[] = "--sttype $name ".$class::GetCreateUsage();
         return $retval;
     }
     
@@ -361,10 +363,10 @@ abstract class Storage extends BaseObject
      * @throws Exceptions\InvalidFSTypeException if not valid
      */
     public function GetFilesystem() : Filesystem
+    // TODO RAY !! public function GetStorage(bool $activate = true) : Storage  - activate was an option before
     {
         if (!isset($this->filesystem))
         {
-            // TODO RAY !!  public function GetStorage(bool $activate = true) : Storage  - activate was an option before
             $this->Activate(); // activate underlying storage
 
             $this->filesystem = match($this->fstype->GetValue())
@@ -646,6 +648,7 @@ abstract class Storage extends BaseObject
     
     /** 
      * Deletes the **empty** folder with the given path
+     * This will FAIL is the folder is not empty
      * @return $this
      */
     public function DeleteFolder(string $path) : self

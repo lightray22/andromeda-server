@@ -37,9 +37,8 @@ class Local extends FWrapper
 
     public function Edit(Input $input) : self
     {
-        parent::Edit($input);
         $this->BasePathEdit($input->GetParams());
-        return $this;
+        return parent::Edit($input);
     }
 
     public function Activate() : self { return $this; }
@@ -52,7 +51,7 @@ class Local extends FWrapper
     {
         if (($space = disk_free_space($this->GetPath())) === false)
             throw new Exceptions\FreeSpaceFailedException();
-        else return (int)$space;
+        else return (int)$space; // disk_free_space returns float
     }
 
     protected function GetFullURL(string $path = "") : string

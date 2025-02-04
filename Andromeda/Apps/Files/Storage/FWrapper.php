@@ -23,7 +23,7 @@ abstract class FWrapper extends Storage
     
     public function ItemStat(string $path) : ItemStat
     {
-        $data = stat($this->GetFullURL($path));
+        $data = @stat($this->GetFullURL($path));
         if ($data === false) throw new Exceptions\ItemStatFailedException($path);
         return new ItemStat($data['atime'], $data['ctime'], $data['mtime'], $data['size']);
     }
@@ -52,14 +52,14 @@ abstract class FWrapper extends Storage
 
     protected function SubReadFolder(string $path) : array
     {
-        if (($list = scandir($this->GetFullURL($path), SCANDIR_SORT_NONE)) === false)
+        if (($list = @scandir($this->GetFullURL($path), SCANDIR_SORT_NONE)) === false)
             throw new Exceptions\FolderReadFailedException($path);
         return array_filter($list, function($item){ return $item !== "." && $item !== ".."; });
     }
     
     protected function SubCreateFolder(string $path) : parent
     {
-        if (!mkdir($this->GetFullURL($path))) 
+        if (!@mkdir($this->GetFullURL($path))) 
             throw new Exceptions\FolderCreateFailedException($path);
         else return $this;
     }
@@ -107,14 +107,15 @@ abstract class FWrapper extends Storage
     
     protected function SubDeleteFolder(string $path) : parent
     {
-        if (!rmdir($this->GetFullURL($path))) 
+        if (!@rmdir($this->GetFullURL($path))) 
             throw new Exceptions\FolderDeleteFailedException($path);
         else return $this;
     }
 
     protected function SubRenameFile(string $old, string $new) : parent
     {
-        $this->ClosePath($old); $this->ClosePath($new);
+        $this->ClosePath($old);
+        $this->ClosePath($new);
         
         if (!rename($this->GetFullURL($old), $this->GetFullURL($new)))
             throw new Exceptions\FileRenameFailedException($old);
@@ -123,14 +124,15 @@ abstract class FWrapper extends Storage
     
     protected function SubRenameFolder(string $old, string $new) : parent
     {
-        if (!rename($this->GetFullURL($old), $this->GetFullURL($new)))
+        if (!@rename($this->GetFullURL($old), $this->GetFullURL($new)))
             throw new Exceptions\FolderRenameFailedException($old);
         return $this;
     }
     
     protected function SubMoveFile(string $old, string $new) : parent
     {
-        $this->ClosePath($old); $this->ClosePath($new);
+        $this->ClosePath($old);
+        $this->ClosePath($new);
         
         if (!rename($this->GetFullURL($old), $this->GetFullURL($new)))
             throw new Exceptions\FileMoveFailedException($old);
@@ -139,7 +141,7 @@ abstract class FWrapper extends Storage
     
     protected function SubMoveFolder(string $old, string $new) : parent
     {
-        if (!rename($this->GetFullURL($old), $this->GetFullURL($new)))
+        if (!@rename($this->GetFullURL($old), $this->GetFullURL($new)))
             throw new Exceptions\FolderMoveFailedException($old);
         return $this;
     }
@@ -156,22 +158,16 @@ abstract class FWrapper extends Storage
     protected function SubReadBytes(string $path, int $start, int $length) : string
     {
         $context = $this->GetContext($path, $start, false);
-        
         $data = FileUtils::ReadStream($context->handle, $length);
-        
         $context->offset += $length;
-        
         return $data;
     }
     
     protected function SubWriteBytes(string $path, int $start, string $data) : self
     {        
         $context = $this->GetContext($path, $start, true);
-        
         FileUtils::WriteStream($context->handle, $data);
-
-        $context->offset += strlen($data);        
-        
+        $context->offset += strlen($data);
         return $this;
     }
     

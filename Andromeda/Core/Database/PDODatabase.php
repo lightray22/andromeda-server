@@ -189,14 +189,10 @@ class PDODatabase
             if (mb_substr($outnam,-1) === "/")
                 $outnam .= "DBConfig.php"; // default
 
-            try
-            { 
-                file_put_contents($outnam, $output);
-                if (function_exists('opcache_invalidate'))
-                    opcache_invalidate($outnam, true);
-            }
-            catch (BaseExceptions\PHPError $e) {
-                throw new Exceptions\DatabasePathException($outnam); }
+            if (@file_put_contents($outnam, $output) === false)
+                throw new Exceptions\DatabasePathException($outnam);
+            if (function_exists('opcache_invalidate'))
+                opcache_invalidate($outnam, true);
             return null;
         }
     }

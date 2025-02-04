@@ -224,6 +224,7 @@ class S3 extends FWrapper
             throw new Exceptions\TestReadFailedException($e); }
     }
     
+    // WORKAROUND - is_writeable does not work on directories
     protected function assertWriteable() : void { $this->TestWriteable(); }
 
     public function ItemStat(string $path) : ItemStat

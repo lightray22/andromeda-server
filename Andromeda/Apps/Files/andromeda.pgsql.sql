@@ -317,7 +317,7 @@ CREATE TABLE public.a2obj_apps_files_storage_storage (
     id character(8) NOT NULL,
     date_created double precision NOT NULL,
     fstype smallint NOT NULL,
-    readonly boolean NOT NULL,
+    readonly boolean DEFAULT false NOT NULL,
     owner character(12) DEFAULT NULL::bpchar,
     name character varying(127) DEFAULT 'Default'::character varying NOT NULL,
     crypto_masterkey bytea DEFAULT NULL::bytea,
@@ -339,272 +339,272 @@ CREATE TABLE public.a2obj_apps_files_storage_webdav (
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_actionlog
-    ADD CONSTRAINT idx_133907_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_134677_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_config
-    ADD CONSTRAINT idx_133919_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_134689_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_items_folder
-    ADD CONSTRAINT idx_133924_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_134694_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_items_item
-    ADD CONSTRAINT idx_133929_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_134699_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_items_rootfolder
-    ADD CONSTRAINT idx_133935_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_134705_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_items_subitem
-    ADD CONSTRAINT idx_133939_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_134709_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_limits_accounttimed
-    ADD CONSTRAINT idx_133942_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_134712_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_limits_accounttotal
-    ADD CONSTRAINT idx_133945_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_134715_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_limits_grouptimed
-    ADD CONSTRAINT idx_133948_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_134718_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_limits_grouptotal
-    ADD CONSTRAINT idx_133951_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_134721_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_limits_storagetimed
-    ADD CONSTRAINT idx_133954_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_134724_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_limits_storagetotal
-    ADD CONSTRAINT idx_133957_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_134727_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_limits_timed
-    ADD CONSTRAINT idx_133960_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_134730_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_limits_timedstats
-    ADD CONSTRAINT idx_133963_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_134733_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_limits_total
-    ADD CONSTRAINT idx_133971_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_134741_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_social_comment
-    ADD CONSTRAINT idx_133979_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_134749_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_social_like
-    ADD CONSTRAINT idx_133984_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_134754_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_social_share
-    ADD CONSTRAINT idx_133987_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_134757_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_social_tag
-    ADD CONSTRAINT idx_133994_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_134764_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_storage_ftp
-    ADD CONSTRAINT idx_133997_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_134767_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_storage_local
-    ADD CONSTRAINT idx_134003_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_134773_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_storage_s3
-    ADD CONSTRAINT idx_134008_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_134778_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_storage_sftp
-    ADD CONSTRAINT idx_134015_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_134785_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_storage_smb
-    ADD CONSTRAINT idx_134024_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_134794_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_storage_storage
-    ADD CONSTRAINT idx_134032_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_134802_primary PRIMARY KEY (id);
 
 
 
 ALTER TABLE ONLY public.a2obj_apps_files_storage_webdav
-    ADD CONSTRAINT idx_134040_primary PRIMARY KEY (id);
+    ADD CONSTRAINT idx_134811_primary PRIMARY KEY (id);
 
 
 
-CREATE INDEX idx_133907_account ON public.a2obj_apps_files_actionlog USING btree (account);
+CREATE INDEX idx_134677_account ON public.a2obj_apps_files_actionlog USING btree (account);
 
 
 
-CREATE INDEX idx_133907_file ON public.a2obj_apps_files_actionlog USING btree (file);
+CREATE INDEX idx_134677_file ON public.a2obj_apps_files_actionlog USING btree (file);
 
 
 
-CREATE INDEX idx_133907_folder ON public.a2obj_apps_files_actionlog USING btree (folder);
+CREATE INDEX idx_134677_folder ON public.a2obj_apps_files_actionlog USING btree (folder);
 
 
 
-CREATE INDEX idx_133929_owner ON public.a2obj_apps_files_items_item USING btree (owner);
+CREATE INDEX idx_134699_owner ON public.a2obj_apps_files_items_item USING btree (owner);
 
 
 
-CREATE INDEX idx_133929_storage ON public.a2obj_apps_files_items_item USING btree (storage);
+CREATE INDEX idx_134699_storage ON public.a2obj_apps_files_items_item USING btree (storage);
 
 
 
-CREATE INDEX idx_133935_owner ON public.a2obj_apps_files_items_rootfolder USING btree (owner);
+CREATE INDEX idx_134705_owner ON public.a2obj_apps_files_items_rootfolder USING btree (owner);
 
 
 
-CREATE UNIQUE INDEX idx_133935_owner_storage ON public.a2obj_apps_files_items_rootfolder USING btree (owner, storage);
+CREATE UNIQUE INDEX idx_134705_owner_storage ON public.a2obj_apps_files_items_rootfolder USING btree (owner, storage);
 
 
 
-CREATE INDEX idx_133935_storage ON public.a2obj_apps_files_items_rootfolder USING btree (storage);
+CREATE INDEX idx_134705_storage ON public.a2obj_apps_files_items_rootfolder USING btree (storage);
 
 
 
-CREATE UNIQUE INDEX idx_133939_name_parent ON public.a2obj_apps_files_items_subitem USING btree (name, parent);
+CREATE UNIQUE INDEX idx_134709_name_parent ON public.a2obj_apps_files_items_subitem USING btree (name, parent);
 
 
 
-CREATE INDEX idx_133939_parent ON public.a2obj_apps_files_items_subitem USING btree (parent);
+CREATE INDEX idx_134709_parent ON public.a2obj_apps_files_items_subitem USING btree (parent);
 
 
 
-CREATE INDEX idx_133942_account ON public.a2obj_apps_files_limits_accounttimed USING btree (account);
+CREATE INDEX idx_134712_account ON public.a2obj_apps_files_limits_accounttimed USING btree (account);
 
 
 
-CREATE UNIQUE INDEX idx_133942_account_timeperiod ON public.a2obj_apps_files_limits_accounttimed USING btree (account, timeperiod);
+CREATE UNIQUE INDEX idx_134712_account_timeperiod ON public.a2obj_apps_files_limits_accounttimed USING btree (account, timeperiod);
 
 
 
-CREATE UNIQUE INDEX idx_133945_account ON public.a2obj_apps_files_limits_accounttotal USING btree (account);
+CREATE UNIQUE INDEX idx_134715_account ON public.a2obj_apps_files_limits_accounttotal USING btree (account);
 
 
 
-CREATE INDEX idx_133948_group ON public.a2obj_apps_files_limits_grouptimed USING btree ("group");
+CREATE INDEX idx_134718_group ON public.a2obj_apps_files_limits_grouptimed USING btree ("group");
 
 
 
-CREATE UNIQUE INDEX idx_133948_group_timeperiod ON public.a2obj_apps_files_limits_grouptimed USING btree ("group", timeperiod);
+CREATE UNIQUE INDEX idx_134718_group_timeperiod ON public.a2obj_apps_files_limits_grouptimed USING btree ("group", timeperiod);
 
 
 
-CREATE UNIQUE INDEX idx_133951_group ON public.a2obj_apps_files_limits_grouptotal USING btree ("group");
+CREATE UNIQUE INDEX idx_134721_group ON public.a2obj_apps_files_limits_grouptotal USING btree ("group");
 
 
 
-CREATE INDEX idx_133954_storage ON public.a2obj_apps_files_limits_storagetimed USING btree (storage);
+CREATE INDEX idx_134724_storage ON public.a2obj_apps_files_limits_storagetimed USING btree (storage);
 
 
 
-CREATE UNIQUE INDEX idx_133954_storage_timeperiod ON public.a2obj_apps_files_limits_storagetimed USING btree (storage, timeperiod);
+CREATE UNIQUE INDEX idx_134724_storage_timeperiod ON public.a2obj_apps_files_limits_storagetimed USING btree (storage, timeperiod);
 
 
 
-CREATE UNIQUE INDEX idx_133957_storage ON public.a2obj_apps_files_limits_storagetotal USING btree (storage);
+CREATE UNIQUE INDEX idx_134727_storage ON public.a2obj_apps_files_limits_storagetotal USING btree (storage);
 
 
 
-CREATE UNIQUE INDEX idx_133963_limit_iscurrent ON public.a2obj_apps_files_limits_timedstats USING btree ("limit", iscurrent);
+CREATE UNIQUE INDEX idx_134733_limit_iscurrent ON public.a2obj_apps_files_limits_timedstats USING btree ("limit", iscurrent);
 
 
 
-CREATE UNIQUE INDEX idx_133963_limit_timestart ON public.a2obj_apps_files_limits_timedstats USING btree ("limit", date_timestart);
+CREATE UNIQUE INDEX idx_134733_limit_timestart ON public.a2obj_apps_files_limits_timedstats USING btree ("limit", date_timestart);
 
 
 
-CREATE INDEX idx_133979_item ON public.a2obj_apps_files_social_comment USING btree (item);
+CREATE INDEX idx_134749_item ON public.a2obj_apps_files_social_comment USING btree (item);
 
 
 
-CREATE INDEX idx_133979_owner_item ON public.a2obj_apps_files_social_comment USING btree (owner, item);
+CREATE INDEX idx_134749_owner_item ON public.a2obj_apps_files_social_comment USING btree (owner, item);
 
 
 
-CREATE INDEX idx_133984_item ON public.a2obj_apps_files_social_like USING btree (item);
+CREATE INDEX idx_134754_item ON public.a2obj_apps_files_social_like USING btree (item);
 
 
 
-CREATE UNIQUE INDEX idx_133984_owner_item ON public.a2obj_apps_files_social_like USING btree (owner, item);
+CREATE UNIQUE INDEX idx_134754_owner_item ON public.a2obj_apps_files_social_like USING btree (owner, item);
 
 
 
-CREATE INDEX idx_133987_dest ON public.a2obj_apps_files_social_share USING btree (dest);
+CREATE INDEX idx_134757_dest ON public.a2obj_apps_files_social_share USING btree (dest);
 
 
 
-CREATE INDEX idx_133987_item ON public.a2obj_apps_files_social_share USING btree (item);
+CREATE INDEX idx_134757_item ON public.a2obj_apps_files_social_share USING btree (item);
 
 
 
-CREATE UNIQUE INDEX idx_133987_item_owner_dest ON public.a2obj_apps_files_social_share USING btree (item, owner, dest);
+CREATE UNIQUE INDEX idx_134757_item_owner_dest ON public.a2obj_apps_files_social_share USING btree (item, owner, dest);
 
 
 
-CREATE INDEX idx_133987_owner ON public.a2obj_apps_files_social_share USING btree (owner);
+CREATE INDEX idx_134757_owner ON public.a2obj_apps_files_social_share USING btree (owner);
 
 
 
-CREATE INDEX idx_133994_item ON public.a2obj_apps_files_social_tag USING btree (item);
+CREATE INDEX idx_134764_item ON public.a2obj_apps_files_social_tag USING btree (item);
 
 
 
-CREATE UNIQUE INDEX idx_133994_item_tag ON public.a2obj_apps_files_social_tag USING btree (item, tag);
+CREATE UNIQUE INDEX idx_134764_item_tag ON public.a2obj_apps_files_social_tag USING btree (item, tag);
 
 
 
-CREATE INDEX idx_133994_owner ON public.a2obj_apps_files_social_tag USING btree (owner);
+CREATE INDEX idx_134764_owner ON public.a2obj_apps_files_social_tag USING btree (owner);
 
 
 
-CREATE INDEX idx_134032_name ON public.a2obj_apps_files_storage_storage USING btree (name);
+CREATE INDEX idx_134802_name ON public.a2obj_apps_files_storage_storage USING btree (name);
 
 
 
-CREATE INDEX idx_134032_owner ON public.a2obj_apps_files_storage_storage USING btree (owner);
+CREATE INDEX idx_134802_owner ON public.a2obj_apps_files_storage_storage USING btree (owner);
 
 
 
-CREATE UNIQUE INDEX idx_134032_owner_name ON public.a2obj_apps_files_storage_storage USING btree (owner, name);
+CREATE UNIQUE INDEX idx_134802_owner_name ON public.a2obj_apps_files_storage_storage USING btree (owner, name);
 
 
 

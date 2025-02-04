@@ -403,7 +403,7 @@ CREATE TABLE `a2obj_apps_files_storage_storage` (
   `id` char(8) NOT NULL,
   `date_created` double NOT NULL,
   `fstype` tinyint(2) NOT NULL,
-  `readonly` tinyint(1) NOT NULL,
+  `readonly` tinyint(1) NOT NULL DEFAULT 0,
   `owner` char(12) DEFAULT NULL,
   `name` varchar(127) NOT NULL DEFAULT 'Default',
   `crypto_masterkey` binary(32) DEFAULT NULL,

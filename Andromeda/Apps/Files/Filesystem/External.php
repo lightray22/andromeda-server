@@ -52,6 +52,7 @@ class External extends Filesystem
 
         $stat = $storage->ItemStat($path); 
         $file->SetSize($stat->size,true);
+
         if ($stat->atime !== 0.0) $file->SetAccessed($stat->atime);
         if ($stat->ctime !== 0.0) $file->SetCreated($stat->ctime);
         if ($stat->mtime !== 0.0) $file->SetModified($stat->mtime); 
@@ -97,10 +98,10 @@ class External extends Filesystem
             {
                 $fspath = $path.'/'.$fsname;
                 $isfile = $storage->isFile($fspath);
-                if (!$isfile && !$storage->isFolder($fspath)) continue;
+                if (!$isfile && !$storage->isFolder($fspath)) continue; // special?
                 
                 if (array_key_exists($fsname, $dbitems))
-                    unset($dbitems[$fsname]);
+                    unset($dbitems[$fsname]); // don't prune
                 else
                 {
                     $database = $this->GetStorage()->GetDatabase();
@@ -108,7 +109,6 @@ class External extends Filesystem
                     
                     $class = $isfile ? File::class : Folder::class;
                     $dbitem = $class::NotifyCreate($database, $folder, $owner, $fsname);
-                    
                     $dbitem->Refresh()->Save(); // update metadata, and insert to the DB immediately
                 }
             }

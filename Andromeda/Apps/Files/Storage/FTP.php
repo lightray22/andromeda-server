@@ -170,9 +170,9 @@ class FTP extends FWrapper
     
     protected function SubReadFolder(string $path) : array
     {        
-        $list = ftp_nlist($this->GetConnection(), $this->GetPath($path));
         // TODO PHP Note that this parameter isn't escaped so there may be some issues with filenames containing spaces and other characters. 
-        if ($list === false) throw new Exceptions\FolderReadFailedException();
+        if (($list = ftp_nlist($this->GetConnection(), $this->GetPath($path))) === false)
+            throw new Exceptions\FolderReadFailedException();
         return array_map(function($item){ return basename($item); }, $list); // TODO why is basename needed? check on . and .. behavior
     }    
     
@@ -187,7 +187,8 @@ class FTP extends FWrapper
     {
         $this->ClosePath($path);
         
-        if ($this->isFile($path)) $this->SubDeleteFile($path);
+        if ($this->isFile($path))
+            $this->SubDeleteFile($path);
         
         if (($handle = fopen($this->GetFullURL($path),'w')) === false) 
             throw new Exceptions\FileCreateFailedException();
@@ -235,7 +236,8 @@ class FTP extends FWrapper
 
     protected function SubRenameFile(string $old, string $new) : self
     {
-        $this->ClosePath($old); $this->ClosePath($new);
+        $this->ClosePath($old);
+        $this->ClosePath($new);
         
         if (!ftp_rename($this->GetConnection(), $this->GetPath($old), $this->GetPath($new)))
             throw new Exceptions\FileRenameFailedException();
@@ -251,7 +253,8 @@ class FTP extends FWrapper
         
     protected function SubMoveFile(string $old, string $new) : self
     {
-        $this->ClosePath($old); $this->ClosePath($new);
+        $this->ClosePath($old);
+        $this->ClosePath($new);
         
         if (!ftp_rename($this->GetConnection(), $this->GetPath($old), $this->GetPath($new)))
             throw new Exceptions\FileMoveFailedException();
